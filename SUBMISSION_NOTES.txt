@@ -1,0 +1,26 @@
+SWE312 PROJECT SUBMISSION
+Topic Number: 20
+Topic Name: Restaurant Order Processing
+Language: Java
+Interface: Java Swing GUI
+
+Included Files
+- src/ : multi-class OOP project structure
+- RestaurantOrderProcessingApp.java : single-file version for quick review
+- README.md : compile/run notes and project summary
+
+How to Compile (multi-file version)
+1. javac -d out src\com\swe312\restaurant\Main.java src\com\swe312\restaurant\model\*.java src\com\swe312\restaurant\service\*.java src\com\swe312\restaurant\ui\*.java
+2. java -cp out com.swe312.restaurant.Main
+
+How to Compile (single-file version)
+1. javac RestaurantOrderProcessingApp.java
+2. java RestaurantOrderProcessingApp
+
+Main Features
+- Menu management by category
+- Cart operations
+- Order total and tax calculation
+- Order placement validation
+- Order tracking and status progression
+- Object-oriented design using classes, enums, and composition
