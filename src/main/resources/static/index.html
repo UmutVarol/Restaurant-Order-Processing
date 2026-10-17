@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sofra · Restaurant POS</title>
+  <meta name="description" content="Sofra is a real-time restaurant point-of-sale: take orders, run the kitchen display, watch the floor and read the numbers.">
+  <meta name="theme-color" content="#e4572e">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="assets/css/app.css">
+  <script src="assets/js/theme-init.js"></script>
+  <script type="module" src="assets/js/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div class="boot" aria-busy="true">
+      <svg class="logo-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#E4572E"/><path d="M10 23h28a14 14 0 0 1-28 0Z" fill="#fff"/></svg>
+      <span class="sr-only">Sofra is loading…</span>
+    </div>
+  </div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <div class="print-root" id="print-root"></div>
+  <noscript>Sofra needs JavaScript to run.</noscript>
+</body>
+</html>
