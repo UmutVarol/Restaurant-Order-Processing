@@ -1,7 +1,17 @@
-*.class
-*.jar
+# Build output
+target/
 out/
 bin/
+*.class
+*.jar
+
+# IDEs and OS
 .idea/
+*.iml
 .vscode/
 .DS_Store
+
+# Local runtime files
+*.log
+.env
+node_modules/

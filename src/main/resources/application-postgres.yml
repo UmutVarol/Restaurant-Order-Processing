@@ -1,0 +1,8 @@
+# Activate with SPRING_PROFILES_ACTIVE=postgres (see docker-compose.yml).
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/sofra}
+    username: ${DATABASE_USERNAME:sofra}
+    password: ${DATABASE_PASSWORD:sofra}
+    hikari:
+      maximum-pool-size: 10

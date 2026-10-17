@@ -1,0 +1,48 @@
+package com.umutvarol.restaurant.security;
+
+import com.umutvarol.restaurant.security.dto.TokenResponse;
+import com.umutvarol.restaurant.security.dto.UserResponse;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.stereotype.Service;
+
+/** Issues signed access tokens carrying the user's role in the {@code roles} claim. */
+@Service
+public class JwtTokenService {
+
+    static final String ROLES_CLAIM = "roles";
+    static final String NAME_CLAIM = "name";
+
+    private final JwtEncoder encoder;
+    private final JwtProperties properties;
+    private final Clock clock;
+
+    public JwtTokenService(JwtEncoder encoder, JwtProperties properties, Clock clock) {
+        this.encoder = encoder;
+        this.properties = properties;
+        this.clock = clock;
+    }
+
+    public TokenResponse issue(AppUser user) {
+        Instant issuedAt = clock.instant();
+        Instant expiresAt = issuedAt.plus(properties.timeToLive());
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(properties.issuer())
+                .subject(user.getUsername())
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .claim(NAME_CLAIM, user.getDisplayName())
+                .claim(ROLES_CLAIM, List.of(user.getRole().name()))
+                .build();
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type("JWT").build();
+        String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        return new TokenResponse(token, "Bearer", expiresAt,
+                new UserResponse(user.getUsername(), user.getDisplayName(), user.getRole()));
+    }
+}

@@ -1,0 +1,87 @@
+spring:
+  application:
+    name: sofra
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:h2:mem:sofra;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_batch_fetch_size: 64
+        jdbc.time_zone: UTC
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+  mvc:
+    problemdetails:
+      enabled: true
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          no-cache: true
+
+server:
+  port: ${PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json,application/problem+json,text/html,text/css,application/javascript,image/svg+xml
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+      roles: ADMIN
+  info:
+    build:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    persist-authorization: true
+  paths-to-match: /api/**
+
+restaurant:
+  name: Sofra Bistro
+  time-zone: Europe/Istanbul
+  pricing:
+    tax-rate: 0.10
+    delivery-fee: 39.90
+    free-delivery-threshold: 750.00
+  security:
+    jwt:
+      # Development-only default. Always provide JWT_SECRET (32+ characters) in real deployments.
+      secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef}
+      issuer: sofra
+      time-to-live: 8h
+  demo:
+    enabled: ${DEMO_MODE:true}
+    history-days: 14
+
+logging:
+  level:
+    org.hibernate.orm.deprecation: error

@@ -1,0 +1,40 @@
+# Publishes the static, in-browser demo (web client + simulated API) to GitHub Pages.
+# One-time setup: Settings → Pages → Build and deployment → Source: "GitHub Actions". Then run this workflow.
+name: Deploy demo
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Assemble the static site
+        run: |
+          mkdir -p _site/demo
+          cp -r src/main/resources/static/. _site/
+          cp demo/mock-backend.js _site/demo/
+          cp demo/index.html _site/index.html
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

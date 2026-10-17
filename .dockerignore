@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.vscode
+target
+legacy
+docs
+out
+*.md
+*.log
+.DS_Store
+docker-compose.yml

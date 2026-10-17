@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    # A fresh in-memory database per application context keeps test classes independent.
+    url: jdbc:h2:mem:test-${random.uuid};DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+
+restaurant:
+  demo:
+    enabled: false
+  security:
+    jwt:
+      secret: test-secret-that-is-long-enough-for-hs256-0123456789
+
+logging:
+  level:
+    root: warn
