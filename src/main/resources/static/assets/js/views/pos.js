@@ -493,13 +493,15 @@ export default {
       }
     };
     document.addEventListener('keydown', onKey);
-    const offOrder = bus.on('order', debounce(loadTables, 400));
+    const reloadTables = debounce(loadTables, 400);
+    const offOrder = bus.on('order', reloadTables);
 
     load();
     return {
       destroy() {
         document.removeEventListener('keydown', onKey);
         offOrder();
+        reloadTables.cancel();
         requestQuote.cancel();
       },
     };

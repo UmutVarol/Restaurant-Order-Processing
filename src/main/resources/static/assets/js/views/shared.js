@@ -202,7 +202,7 @@ export function openReceipt(order) {
     body: receipt,
     footer: (handle) => [
       h('button', { class: 'btn ghost', onclick: handle.close }, t('common.close')),
-      h('button', {
+      window.SOFRA_BACKEND?.print === false ? null : h('button', {
         class: 'btn primary', onclick: () => {
           document.getElementById('print-root').replaceChildren(receiptElement(order));
           window.print();

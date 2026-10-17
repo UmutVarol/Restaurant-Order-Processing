@@ -143,7 +143,7 @@ function updateLiveIndicator(status) {
 }
 
 async function refreshKitchenBadge() {
-  if (!user) return;
+  if (!user || !currentSession()) return;
   try {
     const active = await api.activeOrders();
     kitchenCount = active.filter((o) => ['PENDING', 'PREPARING', 'READY'].includes(o.status)).length;
@@ -175,6 +175,7 @@ function signOut() {
 
 bus.on('session:expired', () => {
   if (!user) return;
+  clearTimeout(badgeTimer);
   toast({ title: t('error.UNAUTHORIZED'), kind: 'info' });
   signOut();
 });

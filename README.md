@@ -24,7 +24,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 
 - [Highlights](#highlights)
 - [Screenshots](#screenshots)
-- [Quick start](#quick-start)
+- [Quick start](#quick-start) · [in-browser demo](#without-installing-anything)
 - [Architecture](#architecture)
 - [Engineering decisions](#engineering-decisions)
 - [REST API](#rest-api)
@@ -78,11 +78,18 @@ Open **http://localhost:8080** and pick a demo account:
 | Waiter | `waiter` | `waiter123` | Point of sale, kitchen, floor, orders |
 | Kitchen | `chef` | `chef123` | Kitchen display, floor, orders |
 
-> **Tip:** open the waiter and the chef in two browser windows side by side, send an order from the till
-> and watch it appear on the kitchen display.
+> **Tip:** sessions are per browser tab — sign in as the waiter in one tab and the chef in another, send an order
+> from the till and watch it appear on the kitchen display.
 
 Demo mode generates two weeks of realistic history on start-up (lunch and dinner rushes, busier weekends,
 coupons, cancellations) plus a handful of orders from the last half hour, so every screen has something to show.
+
+### Without installing anything
+
+[`demo/`](demo) holds a static build of the same web client wired to an in-browser simulation of the API
+([`mock-backend.js`](demo/mock-backend.js) — same endpoints, pricing, roles, validation, error codes and event
+stream). Tabs share the simulated restaurant, so a waiter tab and a chef tab behave like two devices.
+To publish it on GitHub Pages: *Settings → Pages → Source: GitHub Actions*, then run the **Deploy demo** workflow.
 
 ### With Docker and PostgreSQL
 

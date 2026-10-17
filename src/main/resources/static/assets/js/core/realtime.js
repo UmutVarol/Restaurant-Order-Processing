@@ -1,6 +1,6 @@
 // Live order updates over Server-Sent Events. EventSource cannot send an Authorization header, so the stream is
 // read with fetch() and parsed here; the connection is re-established with exponential back-off.
-import { authHeader, backendFetch, EVENTS_URL } from './api.js';
+import { authHeader, backendFetch, currentSession, EVENTS_URL, isCurrentSession } from './api.js';
 import { bus } from './store.js';
 
 let controller = null;
@@ -31,6 +31,7 @@ export function stopRealtime() {
 async function run(signal) {
   let attempt = 0;
   while (!signal.aborted) {
+    const sentWith = currentSession();
     try {
       const response = await backendFetch(EVENTS_URL, {
         headers: { Accept: 'text/event-stream', ...authHeader() },
@@ -38,7 +39,7 @@ async function run(signal) {
         signal,
       });
       if (response.status === 401) {
-        bus.emit('session:expired');
+        if (isCurrentSession(sentWith)) bus.emit('session:expired');
         return;
       }
       if (!response.ok || !response.body) throw new Error(`stream status ${response.status}`);

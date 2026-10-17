@@ -45,12 +45,13 @@ export function errorMessage(error) {
 }
 
 // ---------------------------------------------------------------------------- session
+// Sessions are per tab (sessionStorage): every till, kitchen screen or browser tab signs in as its own user.
 
 let session = loadSession();
 
 function loadSession() {
   try {
-    const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
     if (stored && new Date(stored.expiresAt).getTime() > Date.now() + 60_000) return stored;
   } catch { /* corrupted or unavailable */ }
   return null;
@@ -62,16 +63,21 @@ export function currentSession() {
 
 export function saveSession(tokenResponse) {
   session = { token: tokenResponse.accessToken, expiresAt: tokenResponse.expiresAt, user: tokenResponse.user };
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch { /* ignore */ }
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch { /* ignore */ }
 }
 
 export function clearSession() {
   session = null;
-  try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
 }
 
 export function authHeader() {
   return session ? { Authorization: `Bearer ${session.token}` } : {};
+}
+
+/** Whether {@code candidate} is still the active session object. */
+export function isCurrentSession(candidate) {
+  return candidate != null && candidate === session;
 }
 
 // ---------------------------------------------------------------------------- transport
@@ -87,6 +93,7 @@ function query(params = {}) {
 }
 
 async function request(method, path, body, { auth = true } = {}) {
+  const sentWith = auth ? session : null;
   const headers = { Accept: 'application/json', ...(auth ? authHeader() : {}) };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -106,7 +113,9 @@ async function request(method, path, body, { auth = true } = {}) {
   try { data = text ? JSON.parse(text) : null; } catch { data = null; }
 
   if (!response.ok) {
-    if (response.status === 401 && auth) {
+    // Only a rejection of the *current* token ends the session; a late reply to a request sent before
+    // signing out (or as another user) must not sign out whoever is using the till now.
+    if (response.status === 401 && sentWith && sentWith === session) {
       clearSession();
       bus.emit('session:expired');
     }

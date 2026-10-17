@@ -78,8 +78,11 @@ export default function login({ onSignedIn }) {
         form,
         h('div', { class: 'divider' }, `${t('login.demo')} — ${t('login.demoHint')}`),
         demo,
-        h('p', { class: 'login-foot' }, h('a', { href: 'swagger-ui.html', target: '_blank', rel: 'noopener' }, t('login.api')),
-          ' · Spring Boot 4 · Java 21'))));
+        window.SOFRA_BACKEND?.demo
+          ? h('p', { class: 'login-foot' }, t('login.demoMode'), ' · ',
+            h('a', { href: 'https://github.com/UmutVarol/Restaurant-Order-Processing', target: '_blank', rel: 'noopener' }, t('login.source')))
+          : h('p', { class: 'login-foot' }, h('a', { href: 'swagger-ui.html', target: '_blank', rel: 'noopener' }, t('login.api')),
+            ' · Spring Boot 4 · Java 21'))));
 }
 
 function stat(value, label) {
