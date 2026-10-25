@@ -90,6 +90,9 @@ Status is always shown as a dot and a word, never as colour alone.
 - Easing is `cubic-bezier(.2, .8, .2, 1)` throughout.
 - Buttons and chips press to `scale(.97)`.
 - Only a newly arrived kitchen ticket slides in, and only once; a re-render never replays the animation.
+- Each kitchen ticket carries a thin time-budget bar that fills in real time and turns from green to amber
+  to red at the column's SLA limits. A late ticket also gets a light red tint, so urgent slips stand out at a
+  glance from across the kitchen.
 - Toasts and dialogs slide in, and fade out when closed. At most three toasts are shown, and hovering one
   pauses its timer.
 - Transitions list their properties explicitly; `transition: all` is never used.
@@ -106,6 +109,8 @@ Status is always shown as a dot and a word, never as colour alone.
   Initials split by grapheme (`Intl.Segmenter`).
 - The orders filters are kept in the URL (`#/orders?status=active&q=ayşe`).
 - Inputs are 16px on touch screens so iOS does not zoom. Controls use `touch-action: manipulation`.
+- Controls a waiter taps all shift are tablet-sized (about 44px, Fitts's law): table buttons 44px, quantity
+  steppers 34px, filter chips 40px.
 
 ## Content rules
 

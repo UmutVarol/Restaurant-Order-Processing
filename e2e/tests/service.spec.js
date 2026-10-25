@@ -28,6 +28,8 @@ test('a takeaway order travels from the till to the kitchen rail in real time', 
   await expect(ticket).toBeVisible();
   await expect(ticket).toHaveClass(/fresh/);
   await expect(ticket.locator('.ticket-item')).toHaveCount(2);
+  // The time-budget bar starts filling as soon as the ticket arrives.
+  await expect(ticket.locator('.sla')).toHaveAttribute('style', /--p/);
 
   await ticket.getByRole('button', { name: 'Start cooking' }).click();
   await expect(kitchen.locator('.kds-col[aria-label="Preparing"] .ticket', { hasText: guest })).toBeVisible();

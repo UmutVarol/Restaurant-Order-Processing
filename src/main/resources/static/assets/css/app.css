@@ -941,3 +941,17 @@ body { -webkit-tap-highlight-color: transparent; }
   .drawer-foot .btn { flex: 1 1 40%; min-width: 0; }
   .drawer-foot .btn.primary { flex-basis: 100%; order: -1; }
 }
+
+/* Kitchen: a time-budget bar on each ticket, so the most urgent slips stand out from across the kitchen. */
+.sla { height: 4px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin-top: -2px; }
+.sla i { display: block; height: 100%; width: 100%; border-radius: inherit; background: var(--green); transform-origin: left; transform: scaleX(var(--p, 0)); transition: transform 1s linear, background-color .3s var(--ease); }
+.sla.warn i { background: var(--amber); }
+.sla.late i { background: var(--red); }
+.ticket.is-late { border-color: color-mix(in srgb, var(--red) 45%, var(--border)); background: color-mix(in srgb, var(--red-soft) 40%, var(--surface)); }
+
+/* Tablet-sized touch targets: about 44px for the controls a waiter taps all shift. */
+.stepper button { width: 34px; height: 34px; }
+.table-picker button { height: 44px; }
+.chip { height: 40px; }
+.segmented button { height: 42px; }
+.pay-methods .segmented button { height: 40px; }

@@ -129,7 +129,7 @@ export default {
       }, t(`cat.${category}`), h('span', { class: 'count' }, category === 'ALL' ? (menu || []).length : counts[category]))));
       mount(tagChips, TAGS.map((tag) => h('button', {
         class: ['chip', filters.tags.has(tag) ? 'active' : ''],
-        style: { height: '30px', fontSize: '12px' },
+        style: { height: '36px', fontSize: '12px' },
         onclick: () => {
           if (filters.tags.has(tag)) filters.tags.delete(tag); else filters.tags.add(tag);
           renderFilters();

@@ -39,7 +39,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 | Area | What it does |
 |---|---|
 | **Point of sale** | Menu grouped by category, with search and dietary filters. Dine-in, takeaway or delivery, a table picker with live occupancy, per-line kitchen notes and coupons. The server prices the ticket live, and <kbd>Ctrl</kbd>+<kbd>Enter</kbd> sends it. |
-| **Kitchen display** | Kanban board fed by **Server-Sent Events** with no polling or refresh. SLA timers turn amber, then red. One tap moves a ticket on, and new tickets are highlighted, with an optional chime. |
+| **Kitchen display** | Kanban board fed by **Server-Sent Events** with no polling or refresh. SLA timers turn amber, then red. One tap moves a ticket on, a time bar on each ticket shows how much of its time budget is used, and new tickets are highlighted, with an optional chime. |
 | **Floor plan** | Every table with its seats, open check, status and time seated. Tap a free table to start an order for it. |
 | **Orders** | Paginated history with full-text search (order #, guest, phone, table, address) and status, type and date filters kept in the URL. A detail drawer shows the audit timeline, cancellation with a reason and a printable receipt. |
 | **Dashboard** | Revenue, orders, average ticket and kitchen time against the previous period, with daily revenue, busiest hours, category mix, best sellers, channels and payment methods. |

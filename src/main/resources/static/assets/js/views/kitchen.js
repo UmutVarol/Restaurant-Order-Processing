@@ -80,6 +80,7 @@ export default {
           typeBadge(order),
           h('span', { class: 'timer', dataset: { since: order.status === 'READY' || order.status === 'OUT_FOR_DELIVERY' ? order.statusSince : order.createdAt, status: order.status } },
             icon('clock', 'sm'), h('span', null, ''))),
+        h('div', { class: 'sla', dataset: { since: order.status === 'READY' || order.status === 'OUT_FOR_DELIVERY' ? order.statusSince : order.createdAt, status: order.status } }, h('i')),
         h('div', { class: 'ticket-meta' }, h('span', null, order.customerName), h('span', null, `${order.itemCount} ×`)),
         order.note ? h('div', { class: 'sticky-note' }, icon('note', 'sm'), order.note) : null,
         h('div', { class: 'ticket-items' }, order.lines.map((line) => h('div', { class: 'ticket-item' },
@@ -97,6 +98,15 @@ export default {
         timer.classList.toggle('warn', minutes >= warn && minutes < late);
         timer.classList.toggle('late', minutes >= late);
         timer.lastChild.textContent = elapsed(timer.dataset.since, now);
+      });
+      // Each ticket's bar shows how much of its time budget is used: green, then amber, then red.
+      board.querySelectorAll('.sla').forEach((bar) => {
+        const minutes = minutesSince(bar.dataset.since, now);
+        const [warn, late] = SLA[bar.dataset.status] || [10, 20];
+        bar.style.setProperty('--p', Math.min(1, minutes / late));
+        bar.classList.toggle('warn', minutes >= warn && minutes < late);
+        bar.classList.toggle('late', minutes >= late);
+        bar.closest('.ticket').classList.toggle('is-late', minutes >= late);
       });
     }
 
