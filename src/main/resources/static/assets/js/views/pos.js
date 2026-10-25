@@ -1,7 +1,7 @@
 // Point of sale: browse the menu, build a ticket, price it live on the server and send it to the kitchen.
 import { debounce, h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
-import { t } from '../core/i18n.js';
+import { t, tn } from '../core/i18n.js';
 import { itemCount, money } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
@@ -25,6 +25,8 @@ const ticket = {
   lines: [],
 };
 const filters = { category: 'ALL', query: '', tags: new Set() };
+// Mirrors the server's per-line limit (OrderLineRequest.quantity), so the till never builds a ticket it cannot send.
+const MAX_QUANTITY = 50;
 
 function resetTicket() {
   Object.assign(ticket, {
@@ -42,6 +44,7 @@ export default {
     let quote = null;
     let quoting = false;
     let placing = false;
+    let panelVisible = false;
     let fieldErrors = {};
     let openNote = null;
     let couponDraft = ticket.couponCode;
@@ -64,6 +67,7 @@ export default {
     const typeSection = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
     const linesSection = h('div');
     const couponSection = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
+    const noteSection = h('div');
     const deliveryHint = h('div');
     const totalsSection = h('div');
     const paySection = h('div', { class: 'pay-methods' });
@@ -71,12 +75,25 @@ export default {
     const orderPanel = h('aside', { class: 'card order-panel' });
     // On narrow screens the ticket sits below the menu; this bar keeps the running total in reach.
     const mobileBar = h('button', {
-      class: 'mobile-cart', hidden: true,
+      class: 'mobile-cart', hidden: true, 'aria-label': t('pos.jumpToTicket'),
       onclick: () => orderPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     });
     const countLabel = h('span', { class: 'card-sub' });
+    // Clearing is instant but reversible: the toast offers an undo instead of a confirmation dialog.
     const clearButton = h('button', {
-      class: 'btn ghost sm', onclick: () => { resetTicket(); couponDraft = ''; fieldErrors = {}; refreshAll(); },
+      class: 'btn ghost sm',
+      onclick: () => {
+        const snapshot = structuredClone({ ...ticket });
+        const draft = couponDraft;
+        resetTicket();
+        couponDraft = '';
+        fieldErrors = {};
+        refreshAll();
+        toast({
+          title: t('pos.cleared'), kind: 'info', timeout: 6000,
+          action: { label: t('pos.undo'), run: () => { Object.assign(ticket, snapshot); couponDraft = draft; refreshAll(); } },
+        });
+      },
     }, icon('trash', 'sm'), t('pos.clear'));
 
     mount(container, h('div', { class: 'pos' },
@@ -90,7 +107,7 @@ export default {
         h('div', { class: 'card-head' },
           h('div', { style: { flex: 1 } }, h('div', { class: 'card-title' }, t('pos.current')), countLabel),
           clearButton),
-        h('div', { class: 'scroll' }, typeSection, linesSection, couponSection),
+        h('div', { class: 'scroll' }, typeSection, linesSection, couponSection, noteSection),
         h('div', { class: 'checkout' }, deliveryHint, totalsSection, paySection, placeButton))),
       mobileBar);
 
@@ -186,13 +203,14 @@ export default {
 
     function addItem(item) {
       const line = ticket.lines.find((l) => l.menuItemId === item.id && !l.note);
+      if (line && line.quantity >= MAX_QUANTITY) return;
       if (line) line.quantity += 1;
       else ticket.lines.push({ menuItemId: item.id, quantity: 1, note: '' });
       cartChanged();
     }
 
     function changeQuantity(line, delta) {
-      line.quantity += delta;
+      line.quantity = Math.min(MAX_QUANTITY, line.quantity + delta);
       if (line.quantity <= 0) ticket.lines.splice(ticket.lines.indexOf(line), 1);
       cartChanged();
     }
@@ -205,8 +223,17 @@ export default {
     }
 
     function renderTypeSection() {
-      const field = (name, label, input) => h('div', { class: ['field', fieldErrors[name] ? 'invalid' : ''] },
-        h('label', null, label), input, fieldErrors[name] ? h('div', { class: 'error' }, fieldErrors[name]) : null);
+      const field = (name, label, input) => {
+        const id = `ticket-${name}`;
+        const control = input.matches('input, textarea, select') ? input : null;
+        if (control) {
+          control.id = id;
+          if (fieldErrors[name]) control.setAttribute('aria-invalid', 'true');
+        }
+        return h('div', { class: ['field', fieldErrors[name] ? 'invalid' : ''] },
+          control ? h('label', { for: id }, label) : h('span', { class: 'label' }, label), input,
+          fieldErrors[name] ? h('div', { class: 'error', role: 'alert' }, fieldErrors[name]) : null);
+      };
       const text = (name, placeholder, extra = {}) => h('input', {
         class: 'input', value: ticket[name], placeholder,
         oninput: (event) => { ticket[name] = event.target.value; },
@@ -229,15 +256,23 @@ export default {
           },
         }, icon(TYPE_ICONS[type], 'sm'), t(`type.${type}`)))),
         ticket.type === 'DINE_IN' ? field('tableId', t('pos.pickTable'), tablePicker()) : null,
-        field('customerName', t('pos.customer'), text('customerName', t('pos.customerPlaceholder'), { autocomplete: 'off' })),
-        ticket.type === 'DELIVERY' ? field('customerPhone', t('pos.phone'), text('customerPhone', '+90 5__ ___ __ __', { type: 'tel' })) : null,
-        ticket.type === 'DELIVERY' ? field('deliveryAddress', t('pos.address'), text('deliveryAddress', t('pos.addressPlaceholder'))) : null);
+        field('customerName', t('pos.customer'), text('customerName', t('pos.customerPlaceholder'), { autocomplete: 'off', maxlength: 80 })),
+        ticket.type === 'DELIVERY' ? field('customerPhone', t('pos.phone'), text('customerPhone', '+90 5__ ___ __ __', { type: 'tel', autocomplete: 'tel', inputmode: 'tel' })) : null,
+        ticket.type === 'DELIVERY' ? field('deliveryAddress', t('pos.address'), text('deliveryAddress', t('pos.addressPlaceholder'), { autocomplete: 'street-address', maxlength: 255 })) : null);
+    }
+
+    // The order note was always sent to the API but had no input; the kitchen shows it on the ticket.
+    function renderNote() {
+      mount(noteSection, h('div', { class: 'field' }, h('label', { for: 'ticket-note' }, t('pos.note')), h('textarea', {
+        class: 'textarea', id: 'ticket-note', rows: 2, maxlength: 255, placeholder: t('pos.notePlaceholder'), value: ticket.note,
+        oninput: (event) => { ticket.note = event.target.value; },
+      })));
     }
 
     function tablePicker() {
       return h('div', { class: 'table-picker' }, tables.map((table) => h('button', {
         class: [ticket.tableId === table.id ? 'active' : '', table.occupied ? 'busy' : ''],
-        title: `${t('floor.seats', { n: table.seats })}${table.occupied ? ` · ${t('pos.occupied')}` : ''}`,
+        title: `${tn('floor.seats', table.seats)}${table.occupied ? ` · ${t('pos.occupied')}` : ''}`,
         onclick: () => {
           ticket.tableId = table.id;
           delete fieldErrors.tableId;
@@ -257,6 +292,7 @@ export default {
       }
       mount(linesSection, h('div', { class: 'cart-lines' }, ticket.lines.map((line) => {
         const item = menuItem(line.menuItemId);
+        const name = item?.name ?? `#${line.menuItemId}`;
         const priced = quote?.lines.find((q) => q.menuItemId === line.menuItemId && (q.note || '') === (line.note || '').trim());
         const lineTotal = priced?.lineTotal ?? (item ? item.price * line.quantity : 0);
         const editing = openNote === line;
@@ -278,9 +314,11 @@ export default {
           h('div', { class: 'right' },
             h('div', { class: 'total' }, money(lineTotal)),
             h('div', { class: 'stepper' },
-              h('button', { 'aria-label': '−', onclick: () => changeQuantity(line, -1) }, icon(line.quantity === 1 ? 'trash' : 'minus', 'sm')),
+              h('button', { 'aria-label': t('pos.decrease', { name }), onclick: () => changeQuantity(line, -1) }, icon(line.quantity === 1 ? 'trash' : 'minus', 'sm')),
               h('span', null, line.quantity),
-              h('button', { 'aria-label': '+', onclick: () => changeQuantity(line, 1) }, icon('plus', 'sm')))));
+              h('button', {
+                'aria-label': t('pos.increase', { name }), disabled: line.quantity >= MAX_QUANTITY, onclick: () => changeQuantity(line, 1),
+              }, icon('plus', 'sm')))));
       })));
       const noteInput = linesSection.querySelector('.note-input');
       if (noteInput) {
@@ -295,7 +333,7 @@ export default {
         mount(couponSection, h('div', { class: 'coupon-applied' }, icon('tag'),
           h('div', null, h('b', null, result.code), h('div', { class: 'desc' }, result.description)),
           h('button', {
-            class: 'icon-btn sm', 'aria-label': t('common.cancel'),
+            class: 'icon-btn sm', 'aria-label': t('pos.removeCoupon'),
             onclick: () => { ticket.couponCode = ''; couponDraft = ''; renderCoupon(); requestQuote(); },
           }, icon('x', 'sm'))));
         return;
@@ -371,7 +409,7 @@ export default {
       const total = quote && ticket.lines.length ? ` · ${money(quote.pricing.total)}` : '';
       placeButton.disabled = placing || !ticket.lines.length;
       const count = ticket.lines.reduce((sum, line) => sum + line.quantity, 0);
-      mobileBar.hidden = count === 0;
+      mobileBar.hidden = count === 0 || panelVisible;
       mount(mobileBar, h('span', { class: 'badge' }, count), h('span', null, t('pos.current')),
         h('b', null, quote ? money(quote.pricing.total) : ''), icon('arrowDown', 'sm'));
       mount(placeButton, placing ? h('span', { class: 'spinner' })
@@ -380,6 +418,7 @@ export default {
 
     function refreshAll() {
       renderTypeSection();
+      renderNote();
       renderLines();
       renderCoupon();
       renderTotals();
@@ -493,6 +532,12 @@ export default {
       }
     };
     document.addEventListener('keydown', onKey);
+    // The floating total is a shortcut to the ticket; once the ticket itself is on screen it would only cover it.
+    const panelObserver = 'IntersectionObserver' in window ? new IntersectionObserver(([entry]) => {
+      panelVisible = entry.isIntersecting;
+      renderPlaceButton();
+    }, { threshold: 0.05 }) : null;
+    panelObserver?.observe(orderPanel);
     const reloadTables = debounce(loadTables, 400);
     const offOrder = bus.on('order', reloadTables);
 
@@ -500,6 +545,7 @@ export default {
     return {
       destroy() {
         document.removeEventListener('keydown', onKey);
+        panelObserver?.disconnect();
         offOrder();
         reloadTables.cancel();
         requestQuote.cancel();

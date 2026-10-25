@@ -18,7 +18,7 @@ export default {
     const chips = h('div', { class: 'chips' });
     const tableCard = h('div', { class: 'card table-wrap menu-admin' });
 
-    mount(actions, h('button', { class: 'btn primary', onclick: () => editItem(null) }, icon('plus', 'sm'), h('span', { class: 'btn-label' }, t('menu.add'))));
+    mount(actions, h('button', { class: 'btn primary', 'aria-label': t('menu.add'), onclick: () => editItem(null) }, icon('plus', 'sm'), h('span', { class: 'btn-label' }, t('menu.add'))));
     mount(container, h('div', { class: 'toolbar' }, chips), tableCard);
 
     function render() {
@@ -41,7 +41,7 @@ export default {
           h('th', { class: 'hide-sm right' }, t('menu.col.prep')),
           h('th', { class: 'right' }, t('menu.col.price')),
           h('th', null, t('menu.col.available')),
-          h('th', null, ''))),
+          h('th', null, h('span', { class: 'sr-only' }, t('menu.col.actions'))))),
         h('tbody', null, visible.map(row))));
     }
 
@@ -56,10 +56,10 @@ export default {
         h('td', { class: 'hide-sm right muted' }, t('common.minutes', { n: item.prepTimeMinutes })),
         h('td', { class: 'right num', style: { fontWeight: 650 } }, money(item.price)),
         h('td', null, h('label', { class: 'switch', title: t('menu.col.available') },
-          h('input', { type: 'checkbox', checked: item.available, onchange: (event) => toggle(item, event.target) }), h('span'))),
+          h('input', { type: 'checkbox', role: 'switch', checked: item.available, 'aria-label': `${t('menu.col.available')}: ${item.name}`, onchange: (event) => toggle(item, event.target) }), h('span'))),
         h('td', { class: 'right' }, h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '4px' } },
-          h('button', { class: 'icon-btn sm', title: t('common.edit'), 'aria-label': t('common.edit'), onclick: () => editItem(item) }, icon('edit', 'sm')),
-          h('button', { class: 'icon-btn sm', title: t('menu.archive'), 'aria-label': t('menu.archive'), onclick: () => archive(item) }, icon('archive', 'sm')))));
+          h('button', { class: 'icon-btn sm', title: t('common.edit'), 'aria-label': `${t('common.edit')}: ${item.name}`, onclick: () => editItem(item) }, icon('edit', 'sm')),
+          h('button', { class: 'icon-btn sm', title: t('menu.archive'), 'aria-label': `${t('menu.archive')}: ${item.name}`, onclick: () => archive(item) }, icon('archive', 'sm')))));
     }
 
     async function toggle(item, checkbox) {

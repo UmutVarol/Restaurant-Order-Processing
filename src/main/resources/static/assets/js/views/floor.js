@@ -1,7 +1,7 @@
 // Floor plan: every table with its open check, updated live.
 import { debounce, h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
-import { t } from '../core/i18n.js';
+import { t, tn } from '../core/i18n.js';
 import { elapsed, money, percent } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
@@ -65,7 +65,7 @@ export default {
         ]
         : [
           h('div', { class: 't-free' }, t('floor.available')),
-          h('div', { class: 'seats' }, t('floor.seats', { n: table.seats })),
+          h('div', { class: 'seats' }, tn('floor.seats', table.seats)),
           canTakeOrders(user) ? h('span', { class: 'btn sm', style: { marginTop: '4px' } }, icon('plus', 'sm'), t('floor.seat')) : null,
         ]));
       return card;

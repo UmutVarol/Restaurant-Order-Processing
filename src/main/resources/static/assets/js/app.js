@@ -82,7 +82,7 @@ function renderShell(current) {
   const title = h('h1', { class: 'page-title' });
   const subtitle = h('div', { class: 'page-sub' });
   const actions = h('div', { class: 'topbar-tools' });
-  const content = h('section', { class: 'view', id: 'view' });
+  const content = h('section', { class: 'view', id: 'view', tabindex: -1 });
 
   const navItems = (section) => allowedRoutes().filter((r) => r.section === section).map((route) => {
     const index = allowedRoutes().indexOf(route) + 1;
@@ -122,7 +122,8 @@ function renderShell(current) {
       langButton(),
       themeButton()));
 
-  const element = h('div', { class: 'shell' }, sidebar, h('main', { class: 'main' }, topbar, content));
+  const skip = h('a', { class: 'skip-link', href: '#view', onclick: (event) => { event.preventDefault(); content.focus(); } }, t('common.skip'));
+  const element = h('div', { class: 'shell' }, skip, sidebar, h('main', { class: 'main' }, topbar, content));
   return {
     element,
     content,

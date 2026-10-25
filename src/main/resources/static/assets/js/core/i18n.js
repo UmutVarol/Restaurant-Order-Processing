@@ -80,6 +80,17 @@ const dictionaries = {
     'pos.placedSub': '{items} · {total}',
     'pos.items': '{n} items',
     'pos.item': '1 item',
+    'pos.items.one': '{n} item',
+    'pos.items.other': '{n} items',
+    'pos.cleared': 'Ticket cleared',
+    'pos.undo': 'Undo',
+    'pos.removeCoupon': 'Remove coupon',
+    'pos.placing': 'Sending…',
+    'pos.jumpToTicket': 'Go to the ticket',
+    'pos.decrease': 'Remove one {name}',
+    'pos.increase': 'Add one {name}',
+    'pos.editNote': 'Edit note',
+    'pos.shortcut': 'Send with {keys}',
     'pos.occupied': 'occupied',
 
     'cat.ALL': 'All',
@@ -146,6 +157,7 @@ const dictionaries = {
     'orders.col.total': 'Total',
     'orders.col.status': 'Status',
     'orders.none': 'No orders found',
+    'orders.clearFilters': 'Clear filters',
     'orders.noneHint': 'Adjust the filters or search for something else.',
     'orders.range': '{from}–{to} of {total}',
     'orders.prev': 'Previous',
@@ -175,6 +187,8 @@ const dictionaries = {
     'floor.sub': 'Tables and open checks in real time',
     'floor.available': 'Available',
     'floor.seats': '{n} seats',
+    'floor.seats.one': '{n} seat',
+    'floor.seats.other': '{n} seats',
     'floor.occupancy': 'Occupancy',
     'floor.openChecks': 'Open checks',
     'floor.freeTables': 'Free tables',
@@ -205,6 +219,8 @@ const dictionaries = {
     'dash.channels': 'Channels & payments',
     'dash.sold': '{n} sold',
     'dash.orders': '{n} orders',
+    'dash.orders.one': '{n} order',
+    'dash.orders.other': '{n} orders',
     'dash.noData': 'No sales in this period yet',
 
     'menu.title': 'Menu',
@@ -217,6 +233,7 @@ const dictionaries = {
     'menu.col.prep': 'Prep',
     'menu.col.tags': 'Tags',
     'menu.col.available': 'On sale',
+    'menu.col.actions': 'Actions',
     'menu.name': 'Name',
     'menu.description': 'Description',
     'menu.category': 'Category',
@@ -242,6 +259,7 @@ const dictionaries = {
     'common.view': 'View',
     'common.optional': 'optional',
     'common.loadFailed': 'Could not load this page',
+    'common.skip': 'Skip to content',
 
     'validation.required': 'Required',
     'validation.phone': 'Enter a valid phone number',
@@ -344,6 +362,16 @@ const dictionaries = {
     'pos.placedSub': '{items} · {total}',
     'pos.items': '{n} ürün',
     'pos.item': '1 ürün',
+    'pos.items.other': '{n} ürün',
+    'pos.cleared': 'Fiş temizlendi',
+    'pos.undo': 'Geri al',
+    'pos.removeCoupon': 'Kuponu kaldır',
+    'pos.placing': 'Gönderiliyor…',
+    'pos.jumpToTicket': 'Fişe git',
+    'pos.decrease': 'Bir {name} çıkar',
+    'pos.increase': 'Bir {name} ekle',
+    'pos.editNote': 'Notu düzenle',
+    'pos.shortcut': '{keys} ile gönderin',
     'pos.occupied': 'dolu',
 
     'cat.ALL': 'Tümü',
@@ -410,6 +438,7 @@ const dictionaries = {
     'orders.col.total': 'Tutar',
     'orders.col.status': 'Durum',
     'orders.none': 'Sipariş bulunamadı',
+    'orders.clearFilters': 'Filtreleri temizle',
     'orders.noneHint': 'Filtreleri değiştirin ya da başka bir şey arayın.',
     'orders.range': '{total} kayıttan {from}–{to}',
     'orders.prev': 'Önceki',
@@ -439,6 +468,7 @@ const dictionaries = {
     'floor.sub': 'Masalar ve açık hesaplar, anlık',
     'floor.available': 'Boş',
     'floor.seats': '{n} kişilik',
+    'floor.seats.other': '{n} kişilik',
     'floor.occupancy': 'Doluluk',
     'floor.openChecks': 'Açık hesaplar',
     'floor.freeTables': 'Boş masalar',
@@ -469,6 +499,7 @@ const dictionaries = {
     'dash.channels': 'Kanallar ve ödemeler',
     'dash.sold': '{n} adet',
     'dash.orders': '{n} sipariş',
+    'dash.orders.other': '{n} sipariş',
     'dash.noData': 'Bu dönemde henüz satış yok',
 
     'menu.title': 'Menü yönetimi',
@@ -481,6 +512,7 @@ const dictionaries = {
     'menu.col.prep': 'Hazırlık',
     'menu.col.tags': 'Etiketler',
     'menu.col.available': 'Satışta',
+    'menu.col.actions': 'İşlemler',
     'menu.name': 'Ad',
     'menu.description': 'Açıklama',
     'menu.category': 'Kategori',
@@ -506,6 +538,7 @@ const dictionaries = {
     'common.view': 'Görüntüle',
     'common.optional': 'isteğe bağlı',
     'common.loadFailed': 'Bu sayfa yüklenemedi',
+    'common.skip': 'İçeriğe geç',
 
     'validation.required': 'Zorunlu alan',
     'validation.phone': 'Geçerli bir telefon numarası girin',
@@ -568,6 +601,22 @@ export function onLangChange(fn) {
 export function t(key, params = {}) {
   const template = dictionaries[current][key] ?? dictionaries.en[key] ?? key;
   return template.replace(/\{(\w+)}/g, (_, name) => (params[name] ?? `{${name}}`));
+}
+
+const pluralRules = new Map();
+
+/**
+ * Plural-aware translation: looks up {@code key.one}, {@code key.other} and so on through Intl.PluralRules,
+ * so English gets "1 order" / "2 orders" while Turkish, which does not inflect, only needs {@code .other}.
+ */
+export function tn(key, n, params = {}) {
+  const loc = locale();
+  if (!pluralRules.has(loc)) pluralRules.set(loc, new Intl.PluralRules(loc));
+  const rule = pluralRules.get(loc).select(Number(n));
+  const dict = dictionaries[current];
+  const template = dict[`${key}.${rule}`] ?? dict[`${key}.other`] ?? dictionaries.en[`${key}.${rule}`] ?? dictionaries.en[`${key}.other`] ?? key;
+  const values = { ...params, n: new Intl.NumberFormat(loc).format(n) };
+  return template.replace(/\{(\w+)}/g, (_, name) => (values[name] ?? `{${name}}`));
 }
 
 export function has(key) {

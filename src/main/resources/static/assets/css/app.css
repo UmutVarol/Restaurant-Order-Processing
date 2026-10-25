@@ -124,7 +124,8 @@ p { margin: 0; }
 .faint { color: var(--faint); }
 .display { font-family: var(--font-display); font-optical-sizing: auto; letter-spacing: -.01em; }
 [hidden] { display: none !important; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Scroll containers holding .sr-only text are positioned (see .table-wrap), or the text escapes and widens the page. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .icon { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .icon.sm { width: 15px; height: 15px; }
 .icon.lg { width: 22px; height: 22px; }
@@ -221,7 +222,7 @@ p { margin: 0; }
   transition: transform .12s var(--ease), background .2s, border-color .2s, box-shadow .2s, opacity .2s;
 }
 .btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
-.btn:active { transform: translateY(1px) scale(.99); }
+.btn:active:not(:disabled) { transform: scale(.97); }
 .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .btn.primary { background: var(--brand); border-color: transparent; color: var(--brand-ink); box-shadow: 0 6px 16px -6px rgba(228, 87, 46, .6); }
 .btn.primary:hover { background: var(--brand-strong); }
@@ -298,8 +299,9 @@ p { margin: 0; }
   display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px;
   border-radius: 99px; border: 1px solid var(--border); background: var(--surface);
   color: var(--text-2); font-weight: 600; font-size: 13px; white-space: nowrap;
-  transition: all .2s var(--ease);
+  transition: background-color .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease), transform .14s var(--ease);
 }
+.chip:active { transform: scale(.97); }
 .chip:hover { border-color: var(--border-strong); color: var(--text); }
 .chip.active { background: var(--text); border-color: var(--text); color: var(--bg); }
 .chip .count { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--surface-3); color: var(--muted); }
@@ -400,7 +402,8 @@ p { margin: 0; }
 .demo-accounts { display: grid; gap: 8px; }
 .demo-account {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; text-align: left;
-  border: 1px solid var(--border); background: var(--surface); transition: all .2s var(--ease);
+  border: 1px solid var(--border); background: var(--surface);
+  transition: border-color .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease);
 }
 .demo-account:hover { border-color: var(--brand); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
 .demo-account .avatar { width: 34px; height: 34px; }
@@ -464,7 +467,7 @@ p { margin: 0; }
 .menu-card .prep { display: inline-flex; align-items: center; gap: 4px; color: var(--faint); font-size: 12px; }
 .menu-card .add {
   width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center;
-  background: var(--brand-soft); color: var(--brand); transition: all .2s var(--ease);
+  background: var(--brand-soft); color: var(--brand); transition: background-color .2s var(--ease), color .2s var(--ease);
 }
 .menu-card:hover .add { background: var(--brand); color: #fff; }
 .menu-card.soldout { cursor: not-allowed; }
@@ -483,7 +486,8 @@ p { margin: 0; }
 .table-picker { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .table-picker button {
   height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
-  font-weight: 700; font-size: 12.5px; position: relative; transition: all .15s var(--ease);
+  font-weight: 700; font-size: 12.5px; position: relative;
+  transition: background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease), transform .14s var(--ease);
 }
 .table-picker button:hover { border-color: var(--brand); }
 .table-picker button.active { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 6px 14px -6px rgba(228, 87, 46, .7); }
@@ -506,6 +510,7 @@ p { margin: 0; }
 .stepper { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 10px; background: var(--surface-3); }
 .stepper button { width: 26px; height: 26px; border: 0; border-radius: 8px; background: transparent; display: grid; place-items: center; color: var(--text-2); }
 .stepper button:hover { background: var(--surface); color: var(--brand); box-shadow: var(--shadow-xs); }
+.stepper button:disabled { opacity: .35; cursor: not-allowed; }
 .stepper span { min-width: 22px; text-align: center; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
 .coupon-row { display: flex; gap: 8px; }
 .coupon-row .input { height: 38px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
@@ -544,8 +549,9 @@ p { margin: 0; }
 .ticket {
   position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px 14px 12px;
   border-radius: 16px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm);
-  animation: ticketIn .45s var(--ease);
 }
+/* Only a newly arrived ticket animates, and only once; re-renders on every status change must not replay it. */
+.ticket.drop { animation: ticketIn .35s var(--ease); }
 .ticket::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 4px 4px 0; background: var(--accent, var(--slate)); }
 .ticket.fresh { box-shadow: 0 0 0 2px var(--brand), var(--shadow-md); }
 @keyframes ticketIn { from { opacity: 0; transform: translateY(-10px) scale(.98); } to { opacity: 1; transform: none; } }
@@ -572,7 +578,7 @@ p { margin: 0; }
 /* ==========================================================================
    Orders list
    ========================================================================== */
-.table-wrap { overflow-x: auto; }
+.table-wrap { position: relative; overflow-x: auto; overscroll-behavior-x: contain; }
 .data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .data-table th {
   text-align: left; white-space: nowrap; font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 650;
@@ -644,6 +650,8 @@ p { margin: 0; }
 .receipt { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; background: #fffdf8; color: #2a2420; padding: 22px 20px; border-radius: 6px; box-shadow: inset 0 0 0 1px #eee4d4; }
 .receipt .c { text-align: center; }
 .receipt .r { display: flex; justify-content: space-between; gap: 12px; }
+.receipt .r span:first-child { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+.receipt .r span:last-child { flex: 0 0 auto; max-width: 65%; text-align: right; overflow-wrap: anywhere; }
 .receipt hr { border: 0; border-top: 1px dashed #c9bba6; margin: 10px 0; }
 .receipt .big { font-size: 16px; font-weight: 700; }
 .receipt .brand-line { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
@@ -664,7 +672,7 @@ p { margin: 0; }
 .table-viz .top {
   position: absolute; inset: 22px; border-radius: 50%; display: grid; place-items: center;
   background: var(--surface-3); border: 2px solid var(--border-strong); font-weight: 800; font-size: 17px; color: var(--text-2);
-  transition: all .3s var(--ease);
+  transition: background-color .3s var(--ease), border-color .3s var(--ease), color .3s var(--ease);
 }
 .table-viz .seat { position: absolute; width: 16px; height: 16px; border-radius: 6px; background: var(--border-strong); left: 46px; top: 46px; transition: background .3s; }
 .table-card.occupied { border-color: color-mix(in srgb, var(--brand) 35%, var(--border)); }
@@ -891,4 +899,45 @@ p { margin: 0; }
 @media (max-width: 720px) {
   .kpi .spark { display: none; }
   .menu-admin .item-cell small { max-width: 180px; }
+}
+
+/* ==========================================================================
+   Interaction fixes
+   ========================================================================== */
+.skip-link {
+  position: fixed; left: 12px; top: 12px; z-index: 100; padding: 8px 14px; border-radius: var(--radius-sm);
+  background: var(--text); color: var(--bg); font-weight: 600;
+  transform: translateY(calc(-100% - 16px)); transition: transform .2s var(--ease);
+}
+.skip-link:focus-visible { transform: none; }
+.view:focus { outline: none; }
+.btn.danger-solid { background: var(--red); color: #fff; border-color: transparent; }
+/* Closing overlays fade out instead of vanishing; ui.js removes them once the transition ends. */
+.overlay.closing, .drawer.closing, .modal.closing { opacity: 0; transition: opacity .16s var(--ease); }
+.drawer, .modal { overscroll-behavior: contain; }
+.drawer-body, .modal-body, .order-panel .scroll { overscroll-behavior: contain; }
+.toast { pointer-events: auto; }
+button, .btn, .chip, .nav-item, .icon-btn, .menu-card, .table-picker button, .stepper button { touch-action: manipulation; }
+body { -webkit-tap-highlight-color: transparent; }
+/* iOS zooms into inputs smaller than 16px. */
+@media (pointer: coarse) {
+  .input, .select, .textarea { font-size: 16px; }
+}
+/* Touch screens keep hover styles "stuck" after a tap; drop the lifts there. */
+@media (hover: none) {
+  .menu-card:hover, .table-card:hover, .demo-account:hover { transform: none; box-shadow: var(--shadow-xs); }
+  .menu-card:hover .art span { transform: none; }
+}
+@media (max-width: 1080px) {
+  .order-panel .field textarea { min-height: 60px; }
+}
+.ticket-meta span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ticket-meta span:last-child { flex: none; }
+.segmented button { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 720px) {
+  .order-panel .segmented .icon { display: none; }
+  /* Three actions do not fit side by side on a phone: the main one takes its own row. */
+  .drawer-foot { flex-wrap: wrap; }
+  .drawer-foot .btn { flex: 1 1 40%; min-width: 0; }
+  .drawer-foot .btn.primary { flex-basis: 100%; order: -1; }
 }

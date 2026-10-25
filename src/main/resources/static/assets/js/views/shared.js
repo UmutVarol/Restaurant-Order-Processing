@@ -59,7 +59,13 @@ export function openOrderDrawer(orderId, user) {
   let unsubscribe = () => {};
 
   const drawer = openDrawer((handle) => {
-    if (failed) return h('div', { class: 'empty' }, h('div', { class: 'art' }, '😕'), h('h4', null, t('common.loadFailed')));
+    if (failed) {
+      return [
+        h('div', { class: 'drawer-head' }, h('div', { style: { flex: 1 } }),
+          h('button', { class: 'icon-btn', 'aria-label': t('common.close'), onclick: handle.close }, icon('x'))),
+        h('div', { class: 'empty' }, h('div', { class: 'art' }, '😕'), h('h4', null, t('common.loadFailed'))),
+      ];
+    }
     if (!order) return skeletonDrawer(handle);
     return drawerContent(order, user, handle, async (action) => {
       const updated = await action();
@@ -86,7 +92,7 @@ export function openOrderDrawer(orderId, user) {
 function skeletonDrawer(handle) {
   return [
     h('div', { class: 'drawer-head' }, h('div', { class: 'skeleton', style: { width: '180px', height: '30px' } }),
-      h('button', { class: 'icon-btn', style: { marginLeft: 'auto' }, onclick: handle.close }, icon('x'))),
+      h('button', { class: 'icon-btn', style: { marginLeft: 'auto' }, 'aria-label': t('common.close'), onclick: handle.close }, icon('x'))),
     h('div', { class: 'drawer-body' }, [120, 200, 160].map((height) => h('div', { class: 'skeleton', style: { height: `${height}px` } }))),
   ];
 }
@@ -96,7 +102,7 @@ function drawerContent(order, user, handle, run) {
   return [
     h('div', { class: 'drawer-head' },
       h('div', { style: { flex: 1 } },
-        h('h2', null, t('detail.title', { id: order.id })),
+        h('h2', { id: `order-${order.id}-title` }, t('detail.title', { id: order.id })),
         h('div', { class: 'row', style: { marginTop: '8px', flexWrap: 'wrap' } }, statusPill(order.status), typeBadge(order),
           h('span', { class: 'muted', style: { fontSize: '12.5px' } }, dateTime(order.createdAt)))),
       h('button', { class: 'icon-btn', 'aria-label': t('common.close'), onclick: handle.close }, icon('x'))),

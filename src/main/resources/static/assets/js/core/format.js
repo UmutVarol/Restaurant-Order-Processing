@@ -1,5 +1,5 @@
 // Locale-aware formatting for money, numbers, times and durations.
-import { lang, locale, t } from './i18n.js';
+import { lang, locale, t, tn } from './i18n.js';
 
 const cache = new Map();
 
@@ -36,8 +36,16 @@ export function percent(value) {
   return new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(value ?? 0);
 }
 
+let timeFormatter = null;
+function timeFormat() {
+  if (timeFormatter?.resolvedOptions().locale !== locale()) {
+    timeFormatter = new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' });
+  }
+  return timeFormatter;
+}
+
 export function time(iso) {
-  return new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
+  return timeFormat().format(new Date(iso));
 }
 
 export function dateTime(iso) {
@@ -72,5 +80,5 @@ export function durationMinutes(minutes) {
 }
 
 export function itemCount(n) {
-  return n === 1 ? t('pos.item') : t('pos.items', { n });
+  return tn('pos.items', n);
 }

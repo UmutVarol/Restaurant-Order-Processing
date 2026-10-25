@@ -20,11 +20,16 @@ export default {
   mount(container, { user, actions }) {
     let orders = null;
     const fresh = new Set();
+    // Tickets that already played their arrival animation; a re-render (every status change) must not replay it.
+    const arrived = new Set();
     const board = h('div', { class: 'kds' });
     const summary = h('div', { class: 'kds-summary' });
 
-    const soundButton = h('button', { class: 'btn sm', title: t('kitchen.sound') });
-    const renderSound = () => mount(soundButton, icon(prefs.sound ? 'sound' : 'mute', 'sm'), h('span', { class: 'btn-label' }, t('kitchen.sound')));
+    const soundButton = h('button', { class: 'btn sm', title: t('kitchen.sound'), 'aria-label': t('kitchen.sound') });
+    const renderSound = () => {
+      soundButton.setAttribute('aria-pressed', String(prefs.sound));
+      mount(soundButton, icon(prefs.sound ? 'sound' : 'mute', 'sm'), h('span', { class: 'btn-label' }, t('kitchen.sound')));
+    };
     soundButton.addEventListener('click', () => {
       prefs.sound = !prefs.sound;
       if (prefs.sound) chime();
@@ -66,7 +71,10 @@ export default {
           button.disabled = false;
         },
       }, label, icon('arrowRight', 'sm'));
-      return h('article', { class: ['ticket', fresh.has(order.id) ? 'fresh' : ''], style: { '--accent': accent } },
+      const isFresh = fresh.has(order.id);
+      const drop = isFresh && !arrived.has(order.id);
+      if (isFresh) arrived.add(order.id);
+      return h('article', { class: ['ticket', isFresh ? 'fresh' : '', drop ? 'drop' : ''], style: { '--accent': accent } },
         h('div', { class: 'ticket-head' },
           h('button', { class: 'ticket-no', style: { border: 0, background: 'none', padding: 0 }, onclick: () => openOrderDrawer(order.id, user) }, `#${order.id}`),
           typeBadge(order),
@@ -123,10 +131,16 @@ export default {
     }
 
     const reload = debounce(load, 150);
+    const timeouts = new Set();
     const offOrder = bus.on('order', (event) => {
       if (event.kind === 'CREATED') {
         fresh.add(event.orderId);
-        setTimeout(() => { fresh.delete(event.orderId); board.querySelectorAll('.ticket.fresh').forEach((el) => el.classList.remove('fresh')); }, 8000);
+        const timeout = setTimeout(() => {
+          timeouts.delete(timeout);
+          fresh.delete(event.orderId);
+          board.querySelectorAll('.ticket.fresh').forEach((el) => el.classList.remove('fresh'));
+        }, 8000);
+        timeouts.add(timeout);
         if (prefs.sound) chime();
         toast({
           title: t('kitchen.newOrder', { id: event.orderId }),
@@ -146,6 +160,7 @@ export default {
       destroy() {
         offOrder();
         clearInterval(timer);
+        timeouts.forEach(clearTimeout);
         reload.cancel();
       },
     };

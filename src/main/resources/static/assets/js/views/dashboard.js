@@ -1,7 +1,7 @@
 // Manager dashboard: KPIs with period-over-period trends, revenue, busiest hours, category mix and best sellers.
 import { debounce, h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
-import { t } from '../core/i18n.js';
+import { t, tn } from '../core/i18n.js';
 import { dayLabel, durationMinutes, money, moneyShort, number, percent } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
@@ -69,14 +69,14 @@ export default {
         let running = 0;
         return areaChart(hours.map((point) => {
           running += Number(point.revenue);
-          return { label: `${String(point.hour).padStart(2, '0')}:00`, value: running, tip: money(running), sub: t('dash.orders', { n: point.orders }) };
+          return { label: `${String(point.hour).padStart(2, '0')}:00`, value: running, tip: money(running), sub: tn('dash.orders', point.orders) };
         }), { format: moneyShort });
       }
       return areaChart(data.daily.map((point) => ({
         label: dayLabel(point.date, period > 7 ? { day: 'numeric', month: 'short' } : { weekday: 'short' }),
         value: Number(point.revenue),
         tip: money(point.revenue),
-        sub: `${dayLabel(point.date, { weekday: 'long', day: 'numeric', month: 'long' })} · ${t('dash.orders', { n: point.orders })}`,
+        sub: `${dayLabel(point.date, { weekday: 'long', day: 'numeric', month: 'long' })} · ${tn('dash.orders', point.orders)}`,
       })), { format: moneyShort });
     }
 
@@ -91,7 +91,7 @@ export default {
       return barChart(visibleHours().map((point) => ({
         label: String(point.hour).padStart(2, '0'),
         value: point.orders,
-        tip: t('dash.orders', { n: point.orders }),
+        tip: tn('dash.orders', point.orders),
         sub: `${String(point.hour).padStart(2, '0')}:00–${String((point.hour + 1) % 24).padStart(2, '0')}:00 · ${money(point.revenue)}`,
       })));
     }
@@ -121,7 +121,7 @@ export default {
     function splitBar(title, parts) {
       const total = parts.reduce((sum, p) => sum + p.value, 0) || 1;
       return h('div', { class: 'split-bar' },
-        h('div', { class: 'head' }, h('b', null, title), h('span', { class: 'muted' }, t('dash.orders', { n: number(total) }))),
+        h('div', { class: 'head' }, h('b', null, title), h('span', { class: 'muted' }, tn('dash.orders', total))),
         h('div', { class: 'track' }, parts.filter((p) => p.value > 0).map((p) => h('i', {
           style: { width: `${(p.value / total) * 100}%`, background: p.color }, title: `${p.label}: ${p.value}`,
         }))),

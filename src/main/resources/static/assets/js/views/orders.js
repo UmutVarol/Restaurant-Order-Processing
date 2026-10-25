@@ -16,7 +16,30 @@ const STATUS_FILTERS = {
 };
 const PAGE_SIZE = 12;
 
-const state = { status: 'all', range: 'week', type: '', query: '', page: 0 };
+const DEFAULTS = { status: 'all', range: 'week', type: '', query: '', page: 0 };
+const RANGES = ['today', 'week', 'all'];
+const TYPES = ['DINE_IN', 'TAKEAWAY', 'DELIVERY'];
+const state = { ...DEFAULTS };
+
+/** Filters live in the hash query (#/orders?status=active&q=ayşe) so a filtered list can be bookmarked or shared. */
+function readParams(params) {
+  state.status = params.status in STATUS_FILTERS ? params.status : DEFAULTS.status;
+  state.range = RANGES.includes(params.range) ? params.range : DEFAULTS.range;
+  state.type = TYPES.includes(params.type) ? params.type : DEFAULTS.type;
+  state.query = (params.q || '').slice(0, 100);
+  state.page = Math.max(0, Number.parseInt(params.page, 10) - 1 || 0);
+}
+
+function writeParams() {
+  const query = new URLSearchParams();
+  if (state.status !== DEFAULTS.status) query.set('status', state.status);
+  if (state.range !== DEFAULTS.range) query.set('range', state.range);
+  if (state.type) query.set('type', state.type);
+  if (state.query.trim()) query.set('q', state.query.trim());
+  if (state.page > 0) query.set('page', String(state.page + 1));
+  const hash = `#/orders${query.size ? `?${query}` : ''}`;
+  if (location.hash !== hash) history.replaceState(null, '', hash);
+}
 
 function isoDate(daysAgo = 0) {
   const date = new Date();
@@ -27,7 +50,8 @@ function isoDate(daysAgo = 0) {
 export default {
   title: 'orders.title',
   subtitle: 'orders.sub',
-  mount(container, { user }) {
+  mount(container, { user, params }) {
+    if (Object.keys(params).length) readParams(params);
     let page = null;
     let loading = false;
 
@@ -57,10 +81,12 @@ export default {
     function renderFilters() {
       mount(statusChips, Object.keys(STATUS_FILTERS).map((key) => h('button', {
         class: ['chip', state.status === key ? 'active' : ''],
+        'aria-pressed': String(state.status === key),
         onclick: () => { state.status = key; state.page = 0; renderFilters(); load(); },
       }, t(`orders.${key}`))));
       mount(rangeSwitch, [['today', 'orders.today'], ['week', 'orders.week'], ['all', 'orders.allTime']].map(([key, label]) => h('button', {
         class: state.range === key ? 'active' : '',
+        'aria-pressed': String(state.range === key),
         onclick: () => { state.range = key; state.page = 0; renderFilters(); load(); },
       }, t(label))));
     }
@@ -72,7 +98,9 @@ export default {
         return;
       }
       if (!page.content.length) {
-        mount(tableCard, h('div', { class: 'empty' }, h('div', { class: 'art' }, '🗂️'), h('h4', null, t('orders.none')), h('p', null, t('orders.noneHint'))));
+        const filtered = state.status !== DEFAULTS.status || state.type || state.query.trim() || state.range !== 'all';
+        mount(tableCard, h('div', { class: 'empty' }, h('div', { class: 'art' }, '🗂️'), h('h4', null, t('orders.none')), h('p', null, t('orders.noneHint')),
+          filtered ? h('button', { class: 'btn sm', onclick: clearFilters }, t('orders.clearFilters')) : null));
         return;
       }
       const from = page.page * page.size + 1;
@@ -87,8 +115,15 @@ export default {
             h('th', { class: 'hide-sm' }, t('orders.col.items')),
             h('th', { class: 'right' }, t('orders.col.total')),
             h('th', null, t('orders.col.status')))),
-          h('tbody', null, page.content.map((order) => h('tr', { onclick: () => openOrderDrawer(order.id, user), tabindex: 0,
-            onkeydown: (event) => { if (event.key === 'Enter') openOrderDrawer(order.id, user); } },
+          h('tbody', null, page.content.map((order) => h('tr', {
+            onclick: () => openOrderDrawer(order.id, user), tabindex: 0, 'aria-haspopup': 'dialog',
+            onkeydown: (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openOrderDrawer(order.id, user);
+              }
+            },
+          },
           h('td', { class: 'order-no' }, `#${order.id}`),
           h('td', { class: 'when' }, dateTime(order.createdAt)),
           h('td', { class: 'customer' }, h('b', null, order.customerName), order.customerPhone ? h('small', null, order.customerPhone) : null),
@@ -103,7 +138,16 @@ export default {
             h('button', { class: 'btn sm', disabled: page.last, onclick: () => { state.page += 1; load(); } }, t('orders.next'), icon('chevronRight', 'sm')))));
     }
 
+    function clearFilters() {
+      Object.assign(state, DEFAULTS, { range: 'all' });
+      search.value = '';
+      typeSelect.value = '';
+      renderFilters();
+      load();
+    }
+
     async function load() {
+      writeParams();
       loading = true;
       render();
       try {

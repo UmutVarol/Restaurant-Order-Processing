@@ -2,7 +2,7 @@
 
 <img src="src/main/resources/static/favicon.svg" width="72" alt="Sofra logo">
 
-# Sofra — Restaurant Order Processing
+# Sofra: Restaurant Order Processing
 
 **A real-time restaurant point-of-sale built with Spring Boot 4 and Java 21.**<br>
 Waiters take orders at the till, tickets land on the kitchen display the instant they are placed,
@@ -24,8 +24,9 @@ the floor plan tracks every open check, and the manager watches it all on a live
 
 - [Highlights](#highlights)
 - [Screenshots](#screenshots)
-- [Quick start](#quick-start) · [in-browser demo](#without-installing-anything)
+- [Quick start](#quick-start) and the [in-browser demo](#without-installing-anything)
 - [Architecture](#architecture)
+- [Design](#design)
 - [Engineering decisions](#engineering-decisions)
 - [REST API](#rest-api)
 - [Testing](#testing)
@@ -35,16 +36,16 @@ the floor plan tracks every open check, and the manager watches it all on a live
 
 ## Highlights
 
-| | |
+| Area | What it does |
 |---|---|
-| 🧾 **Point of sale** | Menu grid with search, category and dietary filters · dine-in / takeaway / delivery · table picker with live occupancy · per-line kitchen notes · coupons · prices quoted live by the server · free-delivery progress · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to send |
-| 👩‍🍳 **Kitchen display** | Kanban board fed by **Server-Sent Events** — no polling, no refresh · SLA timers that turn amber and red · one-tap status changes · new-ticket highlight and optional chime |
-| 🪑 **Floor plan** | Every table with its seats, open check, status and time seated · tap a free table to start an order for it |
-| 📋 **Orders** | Paginated history with full-text search (order #, guest, phone, table, address), status/type/date filters · detail drawer with audit timeline · cancel with reason · printable receipt |
-| 📈 **Dashboard** | Revenue, orders, average ticket and kitchen time with period-over-period trends · daily revenue · busiest hours · category mix · best sellers · channels and payment methods |
-| 🍽️ **Menu management** | Create, edit and archive dishes · sold-out toggle · popularity and dietary tags · history-safe soft deletes |
-| 🔐 **Security** | Stateless JWT (HS256) with three roles — **Manager**, **Waiter**, **Kitchen** — enforced on every endpoint |
-| 🌗 **Polish** | Light & dark themes · English & Turkish · responsive down to phones · keyboard shortcuts · accessible markup |
+| **Point of sale** | Menu grouped by category, with search and dietary filters. Dine-in, takeaway or delivery, a table picker with live occupancy, per-line kitchen notes and coupons. The server prices the ticket live, and <kbd>Ctrl</kbd>+<kbd>Enter</kbd> sends it. |
+| **Kitchen display** | Kanban board fed by **Server-Sent Events** with no polling or refresh. SLA timers turn amber, then red. One tap moves a ticket on, and new tickets are highlighted, with an optional chime. |
+| **Floor plan** | Every table with its seats, open check, status and time seated. Tap a free table to start an order for it. |
+| **Orders** | Paginated history with full-text search (order #, guest, phone, table, address) and status, type and date filters kept in the URL. A detail drawer shows the audit timeline, cancellation with a reason and a printable receipt. |
+| **Dashboard** | Revenue, orders, average ticket and kitchen time against the previous period, with daily revenue, busiest hours, category mix, best sellers, channels and payment methods. |
+| **Menu management** | Create, edit and archive dishes, toggle sold-out, and set popularity and dietary tags. Deletes are soft, so history stays intact. |
+| **Security** | Stateless JWT (HS256) with three roles, **Manager**, **Waiter** and **Kitchen**, enforced on every endpoint. |
+| **Interface** | A documented design language ([DESIGN.md](DESIGN.md)), light and dark themes, English and Turkish, phone layouts, keyboard shortcuts and accessible markup, covered by Playwright browser tests. |
 
 ## Screenshots
 
@@ -62,7 +63,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 
 ## Quick start
 
-**Requirements:** Java 21. Nothing else — Maven is bundled through the wrapper and the default database is an in-memory H2.
+**Requirements:** Java 21. Nothing else: Maven is bundled through the wrapper and the default database is an in-memory H2.
 
 ```bash
 git clone https://github.com/UmutVarol/Restaurant-Order-Processing.git
@@ -74,11 +75,11 @@ Open **http://localhost:8080** and pick a demo account:
 
 | Role | Username | Password | Lands on |
 |---|---|---|---|
-| Manager | `admin` | `admin123` | Dashboard — everything is available |
+| Manager | `admin` | `admin123` | Dashboard, with everything available |
 | Waiter | `waiter` | `waiter123` | Point of sale, kitchen, floor, orders |
 | Kitchen | `chef` | `chef123` | Kitchen display, floor, orders |
 
-> **Tip:** sessions are per browser tab — sign in as the waiter in one tab and the chef in another, send an order
+> **Tip:** sessions are per browser tab, so you can sign in as the waiter in one tab and the chef in another, send an order
 > from the till and watch it appear on the kitchen display.
 
 Demo mode generates two weeks of realistic history on start-up (lunch and dinner rushes, busier weekends,
@@ -87,7 +88,7 @@ coupons, cancellations) plus a handful of orders from the last half hour, so eve
 ### Without installing anything
 
 [`demo/`](demo) holds a static build of the same web client wired to an in-browser simulation of the API
-([`mock-backend.js`](demo/mock-backend.js) — same endpoints, pricing, roles, validation, error codes and event
+([`mock-backend.js`](demo/mock-backend.js): same endpoints, pricing, roles, validation, error codes and event
 stream). Tabs share the simulated restaurant, so a waiter tab and a chef tab behave like two devices.
 To publish it on GitHub Pages: *Settings → Pages → Source: GitHub Actions*, then run the **Deploy demo** workflow.
 
@@ -111,18 +112,18 @@ docker compose up --build       # app + PostgreSQL 16 → http://localhost:8080
 
 ```mermaid
 flowchart LR
-    subgraph Browser["Browser — vanilla JS SPA (ES modules, no build step)"]
+    subgraph Browser["Browser: vanilla JS SPA (ES modules, no build step)"]
         POS[Point of sale]
         KDS[Kitchen display]
         FLOOR[Floor plan]
         DASH[Dashboard]
     end
 
-    subgraph App["Spring Boot 4 · Java 21 · virtual threads"]
-        SEC[Security filter chain<br/>JWT · roles]
-        API[REST controllers<br/>Bean Validation · ProblemDetail]
+    subgraph App["Spring Boot 4, Java 21, virtual threads"]
+        SEC[Security filter chain<br/>JWT, roles]
+        API[REST controllers<br/>Bean Validation, ProblemDetail]
         SVC[Application services]
-        DOM[Domain model<br/>Order aggregate · state machine<br/>pricing · coupons]
+        DOM[Domain model<br/>Order aggregate, state machine<br/>pricing, coupons]
         EVT[OrderChangedEvent]
         SSE[SSE broadcaster]
         MET[Micrometer metrics]
@@ -178,6 +179,19 @@ stateDiagram-v2
     CANCELLED --> [*]
 ```
 
+## Design
+
+The visual language is written down in [DESIGN.md](DESIGN.md): a warm *lokanta* palette (cream, tomato red,
+saffron, an espresso sidebar), Fraunces for titles and figures, Inter for text, and a fixed set of colours for
+order states.
+
+- **Built for worst-case content.** Every screen was checked with 80-character names, 255-character addresses
+  and a ₺600,000 ticket, and nothing scrolls sideways on a phone.
+- **Motion with a job.** Button press feedback, a one-time arrival animation for new kitchen tickets, and
+  toasts and dialogs that fade out instead of vanishing.
+- **Accessible by default.** A skip link, labelled controls, inert background behind dialogs, keyboard access
+  to every row, and real plurals in both languages.
+
 ## Engineering decisions
 
 - **Money is `BigDecimal`, never `double`.** Two fraction digits, half-up rounding, `NUMERIC(12,2)` in the database.
@@ -195,7 +209,7 @@ stateDiagram-v2
   (`COUPON_EXPIRED`, `ORDER_NOT_CANCELLABLE`, …) and parameters. The UI translates codes, so the API stays
   language-neutral.
 - **Preview without side effects.** Coupon validation returns a result object instead of throwing across the
-  transactional boundary — a thrown exception would mark the caller's transaction rollback-only (a real bug the
+  transactional boundary. A thrown exception would mark the caller's transaction rollback-only (a real bug the
   integration tests caught).
 - **Stateless JWT security.** HS256 tokens signed with a configurable secret, roles in a `roles` claim, issuer and
   expiry verified with an injectable `Clock`. CSRF is unnecessary because nothing is authenticated by cookies.
@@ -254,22 +268,33 @@ curl -s -X POST localhost:8080/api/v1/orders -H "Authorization: Bearer $TOKEN" -
 | Domain unit tests | state machine for every order type, pricing and rounding, coupon rules, aggregate invariants, custom validator |
 | Service tests (Mockito) | order placement, sold-out and unknown dishes, quotes with invalid coupons, event publication, analytics bucketing across time zones |
 | Full-stack API tests (MockMvc) | real JWT login, role-based access (401 / 403), validation problems, the whole dine-in and delivery lifecycles, search, floor occupancy, SSE stream, security headers |
-| Architecture & database | ArchUnit rules (no cycles, controllers never touch repositories, entities know nothing about the web) · **Testcontainers PostgreSQL** run of migrations, demo data and aggregate queries |
+| Architecture & database | ArchUnit rules (no cycles, controllers never touch repositories, entities know nothing about the web), plus a **Testcontainers PostgreSQL** run of migrations, demo data and aggregate queries |
 
-CI runs everything on every push, then builds the Docker image and smoke-tests the running container.
+Browser tests ([`e2e/`](e2e)) drive the real web client with Playwright, at desktop and phone sizes:
+
+```bash
+cd e2e && npm install && npx playwright install chromium && npm test   # with the app running on :8080
+```
+
+They cover the waiter-to-kitchen loop over Server-Sent Events, the POS rules (server-side pricing, coupons,
+the 50-per-line limit, clear and undo, the kitchen note), filters kept in the URL, keyboard access to dialogs, and a check that
+no screen scrolls sideways at 390px, in either theme.
+
+CI runs the Maven build, then the browser tests against the packaged jar, then builds the Docker image and
+smoke-tests the running container.
 
 ## Configuration
 
 | Variable | Default | Description |
 |---|---|---|
-| `JWT_SECRET` | dev-only value | HS256 signing key, **≥ 32 characters — set it in production** |
+| `JWT_SECRET` | dev-only value | HS256 signing key, **at least 32 characters; set it in production** |
 | `DEMO_MODE` | `true` | Create demo accounts and history on an empty database |
 | `SPRING_PROFILES_ACTIVE` | — | `postgres` to use PostgreSQL |
 | `DATABASE_URL` / `DATABASE_USERNAME` / `DATABASE_PASSWORD` | `jdbc:postgresql://localhost:5432/sofra` | PostgreSQL connection (with the `postgres` profile) |
 | `RESTAURANT_BOOTSTRAP_ADMIN_PASSWORD` | — | Creates an `admin` account on first start when demo mode is off |
 | `PORT` | `8080` | HTTP port |
 
-Business rules — tax rate, delivery fee, free-delivery threshold, time zone — are under `restaurant.*` in
+Business rules (tax rate, delivery fee, free-delivery threshold, time zone) are under `restaurant.*` in
 [`application.yml`](src/main/resources/application.yml) and validated on start-up.
 
 ## Project history
@@ -279,7 +304,7 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 [`legacy/swing-desktop`](legacy/swing-desktop) for comparison.
 
 <details>
-<summary>v1 — the original Swing application</summary>
+<summary>v1: the original Swing application</summary>
 
 ![Swing version](docs/screenshots/v1-swing.png)
 
@@ -295,7 +320,8 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 - **Yönetici paneli** ciro, sipariş sayısı, ortalama sepet ve mutfak süresini önceki dönemle karşılaştırır; en yoğun saatleri ve en çok satanları gösterir.
 - JWT ile rol bazlı yetkilendirme (Yönetici / Garson / Mutfak), Flyway, PostgreSQL, Docker, OpenAPI, Prometheus metrikleri.
 - 100'ü aşkın test (birim, entegrasyon, mimari, Testcontainers) ve ~%95 kod kapsamı.
-- Açık/koyu tema, Türkçe/İngilizce arayüz, mobil uyumlu tasarım.
+- [DESIGN.md](DESIGN.md) ile belgelenmiş sıcak lokanta tasarımı: açık/koyu tema, Türkçe/İngilizce arayüz, mobil uyumlu düzen.
+- Playwright tarayıcı testleri: garsondan mutfağa canlı akış, POS kuralları ve 390px genişlikte taşma kontrolü.
 
 Çalıştırmak için: `./mvnw spring-boot:run` → **http://localhost:8080** (demo hesaplar yukarıdaki tabloda).
 

@@ -1,0 +1,11 @@
+{
+  "name": "sofra-e2e",
+  "private": true,
+  "description": "Browser tests for the Sofra web client, run against a live Spring Boot server.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}

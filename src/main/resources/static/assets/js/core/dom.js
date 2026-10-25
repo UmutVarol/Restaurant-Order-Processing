@@ -64,6 +64,10 @@ export function debounce(fn, wait = 250) {
   return debounced;
 }
 
+const graphemes = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
+
+/** First letter of the first two words. Splits by grapheme so "Ömer" or an emoji never breaks in half. */
 export function initials(name = '') {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0].toLocaleUpperCase()).join('');
+  const first = (word) => (graphemes ? graphemes.segment(word)[Symbol.iterator]().next().value?.segment : [...word][0]) ?? '';
+  return name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((word) => first(word).toLocaleUpperCase('tr')).join('');
 }
