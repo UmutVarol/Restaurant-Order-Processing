@@ -37,12 +37,15 @@ public class BillService implements SettlementPolicy {
     private final BillRepository bills;
     private final OrderRepository orders;
     private final ApplicationEventPublisher events;
+    private final PaymentAuditLog audit;
     private final Clock clock;
 
-    public BillService(BillRepository bills, OrderRepository orders, ApplicationEventPublisher events, Clock clock) {
+    public BillService(BillRepository bills, OrderRepository orders, ApplicationEventPublisher events,
+                       PaymentAuditLog audit, Clock clock) {
         this.bills = bills;
         this.orders = orders;
         this.events = events;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -95,6 +98,7 @@ public class BillService implements SettlementPolicy {
         }
         bills.flush(); // assigns the refunds their ids
         for (Refund refund : refunds) {
+            audit.refund(refund, refund.getCreatedBy());
             events.publishEvent(PaymentChangedEvent.refund(refund, at));
             if (refund.getStatus() == RefundStatus.PENDING) {
                 events.publishEvent(new OnlineRefundRequested(refund.getId()));

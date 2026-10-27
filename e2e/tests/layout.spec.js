@@ -6,6 +6,11 @@ const ROUTES = ['dashboard', 'pos', 'kitchen', 'floor', 'orders', 'cashier', 'me
 
 for (const theme of ['light', 'dark']) {
   test(`every screen fits the viewport in the ${theme} theme`, async ({ page }) => {
+    // The strict CSP and Trusted Types must never block the app itself: any such console error fails the test.
+    const blocked = [];
+    page.on('console', (message) => {
+      if (/Content Security Policy|Trusted ?(HTML|Script|Type)/i.test(message.text())) blocked.push(message.text());
+    });
     await signIn(page, 'admin');
     if (theme === 'dark') await page.getByRole('button', { name: 'Toggle dark mode' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
@@ -15,6 +20,7 @@ for (const theme of ['light', 'dark']) {
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, `${route} scrolls sideways`).toBeLessThanOrEqual(0);
     }
+    expect(blocked, 'blocked by the Content Security Policy').toEqual([]);
   });
 }
 

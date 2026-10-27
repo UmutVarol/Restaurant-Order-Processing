@@ -68,10 +68,11 @@ sequenceDiagram
     S->>I: Initialize checkout form (signed request)
     I-->>G: Hosted payment page, card + 3-D Secure
     G->>S: Browser comes back to the callback with a token
+    I--)S: Webhook (optional): "something happened to this checkout"
     S->>I: Retrieve the result (server to server)
     I-->>S: Signed answer
-    S->>S: Check signature, conversation id, token and amount
-    S-->>G: Back to the link: "Thank you, 441,50 ₺ received"
+    S->>S: Check signature, conversation id, token, amount, currency, fraud status
+    S-->>G: Back to #/pay/return, then the link: "Thank you, 441,50 ₺ received"
     S-->>W: Live update over SSE, the bill closes when fully paid
 ```
 
@@ -83,11 +84,24 @@ sequenceDiagram
 - **Links** are 256-bit random tokens that expire after 2 hours (`restaurant.payments.link-ttl`) and stop working
   once the bill is closed. Only a hash is stored, so a database leak does not hand out working links. The guest
   page shows the items and totals, never staff names or other guests' details.
+- **The return address carries no link token.** The guest's phone remembers which link it came from, so the token
+  is never seen by iyzico or written to a log on the way back.
 - **A share in progress is held.** While a guest is on iyzico's page, that amount cannot be taken a second time at
-  the till. A guest who walks away is given up after 30 minutes (`pending-ttl`), and iyzico is asked first in case
-  they did pay. A payment that arrives after that is still recorded, and any overpayment is refunded.
-- **Refunds iyzico could not be reached for** are retried every few minutes. A refund iyzico refuses is marked
-  failed and logged, and the amount becomes refundable again so a manager can deal with it.
+  the till. A link holds one checkout at a time, and a new one is refused for a minute after the last.
+- **Guests who never come back are still recorded.** Unfinished checkouts are checked with iyzico after 2 minutes,
+  and an iyzico webhook to `/api/v1/payments/webhook/iyzico` triggers the same check at once. The webhook body is
+  not trusted, so it needs no signature to be safe. A checkout still unfinished after 30 minutes (`pending-ttl`) is
+  given up. A payment that arrives after that is still recorded, and any overpayment is refunded.
+- **Staff can release an abandoned checkout** from the bill (the guest decided to pay cash after all). iyzico is
+  asked first; a payment that went through is kept.
+- **Fraud review.** A payment iyzico holds for fraud review stays "under review": the money is held and the bill
+  waits until iyzico approves (recorded) or rejects it (failed).
+- **Refunds iyzico could not be reached for** are retried every few minutes. Each refund is claimed in the database
+  before it is sent, so it is never sent twice. A refund iyzico refuses is marked failed and logged, and the amount
+  becomes refundable again so a manager can deal with it.
+- **Refunds and closing the day need a fresh sign-in** (within 5 minutes); the till asks for the password again.
+- **Everything is audited** in the `payment.audit` log, and suspicious events are counted in
+  `sofra.payments.suspicious` for alerting. See [SECURITY.md](../SECURITY.md#payments) for the full threat model.
 
 ## End of day
 
@@ -116,6 +130,9 @@ Closing the day records the counted cash and the difference (`variance`). Each d
    | `IYZICO_BASE_URL` | `https://sandbox-api.iyzipay.com` for testing, `https://api.iyzipay.com` live |
    | `PUBLIC_BASE_URL` | the HTTPS address guests reach, e.g. `https://pay.example.com`. Used in QR links and as the callback address |
 
+   In the iyzico merchant panel, set the notification (webhook) address to `PUBLIC_BASE_URL` +
+   `/api/v1/payments/webhook/iyzico`.
+
 3. Serve the app over HTTPS only: QR links and the provider callback must never travel over plain HTTP.
 4. Test end to end in the sandbox with the test cards listed in iyzico's developer documentation, including a
    declined card and a refund.
@@ -140,12 +157,14 @@ Stripe can be added as another implementation without touching bills or payments
 | `GET` | `/api/v1/bills/{id}`, `/api/v1/bills/by-order/{orderId}` | Waiter, Manager | A bill with its orders and payments |
 | `POST` | `/api/v1/bills/{id}/payments` | Waiter, Manager | Take cash or card (`Idempotency-Key` header recommended) |
 | `POST` | `/api/v1/bills/{id}/links` | Waiter, Manager | Create a QR payment link, for the whole bill or a fixed share |
-| `POST` | `/api/v1/payments/{id}/refunds` | Manager | Refund part or all of a payment |
+| `POST` | `/api/v1/bills/{id}/payments/{paymentId}/release` | Waiter, Manager | Give up an unfinished online payment |
+| `POST` | `/api/v1/payments/{id}/refunds` | Manager, recent sign-in | Refund part or all of a payment |
 | `GET` | `/api/v1/payments/day?date=` | Manager | Z report |
-| `POST` | `/api/v1/payments/day/close` | Manager | Close a day with the counted cash |
+| `POST` | `/api/v1/payments/day/close` | Manager, recent sign-in | Close a day with the counted cash |
 | `GET` | `/api/v1/public/pay/{token}` | anyone with the link | What the guest sees |
 | `POST` | `/api/v1/public/pay/{token}/checkout` | anyone with the link | Start paying, returns the provider's page |
 | `POST` | `/api/v1/payments/callback/{provider}` | the provider | Where the guest's browser returns |
+| `POST` | `/api/v1/payments/webhook/{provider}` | the provider | Notification that triggers a check; the body is not trusted |
 
 ```bash
 curl -s -X POST localhost:8080/api/v1/bills/5001/payments \

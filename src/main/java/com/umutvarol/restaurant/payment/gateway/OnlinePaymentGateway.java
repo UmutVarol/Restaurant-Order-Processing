@@ -46,7 +46,11 @@ public interface OnlinePaymentGateway {
     record CheckoutOutcome(Status status, @Nullable String providerPaymentId, @Nullable BigDecimal paidAmount,
                            @Nullable String failureReason) {
 
-        public enum Status { SUCCEEDED, FAILED, PENDING }
+        /**
+         * {@code REVIEW}: the card was charged but the provider's fraud team is still checking it. The money is held
+         * and the payment is neither confirmed nor given up until the provider decides.
+         */
+        public enum Status { SUCCEEDED, FAILED, PENDING, REVIEW }
 
         public static CheckoutOutcome pending() {
             return new CheckoutOutcome(Status.PENDING, null, null, null);

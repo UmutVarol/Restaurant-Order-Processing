@@ -109,7 +109,11 @@ restaurant:
       enabled: true
       api-requests-per-minute: 600
       login-requests-per-minute: 60
+      # Guest payment pages, provider callbacks and notifications, browser security reports.
+      public-requests-per-minute: 120
     max-request-body: 64KB
+    # Refunds and closing the day need a sign-in at most this old (step-up authentication).
+    step-up-window: 5m
   realtime:
     max-subscribers: 500
     max-subscribers-per-user: 10

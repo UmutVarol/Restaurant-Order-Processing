@@ -27,4 +27,14 @@ public record IyzicoProperties(
         @DefaultValue("Istanbul") String city,
         @DefaultValue("Turkey") String country,
         @DefaultValue("Moda Cad. No:1, Kadikoy") String address) {
+
+    /** Keys never end up in logs or error pages, even if the settings object is printed. */
+    @Override
+    public String toString() {
+        return "IyzicoProperties[apiKey=%s, secretKey=%s, baseUrl=%s]".formatted(mask(apiKey), mask(secretKey), baseUrl);
+    }
+
+    private static String mask(String key) {
+        return key == null || key.isBlank() ? "<not set>" : "****";
+    }
 }

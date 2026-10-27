@@ -1,0 +1,15 @@
+# Secret scanning (Gitleaks, run in CI over the whole history): the default rules, plus an allowlist for the
+# throwaway keys that tests, CI and local Docker runs use on purpose. They sign nothing real, and the app refuses
+# to start on the development key when demo mode is off.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public, throwaway signing keys for tests, CI and local runs"
+regexTarget = "match"
+regexes = [
+  '''test-secret-that-is-long-enough-for-hs256-0123456789''',
+  '''ci-secret-that-is-long-enough-0123456789''',
+  '''dev-only-secret-change-me-0123456789abcdef''',
+  '''local-compose-secret-change-me-0123456789abcdef''',
+]

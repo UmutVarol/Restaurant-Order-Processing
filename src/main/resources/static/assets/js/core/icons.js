@@ -62,25 +62,42 @@ const PATHS = {
   mute: '<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="m17 9 5 6M22 9l-5 6"/>',
 };
 
-/** Returns an inline SVG icon element. Icon markup is static and trusted. */
+const SHAPE = /<(path|rect|circle|ellipse)\s([^>]*?)\/>/g;
+const ATTRIBUTE = /([a-z-]+)="([^"]*)"/g;
+const parsed = new Map();
+
+/**
+ * Turns the static icon markup above into elements with createElementNS. The page never assigns HTML strings
+ * (no innerHTML), so it can run with Trusted Types enforced, which blocks DOM-based XSS in the browser itself.
+ */
+function shapes(name) {
+  if (!parsed.has(name)) {
+    const markup = PATHS[name] ?? PATHS.info;
+    parsed.set(name, [...markup.matchAll(SHAPE)].map(([, tag, attributes]) =>
+      [tag, Object.fromEntries([...attributes.matchAll(ATTRIBUTE)].map(([, key, value]) => [key, value]))]));
+  }
+  return parsed.get(name);
+}
+
+/** Returns an inline SVG icon element. */
 export function icon(name, className = '') {
-  const svg = s('svg', { viewBox: '0 0 24 24', class: `icon ${className}`.trim(), 'aria-hidden': 'true' });
-  svg.innerHTML = PATHS[name] ?? PATHS.info;
-  return svg;
+  return s('svg', { viewBox: '0 0 24 24', class: `icon ${className}`.trim(), 'aria-hidden': 'true' },
+    shapes(name).map(([tag, attributes]) => s(tag, attributes)));
 }
 
 /** The Sofra brand mark: a steaming bowl on a warm gradient tile. */
 export function logoMark(className = 'logo-mark') {
   const id = `g${Math.random().toString(36).slice(2, 8)}`;
-  const svg = s('svg', { viewBox: '0 0 48 48', class: className, 'aria-hidden': 'true' });
-  svg.innerHTML = `
-    <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#F6A54A"/><stop offset=".55" stop-color="#E4572E"/><stop offset="1" stop-color="#B8381A"/>
-    </linearGradient></defs>
-    <rect width="48" height="48" rx="14" fill="url(#${id})"/>
-    <path d="M10 23h28a14 14 0 0 1-28 0Z" fill="#fff"/>
-    <rect x="16" y="37.5" width="16" height="2.6" rx="1.3" fill="#fff" opacity=".85"/>
-    <path d="M19 18c0-2.2 2.2-2.2 2.2-4.4S19 11.4 19 9.2M26.5 18c0-2.2 2.2-2.2 2.2-4.4s-2.2-2.2-2.2-4.4"
-          stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
-  return svg;
+  return s('svg', { viewBox: '0 0 48 48', class: className, 'aria-hidden': 'true' },
+    s('defs', null, s('linearGradient', { id, x1: '0', y1: '0', x2: '1', y2: '1' },
+      s('stop', { offset: '0', 'stop-color': '#F6A54A' }),
+      s('stop', { offset: '.55', 'stop-color': '#E4572E' }),
+      s('stop', { offset: '1', 'stop-color': '#B8381A' }))),
+    s('rect', { width: '48', height: '48', rx: '14', fill: `url(#${id})` }),
+    s('path', { d: 'M10 23h28a14 14 0 0 1-28 0Z', fill: '#fff' }),
+    s('rect', { x: '16', y: '37.5', width: '16', height: '2.6', rx: '1.3', fill: '#fff', opacity: '.85' }),
+    s('path', {
+      d: 'M19 18c0-2.2 2.2-2.2 2.2-4.4S19 11.4 19 9.2M26.5 18c0-2.2 2.2-2.2 2.2-4.4s-2.2-2.2-2.2-4.4',
+      stroke: '#fff', 'stroke-width': '2.4', fill: 'none', 'stroke-linecap': 'round',
+    }));
 }

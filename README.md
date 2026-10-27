@@ -45,7 +45,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 | **Payments** | One bill per table seating or order: split it equally or by item, take cash (with change) or card (with the terminal's approval code), add tips, or show a **QR code** so guests pay their share from their phone through **iyzico** with 3-D Secure. Orders complete only when paid; cancelled orders are refunded. A cashier screen with the end-of-day Z report and cash count. Details in [docs/PAYMENTS.md](docs/PAYMENTS.md). |
 | **Dashboard** | Revenue, orders, average ticket and kitchen time against the previous period, with daily revenue, busiest hours, category mix, best sellers, channels and payment methods. |
 | **Menu management** | Create, edit and archive dishes, toggle sold-out, and set popularity and dietary tags. Deletes are soft, so history stays intact. |
-| **Security** | Stateless JWT with three roles (**Manager**, **Waiter**, **Kitchen**) enforced on every endpoint, account lockout, rate limiting, token revocation on sign-out, and CodeQL, Trivy and Dependabot in CI. Details in [SECURITY.md](SECURITY.md). |
+| **Security** | Stateless JWT with three roles (**Manager**, **Waiter**, **Kitchen**) enforced on every endpoint, account lockout, rate limiting, token revocation on sign-out, a same-origin-only CSP with **Trusted Types** and violation reports, step-up sign-in for refunds, an audited and tamper-checked payment flow, and CodeQL, Trivy, OWASP ZAP, Gitleaks and Dependabot in CI. Details and the payment threat model in [SECURITY.md](SECURITY.md). |
 | **Interface** | A documented design language ([DESIGN.md](DESIGN.md)), light and dark themes, English and Turkish, phone layouts, keyboard shortcuts and accessible markup, covered by Playwright browser tests. |
 
 ## Screenshots
@@ -337,6 +337,7 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 - **Salon planı** hangi masanın dolu olduğunu, açık hesabı ve oturma süresini canlı gösterir.
 - **Yönetici paneli** ciro, sipariş sayısı, ortalama sepet ve mutfak süresini önceki dönemle karşılaştırır; en yoğun saatleri ve en çok satanları gösterir.
 - **Ödeme altyapısı:** her masa oturumu için tek hesap; eşit ya da ürüne göre bölme, nakit (para üstü), kart (POS onay kodu), bahşiş ve **QR kodla telefondan iyzico (3D Secure) ödemesi**. Ödenmeyen sipariş kapanmaz, iptal edilen sipariş iade edilir; Kasa ekranında gün sonu Z raporu ve kasa sayımı. Ayrıntılar: [docs/PAYMENTS.md](docs/PAYMENTS.md).
+- **Güvenlik:** yalnızca kendi kaynağına izin veren CSP + Trusted Types (XSS/kart hırsızı script'lere karşı tarayıcı düzeyinde engel), iade ve gün kapamada yeniden şifre, sahte ödeme bildirimlerine karşı sunucudan sunucuya doğrulama, ödeme denetim kaydı; CI'da CodeQL, Trivy, OWASP ZAP ve Gitleaks.
 - JWT ile rol bazlı yetkilendirme (Yönetici / Garson / Mutfak), Flyway, PostgreSQL, Docker, OpenAPI, Prometheus metrikleri.
 - 150'yi aşkın test (birim, entegrasyon, mimari, Testcontainers) ve ~%92 kod kapsamı.
 - [DESIGN.md](DESIGN.md) ile belgelenmiş sıcak lokanta tasarımı: açık/koyu tema, Türkçe/İngilizce arayüz, mobil uyumlu düzen.

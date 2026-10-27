@@ -4,6 +4,7 @@ import com.umutvarol.restaurant.payment.dto.CloseDayRequest;
 import com.umutvarol.restaurant.payment.dto.DayReportResponse;
 import com.umutvarol.restaurant.payment.dto.PaymentResponse;
 import com.umutvarol.restaurant.payment.dto.RefundRequest;
+import com.umutvarol.restaurant.security.StepUpAuthentication;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,20 +29,25 @@ class PaymentController {
 
     private final PaymentService paymentService;
     private final DayReportService dayReportService;
+    private final StepUpAuthentication stepUp;
     private final Clock clock;
 
-    PaymentController(PaymentService paymentService, DayReportService dayReportService, Clock clock) {
+    PaymentController(PaymentService paymentService, DayReportService dayReportService, StepUpAuthentication stepUp,
+                      Clock clock) {
         this.paymentService = paymentService;
         this.dayReportService = dayReportService;
+        this.stepUp = stepUp;
         this.clock = clock;
     }
 
     @Operation(summary = "Refund a payment",
-            description = "Cash and card refunds are recorded as given; online refunds are sent to the provider.")
+            description = "Cash and card refunds are recorded as given; online refunds are sent to the provider. "
+                    + "Needs a sign-in from the last 5 minutes (403 REAUTH_REQUIRED otherwise).")
     @PostMapping("/{id}/refunds")
     @ResponseStatus(HttpStatus.CREATED)
     PaymentResponse refund(@PathVariable Long id, @Valid @RequestBody RefundRequest request,
                            Authentication authentication) {
+        stepUp.requireRecentSignIn(authentication);
         return paymentService.refund(id, request, authentication.getName());
     }
 
@@ -51,10 +57,12 @@ class PaymentController {
         return dayReportService.report(date == null ? LocalDate.now(clock) : date);
     }
 
-    @Operation(summary = "Close a day", description = "Records the counted cash and the difference to what was expected.")
+    @Operation(summary = "Close a day",
+            description = "Records the counted cash and the difference to what was expected. Needs a recent sign-in.")
     @PostMapping("/day/close")
     @ResponseStatus(HttpStatus.CREATED)
     DayReportResponse close(@Valid @RequestBody CloseDayRequest request, Authentication authentication) {
+        stepUp.requireRecentSignIn(authentication);
         return dayReportService.close(request.date(), request.countedCash(), request.note(), authentication.getName());
     }
 }

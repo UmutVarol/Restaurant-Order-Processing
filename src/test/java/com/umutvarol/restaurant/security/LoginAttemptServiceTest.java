@@ -15,8 +15,8 @@ class LoginAttemptServiceTest {
     private final MutableClock clock = new MutableClock(Instant.parse("2026-10-27T12:00:00Z"));
     private final LoginAttemptService attempts = new LoginAttemptService(new AbuseProtectionProperties(
             new AbuseProtectionProperties.Login(3, Duration.ofMinutes(15), Duration.ofSeconds(30), Duration.ofMinutes(2)),
-            new AbuseProtectionProperties.RateLimit(true, 600, 60),
-            DataSize.ofKilobytes(64)), clock);
+            new AbuseProtectionProperties.RateLimit(true, 600, 60, 120),
+            DataSize.ofKilobytes(64), Duration.ofMinutes(5)), clock);
 
     @Test
     void locksTheAccountAfterTooManyFailuresInTheWindow() {

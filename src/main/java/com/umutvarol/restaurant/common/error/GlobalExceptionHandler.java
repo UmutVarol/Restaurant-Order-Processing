@@ -50,6 +50,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, "Invalid state transition", ex);
     }
 
+    @ExceptionHandler(ReauthenticationRequiredException.class)
+    ProblemDetail handleReauthentication(ReauthenticationRequiredException ex) {
+        return problem(HttpStatus.FORBIDDEN, "Re-authentication required", ex);
+    }
+
     @ExceptionHandler(UpstreamServiceException.class)
     ProblemDetail handleUpstream(UpstreamServiceException ex) {
         return problem(HttpStatus.BAD_GATEWAY, "Upstream service failed", ex);

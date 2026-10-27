@@ -16,6 +16,9 @@ restaurant:
     rate-limit:
       api-requests-per-minute: 1000000
       login-requests-per-minute: 1000000
+      public-requests-per-minute: 1000000
+    # Tokens are cached for the whole test run; a dedicated test covers the step-up window.
+    step-up-window: 1h
 
 logging:
   level:

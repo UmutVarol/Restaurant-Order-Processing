@@ -7,6 +7,7 @@ import { api, ApiError, errorMessage, newIdempotencyKey } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { openModal, toast } from '../core/ui.js';
 import { qrCode } from './qr.js';
+import { withRecentSignIn } from './reauth.js';
 
 const METHODS = [
   { id: 'CASH', icon: 'cash' },
@@ -148,7 +149,11 @@ export function openBill(ref, user) {
           payment.failureReason && payment.status !== 'SUCCEEDED' ? h('div', { class: 'sub warn' }, payment.failureReason) : null,
           payment.refunds.map((refund) => h('div', { class: 'sub refund' }, icon('refresh', 'sm'),
             `${t('bill.refund')} ${money(refund.amount)} · ${t(`refund.${refund.status}`)} · ${refund.reason}`))),
-        payment.status === 'SUCCEEDED' ? null : h('span', { class: `pill p-${payment.status}` }, t(`payment.${payment.status}`)),
+        payment.status === 'SUCCEEDED' ? null : h('span', { class: `pill p-${payment.status}` },
+          payment.underReview ? t('payment.REVIEW') : t(`payment.${payment.status}`)),
+        payment.status === 'PENDING' && !payment.underReview && bill.status === 'OPEN'
+          ? h('button', { class: 'btn sm ghost', 'data-testid': 'release-payment', title: t('bill.releaseHint'), onclick: () => release(payment) },
+            t('bill.release')) : null,
         user.role === 'ADMIN' && Number(payment.refundable) > 0
           ? h('button', { class: 'btn sm ghost', onclick: () => refundDialog(payment) }, t('bill.refund')) : null))));
   }
@@ -319,6 +324,17 @@ export function openBill(ref, user) {
       h('button', { class: 'btn block', onclick: modal.close }, t('common.close')));
   }
 
+  async function release(payment) {
+    try {
+      bill = await api.releasePayment(bill.id, payment.id);
+      state.amount = bill.available;
+      toast({ title: t('bill.released', { amount: money(payment.amount) }), kind: 'info' });
+    } catch (error) {
+      toast({ title: errorMessage(error), kind: 'error' });
+    }
+    render();
+  }
+
   function refundDialog(payment) {
     const amountInput = h('input', { class: 'input', id: 'refund-amount', inputmode: 'decimal', value: typed(cents(payment.refundable)) });
     const reasonInput = h('textarea', { class: 'textarea', id: 'refund-reason', rows: 2, maxlength: 255, placeholder: t('bill.refundReasonPlaceholder') });
@@ -335,7 +351,8 @@ export function openBill(ref, user) {
         h('button', { class: 'btn danger-solid', onclick: async () => {
           if (!reasonInput.value.trim()) { reasonInput.classList.add('invalid'); reasonInput.focus(); return; }
           try {
-            await api.refund(payment.id, lira(parseCents(amountInput.value)), reasonInput.value.trim());
+            const done = await withRecentSignIn(() => api.refund(payment.id, lira(parseCents(amountInput.value)), reasonInput.value.trim()));
+            if (!done) return;
             toast({ title: t('bill.refunded'), kind: 'info' });
             handle.close();
             load();

@@ -50,7 +50,7 @@ async function render() {
   activeView = null;
 
   // A guest paying by QR code needs no account and sees none of the staff app.
-  const guest = parseHash().route.match(/^(pay|sim-checkout)\/([A-Za-z0-9_-]{8,100})$/);
+  const guest = parseHash().route.match(/^(pay|sim-checkout)\/([A-Za-z0-9_-]{6,100})$/);
   if (guest) {
     const { renderGuest } = await import('./views/pay.js');
     if (token !== renderToken) return;

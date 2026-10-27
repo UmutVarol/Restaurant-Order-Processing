@@ -65,6 +65,14 @@ class BillController {
         return paymentService.take(id, request, idempotencyKey, authentication.getName());
     }
 
+    @Operation(summary = "Release an unfinished online payment",
+            description = "Frees the amount an abandoned QR checkout holds. The provider is asked first; a payment that went through is kept.")
+    @PostMapping("/{id}/payments/{paymentId}/release")
+    BillResponse release(@PathVariable Long id, @PathVariable Long paymentId, Authentication authentication) {
+        onlinePaymentService.release(id, paymentId, authentication.getName());
+        return paymentService.get(id);
+    }
+
     @Operation(summary = "Create a QR payment link",
             description = "The guest pays from their own phone. The token is returned only once.")
     @PostMapping("/{id}/links")

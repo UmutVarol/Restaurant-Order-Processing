@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import org.assertj.core.api.Assertions;
+import com.umutvarol.restaurant.common.money.Money;
 import com.umutvarol.restaurant.support.ApiIntegrationTest;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -24,13 +26,19 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
     private OnlinePaymentService onlinePaymentService;
     @Autowired
     private PaymentRepository payments;
+    @Autowired
+    private BillRepository bills;
+    @Autowired
+    private RefundRepository refunds;
+    @Autowired
+    private org.springframework.transaction.support.TransactionTemplate transactions;
 
     @Test
     void aTablesRoundsShareOneBillThatCanBeSplitAndClosesWhenPaid() throws Exception {
         long first = placeDineIn("A1", "Demlik Çay", 2);   // 2 × 45 = 90 + 10 % tax = 99
         long second = placeDineIn("A1", "Demlik Çay", 1);  // 49.50
         long billId = billIdOf(first);
-        org.assertj.core.api.Assertions.assertThat(billIdOf(second)).isEqualTo(billId);
+        Assertions.assertThat(billIdOf(second)).isEqualTo(billId);
         serve(first);
         serve(second);
 
@@ -64,7 +72,7 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
 
         // The next guests at the table start a new bill.
         long next = placeDineIn("A1", "Demlik Çay", 1);
-        org.assertj.core.api.Assertions.assertThat(billIdOf(next)).isNotEqualTo(billId);
+        Assertions.assertThat(billIdOf(next)).isNotEqualTo(billId);
     }
 
     @Test
@@ -226,15 +234,17 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.amount").value(66.00))
                 .andReturn().getResponse().getContentAsString();
         String callbackUrl = JsonPath.read(page, "$.callbackUrl");
-        org.assertj.core.api.Assertions.assertThat(callbackUrl).contains("/api/v1/payments/callback/simulated?link=" + token);
+        // The link token never travels through the provider.
+        Assertions.assertThat(callbackUrl).endsWith("/api/v1/payments/callback/simulated")
+                .doesNotContain(token);
 
         mvc.perform(json(post("/api/v1/public/sim-checkout/{token}", providerToken), """
                         {"approve": true}"""))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/v1/payments/callback/simulated").param("link", token).param("token", providerToken)
+        mvc.perform(post("/api/v1/payments/callback/simulated").param("token", providerToken)
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED))
                 .andExpect(status().isSeeOther())
-                .andExpect(header().string(HttpHeaders.LOCATION, "/#/pay/" + token));
+                .andExpect(header().string(HttpHeaders.LOCATION, "/#/pay/return"));
 
         mvc.perform(get("/api/v1/public/pay/{token}", token))
                 .andExpect(jsonPath("$.lastPayment.status").value("SUCCEEDED"))
@@ -246,7 +256,7 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
         mvc.perform(post("/api/v1/payments/callback/simulated").param("token", providerToken)
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED))
                 .andExpect(status().isSeeOther())
-                .andExpect(header().string(HttpHeaders.LOCATION, "/"));
+                .andExpect(header().string(HttpHeaders.LOCATION, "/#/pay/return"));
         mvc.perform(as(WAITER, get("/api/v1/bills/{id}", billId)))
                 .andExpect(jsonPath("$.paid").value(60.00))
                 .andExpect(jsonPath("$.payments[0].method").value("ONLINE"))
@@ -262,7 +272,7 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
         mvc.perform(json(post("/api/v1/public/sim-checkout/{token}", providerToken), """
                         {"approve": false}"""))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/v1/payments/callback/simulated").param("link", token).param("token", providerToken)
+        mvc.perform(post("/api/v1/payments/callback/simulated").param("token", providerToken)
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED))
                 .andExpect(status().isSeeOther());
 
@@ -319,10 +329,109 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/public/sim-checkout/{token}", "sim_unknown"))
                 .andExpect(status().isNotFound());
-        mvc.perform(post("/api/v1/payments/callback/simulated").param("token", "forged").param("link", "javascript:alert(1)")
+        mvc.perform(post("/api/v1/payments/callback/simulated").param("token", "forged")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED))
                 .andExpect(status().isSeeOther())
-                .andExpect(header().string(HttpHeaders.LOCATION, "/"));
+                .andExpect(header().string(HttpHeaders.LOCATION, "/#/pay/return"));
+        // A forged provider notification only triggers a lookup, and answers the same either way.
+        mvc.perform(json(post("/api/v1/payments/webhook/simulated"), """
+                        {"token": "forged", "status": "SUCCESS", "paymentConversationId": "sofra-p999999"}"""))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void aLinkHoldsOneCheckoutAtATime() throws Exception {
+        long billId = billIdOf(placeTakeaway("Melis", "Demlik Çay", 2));
+        String token = createLink(billId);
+        startCheckout(token);
+
+        // A second attempt straight away is refused, so a script cannot tie up the bill with holds.
+        mvc.perform(json(post("/api/v1/public/pay/{token}/checkout", token), "{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CHECKOUT_IN_PROGRESS"));
+        mvc.perform(as(WAITER, get("/api/v1/bills/{id}", billId)))
+                .andExpect(jsonPath("$.payments", hasSize(1)))
+                .andExpect(jsonPath("$.pending").value(99.00));
+    }
+
+    @Test
+    void staffCanReleaseAnAbandonedCheckout() throws Exception {
+        long billId = billIdOf(placeTakeaway("Hakan", "Demlik Çay", 1));
+        startCheckout(createLink(billId));
+        long paymentId = ((Number) JsonPath.read(mvc.perform(as(WAITER, get("/api/v1/bills/{id}", billId)))
+                .andReturn().getResponse().getContentAsString(), "$.payments[0].id")).longValue();
+
+        mvc.perform(as(CHEF, post("/api/v1/bills/{id}/payments/{paymentId}/release", billId, paymentId)))
+                .andExpect(status().isForbidden());
+        mvc.perform(as(WAITER, post("/api/v1/bills/{id}/payments/{paymentId}/release", billId + 1, paymentId)))
+                .andExpect(status().isNotFound());
+        mvc.perform(as(WAITER, post("/api/v1/bills/{id}/payments/{paymentId}/release", billId, paymentId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.payments[0].status").value("EXPIRED"))
+                .andExpect(jsonPath("$.payments[0].failureReason").value("Released by staff."))
+                .andExpect(jsonPath("$.available").value(49.50));
+    }
+
+    @Test
+    void aPaymentReleasedByMistakeIsStillRecordedWhenTheProviderSaysItWentThrough() throws Exception {
+        long billId = billIdOf(placeTakeaway("Tolga", "Demlik Çay", 1));
+        String providerToken = startCheckout(createLink(billId));
+        mvc.perform(json(post("/api/v1/public/sim-checkout/{token}", providerToken), """
+                        {"approve": true}"""));
+        long paymentId = payments.findByProviderToken(providerToken).orElseThrow().getId();
+
+        // The provider is asked before releasing: the guest had paid, so nothing is released.
+        mvc.perform(as(WAITER, post("/api/v1/bills/{id}/payments/{paymentId}/release", billId, paymentId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.payments[0].status").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.balance").value(0.00));
+    }
+
+    @Test
+    void aProviderNotificationRecordsAPaymentWhoseGuestNeverCameBack() throws Exception {
+        long billId = billIdOf(placeTakeaway("Pınar", "Demlik Çay", 1));
+        String providerToken = startCheckout(createLink(billId));
+        mvc.perform(json(post("/api/v1/public/sim-checkout/{token}", providerToken), """
+                        {"approve": true}"""));
+        long paymentId = payments.findByProviderToken(providerToken).orElseThrow().getId();
+
+        mvc.perform(json(post("/api/v1/payments/webhook/simulated"), """
+                        {"paymentConversationId": "sofra-p%d", "status": "FAILURE"}""".formatted(paymentId)))
+                .andExpect(status().isOk());
+
+        // What the notification claimed (FAILURE) is ignored: the provider itself says the payment succeeded.
+        mvc.perform(as(WAITER, get("/api/v1/bills/{id}", billId)))
+                .andExpect(jsonPath("$.payments[0].status").value("SUCCEEDED"));
+    }
+
+    @Test
+    void aRefundIsClaimedBeforeItIsSentSoItIsNeverSentTwice() throws Exception {
+        long billId = billIdOf(placeTakeaway("Buse", "Demlik Çay", 1));
+        String providerToken = startCheckout(createLink(billId));
+        mvc.perform(json(post("/api/v1/public/sim-checkout/{token}", providerToken), """
+                        {"approve": true}"""));
+        mvc.perform(post("/api/v1/payments/callback/simulated").param("token", providerToken)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED));
+        // A pending provider refund, recorded without being sent yet.
+        Long refundId = transactions.execute(status -> {
+            Bill bill = bills.findForUpdate(billId).orElseThrow();
+            Payment payment = bill.getPayments().getFirst();
+            Refund refund = bill.refund(payment, Money.of("10.00"), "Test", java.time.Instant.now(), ADMIN);
+            bills.flush();
+            return refund.getId();
+        });
+        java.time.Instant now = java.time.Instant.now();
+
+        Integer first = transactions.execute(status -> refunds.claim(refundId, now, now.plusSeconds(120)));
+        Integer second = transactions.execute(status -> refunds.claim(refundId, now, now.plusSeconds(120)));
+        Assertions.assertThat(first).isEqualTo(1);
+        Assertions.assertThat(second).isEqualTo(0);
+        // While claimed, another attempt does not send it.
+        onlinePaymentService.sendRefund(refundId);
+        Assertions.assertThat(refunds.findById(refundId).orElseThrow().getStatus()).isEqualTo(RefundStatus.PENDING);
+        // A claim that ran out (the sender crashed) can be taken over, and the refund then goes through once.
+        Integer takeover = transactions.execute(status -> refunds.claim(refundId, now.plusSeconds(180), now.plusSeconds(181)));
+        Assertions.assertThat(takeover).isEqualTo(1);
     }
 
     // ------------------------------------------------------------------------------------------- helpers

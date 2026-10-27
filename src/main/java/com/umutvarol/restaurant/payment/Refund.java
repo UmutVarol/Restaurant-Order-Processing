@@ -50,6 +50,10 @@ public class Refund {
     @Column(name = "created_by", nullable = false, length = 50)
     private String createdBy;
 
+    /** Set while a server is sending this refund to the provider; see {@link RefundRepository#claim}. */
+    @Column(name = "claimed_until")
+    private Instant claimedUntil;
+
     protected Refund() {
         // for JPA
     }

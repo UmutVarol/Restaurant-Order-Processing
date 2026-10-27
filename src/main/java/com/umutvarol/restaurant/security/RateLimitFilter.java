@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -21,8 +22,9 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 /**
  * Token-bucket rate limiting (Bucket4j) per client address, applied before authentication so that floods are
- * turned away as cheaply as possible. Every {@code /api/**} call draws from one budget and sign-in attempts
- * also draw from a much smaller one. Over budget, the client gets {@code 429} with {@code Retry-After}.
+ * turned away as cheaply as possible. Every {@code /api/**} call draws from one budget; sign-in attempts, and
+ * endpoints that need no sign-in at all (guest payments, provider callbacks, browser reports), also draw from
+ * smaller ones of their own. Over budget, the client gets {@code 429} with {@code Retry-After}.
  * <p>
  * The client address is {@link HttpServletRequest#getRemoteAddr()}. Behind a reverse proxy, enable
  * {@code server.forward-headers-strategy} so that it is the real client and not the proxy; forwarding headers
@@ -33,12 +35,15 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 class RateLimitFilter extends OncePerRequestFilter {
 
     static final String LOGIN_PATH = "/api/v1/auth/login";
+    private static final List<String> PUBLIC_PREFIXES = List.of("/api/v1/public/", "/api/v1/payments/callback/",
+            "/api/v1/payments/webhook/", "/api/v1/csp-reports");
 
     private final AbuseProtectionProperties.RateLimit limits;
     private final HandlerExceptionResolver resolver;
     private final MeterRegistry meters;
     private final Cache<String, Bucket> apiBuckets = buckets();
     private final Cache<String, Bucket> loginBuckets = buckets();
+    private final Cache<String, Bucket> publicBuckets = buckets();
 
     RateLimitFilter(AbuseProtectionProperties properties, MeterRegistry meters,
                     @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
@@ -60,15 +65,23 @@ class RateLimitFilter extends OncePerRequestFilter {
                 .tryConsumeAndReturnRemaining(1);
         if (probe.isConsumed() && isLogin(request)) {
             probe = loginBuckets.get(client, key -> perMinute(limits.loginRequestsPerMinute())).tryConsumeAndReturnRemaining(1);
+        } else if (probe.isConsumed() && isPublic(request)) {
+            probe = publicBuckets.get(client, key -> perMinute(limits.publicRequestsPerMinute())).tryConsumeAndReturnRemaining(1);
         }
         if (!probe.isConsumed()) {
-            meters.counter("sofra.security.rate_limited", "endpoint", isLogin(request) ? "login" : "api").increment();
+            String endpoint = isLogin(request) ? "login" : isPublic(request) ? "public" : "api";
+            meters.counter("sofra.security.rate_limited", "endpoint", endpoint).increment();
             resolver.resolveException(request, response, null, new TooManyRequestsException("RATE_LIMITED",
                     "Too many requests. Slow down and try again shortly.", Duration.ofNanos(probe.getNanosToWaitForRefill())));
             return;
         }
         response.setHeader("X-RateLimit-Remaining", Long.toString(probe.getRemainingTokens()));
         chain.doFilter(request, response);
+    }
+
+    private static boolean isPublic(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return PUBLIC_PREFIXES.stream().anyMatch(uri::startsWith);
     }
 
     private static boolean isLogin(HttpServletRequest request) {

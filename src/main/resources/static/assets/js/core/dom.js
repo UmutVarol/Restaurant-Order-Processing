@@ -15,6 +15,8 @@ export function s(tag, props, ...children) {
   for (const [key, value] of Object.entries(props || {})) {
     if (value == null || value === false) continue;
     if (key.startsWith('on') && typeof value === 'function') el.addEventListener(key.slice(2).toLowerCase(), value);
+    // Styles go through the CSSOM, never a style attribute, so the CSP needs no 'unsafe-inline' for them.
+    else if (key === 'style' && typeof value === 'object') Object.assign(el.style, value);
     else el.setAttribute(key === 'className' ? 'class' : key, value);
   }
   append(el, children);

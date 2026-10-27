@@ -132,6 +132,18 @@ public class IyzicoGateway implements OnlinePaymentGateway {
         requireEqual("token", token, text(response, "token"));
 
         if ("SUCCESS".equals(text(response, "paymentStatus"))) {
+            if (!"TRY".equals(text(response, "currency"))) {
+                throw new PaymentGatewayException("iyzico answered with an unexpected currency");
+            }
+            // fraudStatus: 1 approved, 0 still being reviewed by iyzico's fraud team, -1 rejected.
+            Integer fraud = integer(response, "fraudStatus");
+            if (fraud != null && fraud == 0) {
+                return new CheckoutOutcome(Status.REVIEW, text(response, "paymentId"), decimal(response, "paidPrice"), null);
+            }
+            if (fraud != null && fraud < 0) {
+                return new CheckoutOutcome(Status.FAILED, text(response, "paymentId"), null,
+                        "The payment was stopped by the provider's fraud checks.");
+            }
             return new CheckoutOutcome(Status.SUCCEEDED, text(response, "paymentId"), decimal(response, "paidPrice"), null);
         }
         String reason = firstNonBlank(text(response, "errorMessage"), "The payment was not completed.");
@@ -230,6 +242,11 @@ public class IyzicoGateway implements OnlinePaymentGateway {
     private static @Nullable String text(JsonNode node, String field) {
         JsonNode value = node.get(field);
         return value == null || value.isNull() ? null : value.asString();
+    }
+
+    private static @Nullable Integer integer(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? null : value.asInt();
     }
 
     private static @Nullable BigDecimal decimal(JsonNode node, String field) {

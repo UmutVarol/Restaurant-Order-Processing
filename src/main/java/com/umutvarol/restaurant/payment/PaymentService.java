@@ -42,15 +42,17 @@ public class PaymentService {
     private final PaymentRepository payments;
     private final OrderService orderService;
     private final ApplicationEventPublisher events;
+    private final PaymentAuditLog audit;
     private final Clock clock;
 
     public PaymentService(BillService billService, BillRepository bills, PaymentRepository payments,
-                          OrderService orderService, ApplicationEventPublisher events, Clock clock) {
+                          OrderService orderService, ApplicationEventPublisher events, PaymentAuditLog audit, Clock clock) {
         this.billService = billService;
         this.bills = bills;
         this.payments = payments;
         this.orderService = orderService;
         this.events = events;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -103,6 +105,7 @@ public class PaymentService {
                     "Online payments are taken through a payment link");
         };
         payments.saveAndFlush(payment);
+        audit.paymentTaken(payment, actor);
         events.publishEvent(PaymentChangedEvent.payment(payment, now));
         afterPayment(bill, actor, now);
         return new TakePaymentResponse(PaymentResponse.from(payment), BillResponse.from(bill));

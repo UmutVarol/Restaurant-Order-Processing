@@ -163,6 +163,7 @@ export const api = {
   // The key makes a retry after a timeout safe: the server returns the payment already taken.
   takePayment: (billId, payment, idempotencyKey) => request('POST', `/bills/${billId}/payments`, payment,
     { headers: { 'Idempotency-Key': idempotencyKey } }),
+  releasePayment: (billId, paymentId) => request('POST', `/bills/${billId}/payments/${paymentId}/release`),
   createPaymentLink: (billId, amount) => request('POST', `/bills/${billId}/links`, amount ? { amount } : {}),
   refund: (paymentId, amount, reason) => request('POST', `/payments/${paymentId}/refunds`, { amount, reason }),
   dayReport: (date) => request('GET', `/payments/day${query({ date })}`),

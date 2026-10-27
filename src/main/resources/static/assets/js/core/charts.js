@@ -48,7 +48,7 @@ export function areaChart(points, { height = 240, format = String, color = 'var(
       class: 'grid-line', x1: 0, x2: 1000, y1: yAt(max * f), y2: yAt(max * f), 'vector-effect': 'non-scaling-stroke',
     })),
     s('path', { d: `${smoothPath(coords)} L${coords.at(-1)[0]},100 L${coords[0][0]},100 Z`, fill: `url(#${id})` }),
-    s('path', { d: smoothPath(coords), class: 'area-line', style: `stroke:${color}`, 'vector-effect': 'non-scaling-stroke' }));
+    s('path', { d: smoothPath(coords), class: 'area-line', style: { stroke: color }, 'vector-effect': 'non-scaling-stroke' }));
 
   const dot = h('div', { class: 'hover-dot', style: { borderColor: color } });
   const tip = h('div', { class: 'chart-tip' });
@@ -113,7 +113,7 @@ export function donutChart(slices, { size = 160, thickness = 22, center } = {}) 
   const circumference = 2 * Math.PI * r;
   let offset = 0;
   const gap = slices.filter((x) => x.value > 0).length > 1 ? 1.2 : 0;
-  const svg = s('svg', { viewBox: '0 0 100 100', width: size, height: size, style: 'transform: rotate(-90deg)' },
+  const svg = s('svg', { viewBox: '0 0 100 100', width: size, height: size, style: { transform: 'rotate(-90deg)' } },
     s('circle', { cx: 50, cy: 50, r, fill: 'none', stroke: 'var(--surface-3)', 'stroke-width': thickness }),
     slices.map((slice) => {
       const length = (slice.value / total) * circumference;

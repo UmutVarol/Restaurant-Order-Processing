@@ -14,6 +14,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     List<Payment> findByStatusAndCreatedAtBefore(PaymentStatus status, Instant before);
 
+    List<Payment> findByLinkIdAndStatus(Long linkId, PaymentStatus status);
+
     @EntityGraph(attributePaths = {"refunds", "bill"})
     List<Payment> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(Instant from, Instant to);
 }

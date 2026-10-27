@@ -55,7 +55,7 @@ public class SimulatedGateway implements OnlinePaymentGateway {
             case SUCCEEDED -> new CheckoutOutcome(Status.SUCCEEDED, "simpay_" + token.substring(4, 16),
                     session.request().amount(), null);
             case FAILED -> new CheckoutOutcome(Status.FAILED, null, null, "The card was declined (simulated).");
-            case PENDING -> CheckoutOutcome.pending();
+            case PENDING, REVIEW -> CheckoutOutcome.pending();
         };
     }
 

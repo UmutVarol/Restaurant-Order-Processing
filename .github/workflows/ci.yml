@@ -99,6 +99,20 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report/
 
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the whole history: a secret removed later is still leaked
+      # Gitleaks, pinned by image digest. Known throwaway test keys are allowlisted in .gitleaks.toml.
+      - name: Scan the history for committed secrets
+        run: |
+          docker run --rm -v "$PWD:/repo" \
+            zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git /repo --config /repo/.gitleaks.toml --redact --no-banner
+
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request'
@@ -170,6 +184,31 @@ jobs:
           [ "$code" = "429" ] || { echo "expected account lockout (429), got $code"; exit 1; }
           echo "Security headers present and brute-force lockout active"
 
+      # Passive DAST with OWASP ZAP against a second container whose rate limit is lifted, so the crawler's own
+      # bursts are not mistaken for findings. Missing anti-clickjacking, nosniff or CSP headers fail the build
+      # (.zap/rules.tsv); everything else is reported in the zap_scan artifact.
+      - name: Start a container for the DAST scan
+        run: |
+          docker run -d --name sofra-dast -p 8081:8080 -e JWT_SECRET=ci-secret-that-is-long-enough-0123456789 \
+            -e RESTAURANT_SECURITY_RATE_LIMIT_API_REQUESTS_PER_MINUTE=1000000 \
+            -e RESTAURANT_SECURITY_RATE_LIMIT_PUBLIC_REQUESTS_PER_MINUTE=1000000 sofra-restaurant:ci
+          for i in $(seq 1 60); do
+            if curl -fs http://localhost:8081/actuator/health/readiness > /dev/null; then break; fi
+            sleep 2
+          done
+
+      - name: DAST baseline scan (OWASP ZAP)
+        # Pinned to a commit for the same reason as Trivy above.
+        uses: zaproxy/action-baseline@6c5a007541891231cd9e0ddec25d4f25c59c9874 # v0.15.0
+        with:
+          target: http://localhost:8081/
+          rules_file_name: .zap/rules.tsv
+          cmd_options: -I
+          allow_issue_writing: false
+          fail_action: true
+
       - name: Container logs
         if: failure()
-        run: docker logs sofra || echo "The container was not started."
+        run: |
+          docker logs sofra || echo "The container was not started."
+          docker logs sofra-dast 2>/dev/null | tail -100 || true

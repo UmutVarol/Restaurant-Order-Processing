@@ -12,8 +12,32 @@ const TIP_RATES = [0, 0.05, 0.1, 0.15];
 const lira = (value) => (value / 100).toFixed(2);
 
 /** Renders a guest page into {@code root}. Returns a cleanup function. */
+const RETURN_KEY = 'sofra.pay.return';
+const RETURN_TTL_MS = 2 * 60 * 60 * 1000;
+
 export function renderGuest(root, kind, token) {
+  if (kind === 'pay' && token === 'return') return returnFromProvider(root);
   return kind === 'pay' ? payPage(root, token) : simulatedCheckoutPage(root, token);
+}
+
+/**
+ * The provider sends the guest back without the link in the URL (it would be seen by the provider and could end
+ * up in logs), so the page remembers on this phone which link it came from.
+ */
+function remember(token) {
+  try { localStorage.setItem(RETURN_KEY, JSON.stringify({ token, at: Date.now() })); } catch { /* private mode */ }
+}
+
+function returnFromProvider(root) {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(RETURN_KEY) || 'null'); } catch { /* ignore */ }
+  if (saved && /^[A-Za-z0-9_-]{20,100}$/.test(saved.token) && Date.now() - saved.at < RETURN_TTL_MS) {
+    location.replace(`#/pay/${saved.token}`);
+    return () => {};
+  }
+  mount(root, frame(h('div', { class: 'empty' }, h('div', { class: 'art' }, '🧾'),
+    h('h4', null, t('guest.returned')), h('p', null, t('guest.returnedText')))));
+  return () => {};
 }
 
 function frame(...content) {
@@ -117,6 +141,7 @@ function payPage(root, token) {
             const { paymentPageUrl } = await api.publicCheckout(token, {
               amount: fixed ? null : lira(amount), tip: lira(tip), name: state.name.trim() || null,
             });
+            remember(token);
             // Only the app itself (the simulated provider) or a secure provider page.
             if (/^\/#\//.test(paymentPageUrl)) location.hash = paymentPageUrl.slice(2);
             else if (/^https:\/\//.test(paymentPageUrl)) location.assign(paymentPageUrl);

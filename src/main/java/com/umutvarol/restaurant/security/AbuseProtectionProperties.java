@@ -16,13 +16,15 @@ import org.springframework.validation.annotation.Validated;
  * @param login          per-account lockout after repeated failed sign-ins
  * @param rateLimit      per-client request budgets
  * @param maxRequestBody largest request body the API accepts; bigger ones get 413
+ * @param stepUpWindow   how recent a sign-in must be for money-sensitive actions (refunds, closing the day)
  */
 @Validated
 @ConfigurationProperties(prefix = "restaurant.security")
 public record AbuseProtectionProperties(
         @Valid @NotNull @DefaultValue Login login,
         @Valid @NotNull @DefaultValue RateLimit rateLimit,
-        @NotNull @DefaultValue("64KB") DataSize maxRequestBody) {
+        @NotNull @DefaultValue("64KB") DataSize maxRequestBody,
+        @NotNull @DefaultValue("5m") Duration stepUpWindow) {
 
     /**
      * Failed sign-ins are counted per account, not per IP address, so spreading a guessing attack over many
@@ -48,10 +50,13 @@ public record AbuseProtectionProperties(
      * @param enabled                 switch for local load testing
      * @param apiRequestsPerMinute    budget for every {@code /api/**} call
      * @param loginRequestsPerMinute  separate, tighter budget for the sign-in endpoint
+     * @param publicRequestsPerMinute separate budget for what needs no sign-in: the guest payment page, provider
+     *                                callbacks and notifications, and browser security reports
      */
     public record RateLimit(
             @DefaultValue("true") boolean enabled,
             @Min(1) @DefaultValue("600") int apiRequestsPerMinute,
-            @Min(1) @DefaultValue("60") int loginRequestsPerMinute) {
+            @Min(1) @DefaultValue("60") int loginRequestsPerMinute,
+            @Min(1) @DefaultValue("120") int publicRequestsPerMinute) {
     }
 }

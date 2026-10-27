@@ -42,7 +42,13 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
 import org.springframework.security.web.header.writers.CrossOriginResourcePolicyHeaderWriter.CrossOriginResourcePolicy;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
+import org.springframework.security.web.header.writers.ContentSecurityPolicyHeaderWriter;
+import org.springframework.security.web.header.writers.DelegatingRequestMatcherHeaderWriter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
  * Stateless JWT security. Access rules, from most to least specific:
@@ -61,17 +67,46 @@ import org.springframework.security.web.header.writers.StaticHeadersWriter;
 @EnableWebSecurity
 class SecurityConfig {
 
-    private static final String CONTENT_SECURITY_POLICY = String.join("; ",
+    /**
+     * Only the app's own origin may supply scripts, styles, fonts and connections (fonts are self-hosted, so no
+     * third party is allowed at all). Trusted Types are enforced: the client never assigns HTML strings, so any
+     * attempt to inject markup through a DOM sink is blocked by the browser itself. Violations are reported to
+     * {@code /api/v1/csp-reports}, which turns a tampered page into an alert (PCI DSS 11.6.1-style detection).
+     */
+    static final String CONTENT_SECURITY_POLICY = String.join("; ",
             "default-src 'self'",
             "script-src 'self'",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-            "font-src 'self' https://fonts.gstatic.com data:",
+            "style-src 'self'",
+            "font-src 'self'",
+            "img-src 'self' data:",
+            "connect-src 'self'",
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "object-src 'none'",
+            "require-trusted-types-for 'script'",
+            "trusted-types 'none'",
+            "report-uri /api/v1/csp-reports",
+            "report-to csp");
+
+    /**
+     * Swagger UI is a third-party page that sets inline styles and assigns HTML, so it gets its own, looser policy.
+     * It never handles payments; in production it can be switched off with {@code springdoc.swagger-ui.enabled=false}.
+     */
+    private static final String API_DOCS_CONTENT_SECURITY_POLICY = String.join("; ",
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data:",
             "connect-src 'self'",
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "form-action 'self'",
             "object-src 'none'");
+
+    private static final RequestMatcher API_DOCS = new OrRequestMatcher(
+            PathPatternRequestMatcher.withDefaults().matcher("/swagger-ui/**"),
+            PathPatternRequestMatcher.withDefaults().matcher("/swagger-ui.html"));
 
     /** Browser features the app never uses are switched off (OWASP HTTP Headers Cheat Sheet). */
     private static final String PERMISSIONS_POLICY = String.join(", ",
@@ -89,14 +124,15 @@ class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**", "/favicon.svg",
-                                "/manifest.webmanifest", "/robots.txt").permitAll()
+                                "/manifest.webmanifest", "/robots.txt", "/.well-known/security.txt").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/csp-reports").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/actuator/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         // Guests paying by QR link: the unguessable link token is their permission.
                         .requestMatchers("/api/v1/public/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/callback/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/callback/*", "/api/v1/payments/webhook/*").permitAll()
                         .requestMatchers("/api/v1/payments/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/bills", "/api/v1/bills/**")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
@@ -115,13 +151,17 @@ class SecurityConfig {
                         .authenticationEntryPoint(problemHandler)
                         .accessDeniedHandler(problemHandler))
                 .headers(headers -> headers
-                        .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
+                        .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(new NegatedRequestMatcher(API_DOCS),
+                                new ContentSecurityPolicyHeaderWriter(CONTENT_SECURITY_POLICY)))
+                        .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(API_DOCS,
+                                new ContentSecurityPolicyHeaderWriter(API_DOCS_CONTENT_SECURITY_POLICY)))
                         .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                         // Sent only over HTTPS, as the HSTS specification requires.
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(Duration.ofDays(365).toSeconds()))
                         .crossOriginOpenerPolicy(coop -> coop.policy(CrossOriginOpenerPolicy.SAME_ORIGIN))
                         .crossOriginResourcePolicy(corp -> corp.policy(CrossOriginResourcePolicy.SAME_ORIGIN))
-                        .addHeaderWriter(new StaticHeadersWriter("Permissions-Policy", PERMISSIONS_POLICY)));
+                        .addHeaderWriter(new StaticHeadersWriter("Permissions-Policy", PERMISSIONS_POLICY))
+                        .addHeaderWriter(new StaticHeadersWriter("Reporting-Endpoints", "csp=\"/api/v1/csp-reports\"")));
         return http.build();
     }
 

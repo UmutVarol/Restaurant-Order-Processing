@@ -29,13 +29,15 @@ public class DayReportService {
     private final PaymentRepository payments;
     private final RefundRepository refunds;
     private final DayClosingRepository closings;
+    private final PaymentAuditLog audit;
     private final Clock clock;
 
     public DayReportService(PaymentRepository payments, RefundRepository refunds, DayClosingRepository closings,
-                            Clock clock) {
+                            PaymentAuditLog audit, Clock clock) {
         this.payments = payments;
         this.refunds = refunds;
         this.closings = closings;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -56,6 +58,7 @@ public class DayReportService {
         DaySummary summary = summarise(date);
         DayClosing closing = closings.save(new DayClosing(date, summary, Money.normalize(countedCash),
                 note == null || note.isBlank() ? null : note.strip(), clock.instant(), actor));
+        audit.dayClosed(date.toString(), summary.expectedCash(), closing.getCountedCash(), actor);
         return new DayReportResponse(summary, Closing.from(closing));
     }
 

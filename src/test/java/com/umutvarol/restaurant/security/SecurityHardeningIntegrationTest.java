@@ -1,8 +1,10 @@
 package com.umutvarol.restaurant.security;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -117,6 +119,39 @@ class SecurityHardeningIntegrationTest extends ApiIntegrationTest {
                 .andExpect(header().string("Permissions-Policy", containsString("camera=()")))
                 .andExpect(header().string("Content-Security-Policy", containsString("frame-ancestors 'none'")))
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("no-store")));
+    }
+
+    @Test
+    void theAppPageAllowsOnlyItsOwnOriginAndEnforcesTrustedTypes() throws Exception {
+        mvc.perform(get("/index.html"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Security-Policy", SecurityConfig.CONTENT_SECURITY_POLICY))
+                .andExpect(header().string("Content-Security-Policy", containsString("require-trusted-types-for 'script'")))
+                .andExpect(header().string("Content-Security-Policy", not(containsString("unsafe-inline"))))
+                .andExpect(header().string("Content-Security-Policy", not(containsString("https:"))))
+                .andExpect(header().string("Reporting-Endpoints", containsString("/api/v1/csp-reports")));
+        // Swagger UI gets its own, looser policy, so the app's stays strict.
+        mvc.perform(get("/swagger-ui/index.html"))
+                .andExpect(header().string("Content-Security-Policy", containsString("'unsafe-inline'")))
+                .andExpect(header().string("Content-Security-Policy", not(containsString("trusted-types"))));
+    }
+
+    @Test
+    void browsersCanReportPolicyViolationsWithoutSigningIn() throws Exception {
+        mvc.perform(post("/api/v1/csp-reports").contentType("application/csp-report").content("""
+                        {"csp-report": {"document-uri": "https://sofra.example/", "violated-directive": "script-src",
+                         "blocked-uri": "https://evil.example/skimmer.js"}}"""))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/csp-reports").contentType("text/plain").content("hello"))
+                .andExpect(status().isUnsupportedMediaType());
+    }
+
+    @Test
+    void publishesASecurityContact() throws Exception {
+        mvc.perform(get("/.well-known/security.txt"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Contact: https://github.com/UmutVarol/Restaurant-Order-Processing/security")))
+                .andExpect(content().string(containsString("Expires: ")));
     }
 
     @Test

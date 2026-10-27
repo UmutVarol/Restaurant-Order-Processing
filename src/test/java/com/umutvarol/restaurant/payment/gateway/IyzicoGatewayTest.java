@@ -120,6 +120,33 @@ class IyzicoGatewayTest {
     }
 
     @Test
+    void aPaymentHeldForFraudReviewIsNeitherConfirmedNorGivenUp() {
+        iyzico.expect(requestTo(BASE + IyzicoGateway.RETRIEVE_PATH))
+                .andRespond(withSuccess(retrieveAnswer("SUCCESS", "sofra-p7", "tok-123", "TRY", 0), MediaType.APPLICATION_JSON));
+        assertThat(gateway.retrieve("tok-123", "sofra-p7").status()).isEqualTo(CheckoutOutcome.Status.REVIEW);
+
+        iyzico.reset();
+        iyzico.expect(requestTo(BASE + IyzicoGateway.RETRIEVE_PATH))
+                .andRespond(withSuccess(retrieveAnswer("SUCCESS", "sofra-p7", "tok-123", "TRY", -1), MediaType.APPLICATION_JSON));
+        assertThat(gateway.retrieve("tok-123", "sofra-p7").status()).isEqualTo(CheckoutOutcome.Status.FAILED);
+    }
+
+    @Test
+    void refusesAPaymentInAnotherCurrency() {
+        iyzico.expect(requestTo(BASE + IyzicoGateway.RETRIEVE_PATH))
+                .andRespond(withSuccess(retrieveAnswer("SUCCESS", "sofra-p7", "tok-123", "USD", 1), MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> gateway.retrieve("tok-123", "sofra-p7"))
+                .isInstanceOf(PaymentGatewayException.class)
+                .hasMessageContaining("currency");
+    }
+
+    @Test
+    void neverPrintsTheKeys() {
+        assertThat(PROPERTIES.toString()).doesNotContain("sandbox-api-key").doesNotContain("sandbox-secret-key").contains("****");
+    }
+
+    @Test
     void reportsADeclinedCard() {
         iyzico.expect(requestTo(BASE + IyzicoGateway.RETRIEVE_PATH))
                 .andRespond(withSuccess(retrieveAnswer("FAILURE", "sofra-p7", "tok-123"), MediaType.APPLICATION_JSON));
@@ -159,11 +186,15 @@ class IyzicoGatewayTest {
     }
 
     private String retrieveAnswer(String paymentStatus, String conversationId, String token) {
+        return retrieveAnswer(paymentStatus, conversationId, token, "TRY", 1);
+    }
+
+    private String retrieveAnswer(String paymentStatus, String conversationId, String token, String currency, int fraudStatus) {
         String json = """
-                {"status":"success","paymentStatus":"%s","paymentId":"2900001","currency":"TRY","basketId":"B5001",
-                 "conversationId":"%s","paidPrice":165.0,"price":165.0,"token":"%s"}""".formatted(paymentStatus,
-                conversationId, token);
-        String signature = gateway.hmacHex(String.join(":", paymentStatus, "2900001", "TRY", "B5001", conversationId,
+                {"status":"success","paymentStatus":"%s","paymentId":"2900001","currency":"%s","basketId":"B5001",
+                 "conversationId":"%s","paidPrice":165.0,"price":165.0,"token":"%s","fraudStatus":%d}""".formatted(
+                paymentStatus, currency, conversationId, token, fraudStatus);
+        String signature = gateway.hmacHex(String.join(":", paymentStatus, "2900001", currency, "B5001", conversationId,
                 "165", "165", token));
         return json.substring(0, json.length() - 1) + ",\"signature\":\"" + signature + "\"}";
     }

@@ -85,6 +85,9 @@ public class Payment {
     @Column(name = "failure_reason", length = 255)
     private String failureReason;
 
+    @Column(name = "under_review", nullable = false)
+    private boolean underReview;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -140,10 +143,18 @@ public class Payment {
      * The provider confirmed the payment. A payment that had already expired can still succeed: the guest may
      * have finished paying just as we gave up waiting, and the money has been taken either way.
      */
+    /** The card was charged, but the provider's fraud team is still checking it: keep holding the amount. */
+    void underReview(@Nullable String providerPaymentId) {
+        requirePending();
+        this.underReview = true;
+        this.providerPaymentId = providerPaymentId;
+    }
+
     void succeed(@Nullable String providerPaymentId, Instant at) {
         if (status != PaymentStatus.PENDING && status != PaymentStatus.EXPIRED) {
             throw new IllegalStateException("Payment %d is already %s".formatted(id, status));
         }
+        this.underReview = false;
         this.status = PaymentStatus.SUCCEEDED;
         this.providerPaymentId = providerPaymentId;
         this.completedAt = at;
@@ -151,15 +162,23 @@ public class Payment {
 
     void fail(String reason, Instant at) {
         requirePending();
+        this.underReview = false;
         this.status = PaymentStatus.FAILED;
         this.failureReason = reason;
         this.completedAt = at;
     }
 
     void expire(Instant at) {
+        expire(at, "The guest did not finish paying in time.");
+    }
+
+    void expire(Instant at, String reason) {
         requirePending();
+        if (underReview) {
+            throw new IllegalStateException("Payment %d is under the provider's fraud review".formatted(id));
+        }
         this.status = PaymentStatus.EXPIRED;
-        this.failureReason = "The guest did not finish paying in time.";
+        this.failureReason = reason;
         this.completedAt = at;
     }
 
@@ -186,6 +205,10 @@ public class Payment {
 
     public BigDecimal refundable() {
         return status == PaymentStatus.SUCCEEDED ? amount.subtract(refundedAmount) : Money.ZERO;
+    }
+
+    public boolean isUnderReview() {
+        return underReview;
     }
 
     public boolean isPending() {

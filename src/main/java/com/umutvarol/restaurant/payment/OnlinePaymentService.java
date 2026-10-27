@@ -26,6 +26,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Comparator;
@@ -34,8 +35,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -61,6 +60,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class OnlinePaymentService {
 
     static final Pattern TOKEN = Pattern.compile("[A-Za-z0-9_-]{20,100}");
+    /** The guest's browser comes back here after the provider's page; the page then finds the link it came from. */
+    static final String RETURN_PATH = "/#/pay/return";
+    /** A second checkout on the same link within this time is refused, so a script cannot spin up holds. */
+    static final Duration CHECKOUT_COOLDOWN = Duration.ofSeconds(60);
+    /** How soon an unfinished checkout is first checked with the provider, in case the guest never came back. */
+    static final Duration RECONCILE_AFTER = Duration.ofMinutes(2);
+    private static final Pattern CONVERSATION_ID = Pattern.compile("sofra-p(\\d{1,18})");
     private static final Logger log = LoggerFactory.getLogger(OnlinePaymentService.class);
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -74,15 +80,14 @@ public class OnlinePaymentService {
     private final RestaurantProperties restaurant;
     private final ApplicationEventPublisher events;
     private final TransactionTemplate transaction;
+    private final PaymentAuditLog audit;
     private final Clock clock;
-    /** Refunds being sent right now, so the retry job and the after-commit hook never send one twice. */
-    private final Set<Long> refundsInFlight = ConcurrentHashMap.newKeySet();
 
     public OnlinePaymentService(BillService billService, PaymentService paymentService, PaymentRepository payments,
                                 PaymentLinkRepository links, RefundRepository refunds, OnlinePayments online,
                                 PaymentProperties properties, RestaurantProperties restaurant,
                                 ApplicationEventPublisher events, PlatformTransactionManager transactionManager,
-                                Clock clock) {
+                                PaymentAuditLog audit, Clock clock) {
         this.billService = billService;
         this.paymentService = paymentService;
         this.payments = payments;
@@ -95,6 +100,7 @@ public class OnlinePaymentService {
         this.transaction = new TransactionTemplate(transactionManager);
         // Each step commits on its own, also when called from an after-commit hook.
         this.transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -126,6 +132,7 @@ public class OnlinePaymentService {
         String token = newToken();
         Instant now = clock.instant();
         PaymentLink link = links.save(new PaymentLink(bill, hash(token), share, now.plus(properties.linkTtl()), now, actor));
+        audit.linkCreated(link, actor);
         return new PaymentLinkResponse(token, baseUrl + "/#/pay/" + token, share, link.getExpiresAt());
     }
 
@@ -176,6 +183,10 @@ public class OnlinePaymentService {
      */
     public CheckoutResponse checkout(String token, PublicCheckoutRequest request, String baseUrl, String clientIp) {
         OnlinePaymentGateway gateway = online.require();
+        // An earlier attempt on this link may have been paid, or abandoned: ask the provider before starting another.
+        List<Long> earlier = transaction.execute(status -> payments.findByLinkIdAndStatus(findLink(token).getId(),
+                PaymentStatus.PENDING).stream().map(Payment::getId).toList());
+        Objects.requireNonNull(earlier).forEach(paymentId -> reconcile(paymentId, false));
         Started started = Objects.requireNonNull(transaction.execute(status -> start(token, request)));
 
         CheckoutSession session;
@@ -185,7 +196,8 @@ public class OnlinePaymentService {
                     "B" + started.billId(),
                     started.charge(),
                     started.description(),
-                    baseUrl + "/api/v1/payments/callback/" + gateway.provider().toLowerCase() + "?link=" + token,
+                    // No link token here: the URL is seen by the provider and may end up in logs.
+                    baseUrl + "/api/v1/payments/callback/" + gateway.provider().toLowerCase(),
                     request.name() == null || request.name().isBlank() ? "Sofra Guest" : request.name().strip(),
                     null,
                     clientIp));
@@ -215,6 +227,7 @@ public class OnlinePaymentService {
             throw new BusinessRuleException(bill.getStatus() == BillStatus.OPEN ? "PAYMENT_LINK_EXPIRED" : "BILL_NOT_OPEN",
                     "This payment link can no longer be used. Ask your waiter for a new one.");
         }
+        holdOnePerLink(bill, link, now);
         BigDecimal available = bill.available();
         if (available.signum() <= 0) {
             throw new BusinessRuleException("BILL_ALREADY_PAID", "This bill has already been paid.");
@@ -232,6 +245,26 @@ public class OnlinePaymentService {
     }
 
     /**
+     * A link holds at most one unfinished checkout, so whoever has the QR code cannot tie up more of the bill than
+     * one share. A fresh attempt replaces an older one the provider says is unfinished; one started moments ago,
+     * or one the provider is reviewing for fraud, is left alone.
+     */
+    private void holdOnePerLink(Bill bill, PaymentLink link, Instant now) {
+        for (Payment pending : bill.getPayments()) {
+            if (!pending.isPending() || pending.getLink() == null || !pending.getLink().getId().equals(link.getId())) {
+                continue;
+            }
+            if (pending.isUnderReview() || pending.getCreatedAt().isAfter(now.minus(CHECKOUT_COOLDOWN))) {
+                audit.suspicious("checkout_in_progress", "link " + link.getId());
+                throw new InvalidStateException("CHECKOUT_IN_PROGRESS",
+                        "A payment from this link is already in progress. Finish it or try again in a minute.", Map.of());
+            }
+            pending.expire(now, "Replaced by a new attempt from the same link.");
+            events.publishEvent(PaymentChangedEvent.payment(pending, now));
+        }
+    }
+
+    /**
      * The guest came back from the provider's page. Whatever the browser says is ignored: the outcome is asked
      * from the provider. Safe to call any number of times.
      */
@@ -241,34 +274,82 @@ public class OnlinePaymentService {
                 .map(Payment::getId)
                 .orElse(null));
         if (paymentId == null) {
-            log.warn("Payment callback for an unknown checkout from {}", provider);
+            audit.suspicious("unknown_checkout", provider);
             return;
         }
         reconcile(paymentId, false);
     }
 
-    /** Whether a token is a real payment link; only then is the guest sent back to it. */
-    @Transactional(readOnly = true)
-    public boolean isKnownLink(String token) {
-        return TOKEN.matcher(token).matches() && links.findByTokenHash(hash(token)).isPresent();
+    /**
+     * A server-to-server notification from the provider (iyzico webhook). Its body is not trusted either: it only
+     * names a checkout, which is then looked up with the provider like a callback. That keeps a forged notification
+     * harmless without depending on a signature scheme that must be switched on per merchant account.
+     */
+    public void handleNotification(String provider, Map<String, Object> body) {
+        String token = body.get("token") instanceof String value && value.length() <= 200 ? value : null;
+        Long paymentId = transaction.execute(status -> {
+            if (token != null) {
+                return payments.findByProviderToken(token).map(Payment::getId).orElse(null);
+            }
+            Object conversation = body.get("paymentConversationId");
+            java.util.regex.Matcher match = conversation instanceof String value ? CONVERSATION_ID.matcher(value) : null;
+            return match != null && match.matches() ? Long.valueOf(match.group(1)) : null;
+        });
+        Long found = paymentId == null ? null : transaction.execute(status -> payments.findById(paymentId)
+                .filter(payment -> provider.equalsIgnoreCase(payment.getProvider()))
+                .map(Payment::getId).orElse(null));
+        if (found == null) {
+            audit.suspicious("unknown_notification", provider);
+            return;
+        }
+        reconcile(found, false);
+    }
+
+    /**
+     * Staff give up an online payment that is still open, for instance when the guest decided to pay in cash after
+     * all. The provider is asked first; a payment that went through is kept.
+     */
+    public void release(Long billId, Long paymentId, String actor) {
+        Long owner = transaction.execute(status -> payments.findById(paymentId).map(p -> p.getBill().getId()).orElse(null));
+        if (owner == null || !owner.equals(billId)) {
+            throw new ResourceNotFoundException("payment", paymentId);
+        }
+        reconcile(paymentId, false);
+        transaction.executeWithoutResult(status -> {
+            Payment payment = lockedPayment(paymentId);
+            if (!payment.isPending()) {
+                return; // it finished meanwhile: nothing to release
+            }
+            if (payment.isUnderReview()) {
+                throw new InvalidStateException("PAYMENT_UNDER_REVIEW",
+                        "The card was charged and the provider is reviewing it; it cannot be released.", Map.of());
+            }
+            Instant now = clock.instant();
+            payment.expire(now, "Released by staff.");
+            audit.released(payment, actor);
+            events.publishEvent(PaymentChangedEvent.payment(payment, now));
+            billService.refresh(payment.getBill(), now);
+        });
     }
 
     // ------------------------------------------------------------------------------------------- background
 
     /**
-     * Online payments the guest never finished are given up after a while, which frees the amount on the bill.
-     * The provider is asked first, in case the guest paid but never came back.
+     * Unfinished online payments are checked with the provider after a couple of minutes, so a guest who paid but
+     * closed the browser before coming back is still recorded quickly. Payments still unfinished after
+     * {@code pending-ttl} are given up, which frees their amount on the bill.
      */
     @Scheduled(fixedDelayString = "${restaurant.payments.reconcile-interval:PT1M}", initialDelayString = "PT1M")
-    public void expireAbandonedPayments() {
-        Instant cutoff = clock.instant().minus(properties.pendingTtl());
-        List<Long> stale = transaction.execute(status -> payments.findByStatusAndCreatedAtBefore(PaymentStatus.PENDING, cutoff)
-                .stream().map(Payment::getId).toList());
-        for (Long paymentId : Objects.requireNonNull(stale)) {
+    public void reconcilePendingPayments() {
+        Instant now = clock.instant();
+        Instant giveUp = now.minus(properties.pendingTtl());
+        List<Payment> open = transaction.execute(status ->
+                payments.findByStatusAndCreatedAtBefore(PaymentStatus.PENDING, now.minus(RECONCILE_AFTER)));
+        for (Payment payment : Objects.requireNonNull(open)) {
             try {
-                reconcile(paymentId, true);
+                reconcile(payment.getId(), payment.getCreatedAt().isBefore(giveUp));
             } catch (RuntimeException ex) {
-                log.warn("Could not reconcile payment {}: {}", paymentId, ex.getMessage());
+                log.warn("Could not reconcile payment {}: {}", payment.getId(), ex.getMessage());
             }
         }
     }
@@ -294,6 +375,10 @@ public class OnlinePaymentService {
                 outcome = gateway.retrieve(snapshot.providerToken(), conversationId(paymentId));
             } catch (PaymentGatewayException ex) {
                 log.warn("Could not ask {} about payment {}: {}", snapshot.provider(), paymentId, ex.getMessage());
+                if (!(ex.getCause() instanceof org.springframework.web.client.RestClientException)) {
+                    // Answered, but the answer failed verification: possibly tampered with.
+                    audit.suspicious("unverified_provider_answer", "payment " + paymentId + ": " + ex.getMessage());
+                }
                 return;
             }
         }
@@ -316,6 +401,8 @@ public class OnlinePaymentService {
                 if (outcome.paidAmount() != null && outcome.paidAmount().compareTo(expected) != 0) {
                     log.error("Payment {} was charged {} but {} was expected; check it in the provider panel",
                             paymentId, outcome.paidAmount(), expected);
+                    audit.suspicious("amount_mismatch", "payment %d charged %s expected %s".formatted(paymentId,
+                            outcome.paidAmount(), expected));
                     if (open) {
                         payment.fail("The amount charged did not match. Staff will check it.", now);
                     }
@@ -330,11 +417,19 @@ public class OnlinePaymentService {
                     payment.fail(Objects.requireNonNullElse(outcome.failureReason(), "The payment was declined."), now);
                 }
             }
+            case REVIEW -> {
+                if (open && !payment.isUnderReview()) {
+                    payment.underReview(outcome.providerPaymentId());
+                }
+            }
             case PENDING -> {
-                if (open && expireIfUnfinished) {
+                if (open && expireIfUnfinished && !payment.isUnderReview()) {
                     payment.expire(now);
                 }
             }
+        }
+        if (payment.getStatus() != PaymentStatus.PENDING || payment.isUnderReview()) {
+            audit.onlinePaymentSettled(payment);
         }
         events.publishEvent(PaymentChangedEvent.payment(payment, now));
         paymentService.afterPayment(bill, "guest", now);
@@ -361,46 +456,45 @@ public class OnlinePaymentService {
     }
 
     void sendRefund(Long refundId) {
-        if (!refundsInFlight.add(refundId)) {
+        Instant now = clock.instant();
+        Integer claimed = transaction.execute(status -> refunds.claim(refundId, now, now.plus(Duration.ofMinutes(2))));
+        if (claimed == null || claimed != 1) {
+            return; // already done, or being sent by another attempt or server
+        }
+        RefundOrder order = transaction.execute(status -> refunds.findById(refundId)
+                .filter(refund -> refund.getStatus() == RefundStatus.PENDING)
+                .map(refund -> new RefundOrder(refund.getPayment().getProvider(),
+                        refund.getPayment().getProviderPaymentId(), refund.getAmount(),
+                        "sofra-r" + refund.getId()))
+                .orElse(null));
+        if (order == null) {
             return;
         }
-        try {
-            RefundOrder order = transaction.execute(status -> refunds.findById(refundId)
-                    .filter(refund -> refund.getStatus() == RefundStatus.PENDING)
-                    .map(refund -> new RefundOrder(refund.getPayment().getProvider(),
-                            refund.getPayment().getProviderPaymentId(), refund.getAmount(),
-                            conversationId(refund.getPayment().getId())))
-                    .orElse(null));
-            if (order == null) {
-                return;
-            }
-            OnlinePaymentGateway gateway = online.gateway().filter(active -> active.provider().equals(order.provider()))
-                    .orElse(null);
-            if (gateway == null || order.providerPaymentId() == null) {
-                log.warn("Refund {} waits: provider {} is not configured", refundId, order.provider());
-                return;
-            }
-            RefundOutcome outcome;
-            try {
-                outcome = gateway.refund(order.providerPaymentId(), order.amount(), order.conversationId());
-            } catch (PaymentGatewayException ex) {
-                log.warn("Refund {} could not be sent, will retry: {}", refundId, ex.getMessage());
-                return;
-            }
-            transaction.executeWithoutResult(status -> {
-                Refund refund = refunds.findById(refundId).orElseThrow();
-                billService.lock(refund.getPayment().getBill());
-                if (outcome.succeeded()) {
-                    refund.succeed(outcome.providerRefundId());
-                } else {
-                    log.error("{} refused refund {}: {}", order.provider(), refundId, outcome.failureReason());
-                    refund.fail(Objects.requireNonNullElse(outcome.failureReason(), "Refused by the provider"));
-                }
-                events.publishEvent(PaymentChangedEvent.refund(refund, clock.instant()));
-            });
-        } finally {
-            refundsInFlight.remove(refundId);
+        OnlinePaymentGateway gateway = online.gateway().filter(active -> active.provider().equals(order.provider()))
+                .orElse(null);
+        if (gateway == null || order.providerPaymentId() == null) {
+            log.warn("Refund {} waits: provider {} is not configured", refundId, order.provider());
+            return;
         }
+        RefundOutcome outcome;
+        try {
+            outcome = gateway.refund(order.providerPaymentId(), order.amount(), order.conversationId());
+        } catch (PaymentGatewayException ex) {
+            log.warn("Refund {} could not be sent, will retry: {}", refundId, ex.getMessage());
+            return;
+        }
+        transaction.executeWithoutResult(status -> {
+            Refund refund = refunds.findById(refundId).orElseThrow();
+            billService.lock(refund.getPayment().getBill());
+            if (outcome.succeeded()) {
+                refund.succeed(outcome.providerRefundId());
+            } else {
+                log.error("{} refused refund {}: {}", order.provider(), refundId, outcome.failureReason());
+                refund.fail(Objects.requireNonNullElse(outcome.failureReason(), "Refused by the provider"));
+            }
+            audit.refund(refund, "provider");
+            events.publishEvent(PaymentChangedEvent.refund(refund, clock.instant()));
+        });
     }
 
     private record RefundOrder(String provider, @Nullable String providerPaymentId, BigDecimal amount,

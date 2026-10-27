@@ -670,7 +670,7 @@
     id: p.id, billId: bill.id, method: p.method, status: p.status, amount: toLira(p.amountC), tip: toLira(p.tipC),
     tendered: p.tenderedC == null ? null : toLira(p.tenderedC), changeDue: p.changeC == null ? null : toLira(p.changeC),
     refunded: toLira(p.refundedC), refundable: p.status === 'SUCCEEDED' ? toLira(p.amountC - p.refundedC) : 0,
-    approvalCode: p.approvalCode, provider: p.provider, viaLink: p.link != null, failureReason: p.failureReason,
+    approvalCode: p.approvalCode, provider: p.provider, viaLink: p.link != null, failureReason: p.failureReason, underReview: false,
     createdAt: iso(p.createdAt), completedAt: p.completedAt ? iso(p.completedAt) : null, createdBy: p.createdBy, refunds: p.refunds.map(refundView),
   });
 
@@ -777,6 +777,22 @@
       paymentsChanged(bill, payment);
       return [201, { payment: paymentView(bill, payment), bill: billView(bill) }];
     }],
+    ['POST', /^bills\/(\d+)\/payments\/(\d+)\/release$/, 'till', ({ params }) => {
+      const bill = findBill(params[0]);
+      const payment = bill.payments.find((p) => p.id === Number(params[1]));
+      if (!payment) throw new Problem(404, 'PAYMENT_NOT_FOUND', `Payment ${params[1]} was not found`, { parameters: { id: String(params[1]) } });
+      if (payment.status === 'PENDING') {
+        const sim = Object.values(state.sims).find((s) => s.paymentId === payment.id);
+        if (sim && sim.decision === true) {
+          Object.assign(payment, { status: 'SUCCEEDED', completedAt: Date.now() });
+          afterPayment(bill, 'guest');
+        } else {
+          Object.assign(payment, { status: 'EXPIRED', failureReason: 'Released by staff.', completedAt: Date.now() });
+        }
+        paymentsChanged(bill, payment);
+      }
+      return billView(bill);
+    }],
     ['POST', /^bills\/(\d+)\/links$/, 'till', ({ params, user }, body) => {
       const bill = findBill(params[0]);
       if (bill.status !== 'OPEN') throw new Problem(409, 'BILL_NOT_OPEN', `Bill #${bill.id} is ${bill.status}`, { parameters: { billId: String(bill.id), status: bill.status } });
@@ -870,7 +886,7 @@
       save();
       return view;
     }],
-    ['POST', /^payments\/callback\/simulated$/, 'public', ({ query }, body) => {
+    ['POST', /^payments\/callback\/simulated$/, 'public', (_, body) => {
       const sim = state.sims[body.token];
       const bill = sim && state.bills.find((b) => b.payments.some((p) => p.id === sim.paymentId));
       if (sim && bill) {
@@ -886,8 +902,8 @@
           paymentsChanged(bill, payment);
         }
       }
-      const link = query.get('link');
-      return { redirect: link && state.links.some((l) => l.token === link) ? `/#/pay/${link}` : '/' };
+      // Like the server: the link token never travels through the provider; the page remembers it.
+      return { redirect: '/#/pay/return' };
     }],
   ];
 
@@ -897,7 +913,7 @@
     if (!bill) throw new Problem(404, 'CHECKOUT_NOT_FOUND', 'Checkout ? was not found', { parameters: { id: '?' } });
     const payment = bill.payments.find((p) => p.id === sim.paymentId);
     return { token, amount: toLira(payment.amountC + payment.tipC), description: `Sofra Bistro${bill.table ? ` - ${bill.table.code}` : ''}`,
-      callbackUrl: `api/v1/payments/callback/simulated?link=${encodeURIComponent(sim.link)}` };
+      callbackUrl: 'api/v1/payments/callback/simulated' };
   }
 
   const routes = [

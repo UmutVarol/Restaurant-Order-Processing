@@ -7,6 +7,7 @@ import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { toast } from '../core/ui.js';
 import { openBill, parseCents } from './bill.js';
+import { withRecentSignIn } from './reauth.js';
 
 const METHOD_ICONS = { CASH: 'cash', CARD: 'card', ONLINE: 'online' };
 
@@ -111,7 +112,9 @@ export default {
         h('button', { class: 'btn dark block', 'data-testid': 'close-day', onclick: async () => {
           if (!counted.value.trim()) { counted.classList.add('invalid'); counted.focus(); return; }
           try {
-            report = await api.closeDay(date, (parseCents(counted.value) / 100).toFixed(2), note.value.trim() || null);
+            const closed = await withRecentSignIn(() => api.closeDay(date, (parseCents(counted.value) / 100).toFixed(2), note.value.trim() || null));
+            if (!closed) return;
+            report = closed;
             toast({ title: t('cashier.dayClosed') });
             renderReport();
           } catch (error) {

@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @TestPropertySource(properties = {
         "restaurant.security.rate-limit.api-requests-per-minute=10",
         "restaurant.security.rate-limit.login-requests-per-minute=3",
+        "restaurant.security.rate-limit.public-requests-per-minute=4",
         "restaurant.realtime.max-subscribers-per-user=1"})
 class RateLimitIntegrationTest extends ApiIntegrationTest {
 
@@ -46,6 +47,17 @@ class RateLimitIntegrationTest extends ApiIntegrationTest {
                 {"username": "spray-9", "password": "Summer2026"}"""))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.code").value("RATE_LIMITED"));
+    }
+
+    @Test
+    void pagesThatNeedNoSignInHaveTheirOwnTighterBudget() throws Exception {
+        for (int i = 0; i < 4; i++) {
+            mvc.perform(from("10.0.0.6", get("/api/v1/public/pay/{token}", "x".repeat(43)))).andExpect(status().isNotFound());
+        }
+        mvc.perform(from("10.0.0.6", get("/api/v1/public/pay/{token}", "x".repeat(43))))
+                .andExpect(status().isTooManyRequests());
+        // Staff screens from the same address still work.
+        mvc.perform(from("10.0.0.6", get("/api/v1/menu"))).andExpect(status().isOk());
     }
 
     @Test
