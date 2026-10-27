@@ -168,6 +168,8 @@ async function onSignedIn(tokenResponse) {
 
 function signOut() {
   stopRealtime();
+  // Revoke the token on the server too; the local sign-out does not wait for it or depend on it.
+  if (currentSession()) api.logout().catch(() => {});
   clearSession();
   user = null;
   history.replaceState(null, '', location.pathname + location.search);

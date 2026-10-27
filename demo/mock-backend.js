@@ -518,6 +518,8 @@
       return { accessToken: `demo.${username}`, tokenType: 'Bearer', expiresAt: iso(Date.now() + 8 * 60 * MINUTE), user: { username, displayName: user.displayName, role: user.role } };
     }],
     ['GET', /^auth\/me$/, 'staff', ({ user }) => ({ username: user.username, displayName: user.displayName, role: user.role })],
+    // Demo tokens are not real JWTs, so there is nothing to revoke; the call simply succeeds like the real one.
+    ['POST', /^auth\/logout$/, 'staff', () => [204, null]],
 
     ['GET', /^menu$/, 'public', ({ query }) => {
       const needle = (query.get('q') || '').trim().toLocaleLowerCase();

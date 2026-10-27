@@ -6,6 +6,8 @@ import { money } from './format.js';
 
 const SESSION_KEY = 'sofra.session';
 const API_BASE = 'api/v1';
+// A request that has not answered by then is abandoned, so a hung connection never freezes the till.
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export function backendFetch(url, init) {
   const backend = window.SOFRA_BACKEND;
@@ -20,6 +22,7 @@ export class ApiError extends Error {
     this.code = problem?.code || (status === 0 ? 'NETWORK' : 'UNKNOWN');
     this.errors = problem?.errors || [];
     this.parameters = problem?.parameters || {};
+    this.retryAfter = Number(problem?.parameters?.retryAfterSeconds) || null;
   }
 
   /** Field name → message, for highlighting form inputs. */
@@ -98,14 +101,19 @@ async function request(method, path, body, { auth = true } = {}) {
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   let response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     response = await backendFetch(`${API_BASE}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
     });
   } catch {
     throw new ApiError(0, null);
+  } finally {
+    clearTimeout(timer);
   }
 
   const text = response.status === 204 ? '' : await response.text();
@@ -127,6 +135,7 @@ async function request(method, path, body, { auth = true } = {}) {
 export const api = {
   login: (username, password) => request('POST', '/auth/login', { username, password }, { auth: false }),
   me: () => request('GET', '/auth/me'),
+  logout: () => request('POST', '/auth/logout'),
 
   menu: (params) => request('GET', `/menu${query(params)}`, undefined, { auth: false }),
   createMenuItem: (item) => request('POST', '/menu', item),

@@ -3,6 +3,7 @@ package com.umutvarol.restaurant.security;
 import jakarta.servlet.DispatcherType;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.context.annotation.Bean;
@@ -21,17 +22,27 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtAudienceValidator;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.JwtTypeValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
+import org.springframework.security.web.header.writers.CrossOriginResourcePolicyHeaderWriter.CrossOriginResourcePolicy;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
+import org.springframework.security.web.header.writers.StaticHeadersWriter;
 
 /**
  * Stateless JWT security. Access rules, from most to least specific:
@@ -57,7 +68,13 @@ class SecurityConfig {
             "connect-src 'self'",
             "frame-ancestors 'none'",
             "base-uri 'self'",
-            "form-action 'self'");
+            "form-action 'self'",
+            "object-src 'none'");
+
+    /** Browser features the app never uses are switched off (OWASP HTTP Headers Cheat Sheet). */
+    private static final String PERMISSIONS_POLICY = String.join(", ",
+            "accelerometer=()", "camera=()", "display-capture=()", "geolocation=()", "gyroscope=()",
+            "magnetometer=()", "microphone=()", "midi=()", "payment=()", "usb=()", "xr-spatial-tracking=()");
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ProblemDetailsSecurityHandler problemHandler,
@@ -91,7 +108,12 @@ class SecurityConfig {
                         .accessDeniedHandler(problemHandler))
                 .headers(headers -> headers
                         .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
-                        .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)));
+                        .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        // Sent only over HTTPS, as the HSTS specification requires.
+                        .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(Duration.ofDays(365).toSeconds()))
+                        .crossOriginOpenerPolicy(coop -> coop.policy(CrossOriginOpenerPolicy.SAME_ORIGIN))
+                        .crossOriginResourcePolicy(corp -> corp.policy(CrossOriginResourcePolicy.SAME_ORIGIN))
+                        .addHeaderWriter(new StaticHeadersWriter("Permissions-Policy", PERMISSIONS_POLICY)));
         return http.build();
     }
 
@@ -123,16 +145,33 @@ class SecurityConfig {
         return NimbusJwtEncoder.withSecretKey(secretKey(properties)).algorithm(MacAlgorithm.HS256).build();
     }
 
+    /**
+     * Verifies every incoming token: HS256 only (the algorithm is fixed here, never read from the token), then
+     * expiry, issuer, audience, explicit type {@code at+jwt}, a token ID, and that the token was not signed out.
+     */
     @Bean
-    JwtDecoder jwtDecoder(JwtProperties properties, Clock clock) {
+    JwtDecoder jwtDecoder(JwtProperties properties, Clock clock, TokenDenylist denylist) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey(properties))
                 .macAlgorithm(MacAlgorithm.HS256)
+                .validateType(false)
                 .build();
-        JwtTimestampValidator timestampValidator = new JwtTimestampValidator();
+        JwtTimestampValidator timestampValidator = new JwtTimestampValidator(Duration.ofSeconds(30));
         timestampValidator.setClock(clock);
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                timestampValidator, new JwtIssuerValidator(properties.issuer())));
+                timestampValidator,
+                new JwtIssuerValidator(properties.issuer()),
+                new JwtAudienceValidator(properties.audience()),
+                new JwtTypeValidator(JwtTokenService.TOKEN_TYPE),
+                new JwtClaimValidator<String>("jti", jti -> jti != null && !jti.isBlank()),
+                notRevoked(denylist)));
         return decoder;
+    }
+
+    private static OAuth2TokenValidator<Jwt> notRevoked(TokenDenylist denylist) {
+        OAuth2Error revoked = new OAuth2Error("invalid_token", "The token has been revoked", null);
+        return jwt -> denylist.isRevoked(jwt.getId())
+                ? OAuth2TokenValidatorResult.failure(revoked)
+                : OAuth2TokenValidatorResult.success();
     }
 
     @Bean

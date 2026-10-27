@@ -1,14 +1,17 @@
 package com.umutvarol.restaurant.realtime;
 
+import com.umutvarol.restaurant.common.error.TooManyRequestsException;
 import com.umutvarol.restaurant.order.OrderChangedEvent;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -25,18 +28,42 @@ public class OrderEventBroadcaster {
     static final Duration EMITTER_TIMEOUT = Duration.ofMinutes(30);
     private static final Logger log = LoggerFactory.getLogger(OrderEventBroadcaster.class);
 
-    private final Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
-    private final AtomicLong sequence = new AtomicLong();
+    private static final Duration RETRY_AFTER_LIMIT = Duration.ofSeconds(30);
 
-    public SseEmitter subscribe() {
+    /** Open streams and the user each belongs to. */
+    private final Map<SseEmitter, String> emitters = new ConcurrentHashMap<>();
+    private final AtomicLong sequence = new AtomicLong();
+    private final RealtimeProperties limits;
+
+    public OrderEventBroadcaster(RealtimeProperties limits) {
+        this.limits = limits;
+    }
+
+    /**
+     * Opens a stream for the given user.
+     *
+     * @throws TooManyRequestsException if the user, or the server as a whole, already has the maximum number of streams
+     */
+    public SseEmitter subscribe(String user) {
         SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT.toMillis());
+        synchronized (emitters) {
+            if (emitters.size() >= limits.maxSubscribers()) {
+                throw new TooManyRequestsException("TOO_MANY_STREAMS",
+                        "The server has reached its limit of live connections. Try again shortly.", RETRY_AFTER_LIMIT);
+            }
+            long mine = emitters.values().stream().filter(user::equals).count();
+            if (mine >= limits.maxSubscribersPerUser()) {
+                throw new TooManyRequestsException("TOO_MANY_STREAMS",
+                        "Too many live connections for this account. Close another screen or tab.", RETRY_AFTER_LIMIT);
+            }
+            emitters.put(emitter, user);
+        }
         emitter.onCompletion(() -> emitters.remove(emitter));
         emitter.onTimeout(() -> {
             emitters.remove(emitter);
             emitter.complete();
         });
         emitter.onError(error -> emitters.remove(emitter));
-        emitters.add(emitter);
         send(emitter, SseEmitter.event().name("connected").data("{\"subscribers\":" + emitters.size() + "}",
                 MediaType.APPLICATION_JSON).reconnectTime(3_000));
         return emitter;
@@ -58,9 +85,21 @@ public class OrderEventBroadcaster {
         return emitters.size();
     }
 
+    /**
+     * Ends every stream when the application shuts down. Streams are long-lived requests, so otherwise graceful
+     * shutdown would wait out its whole grace period for them; clients reconnect to the next instance on their own.
+     */
+    @EventListener(ContextClosedEvent.class)
+    void closeAll() {
+        for (SseEmitter emitter : emitters.keySet()) {
+            emitters.remove(emitter);
+            emitter.complete();
+        }
+    }
+
     /** Builders are single-use, so a fresh one is created for every subscriber. */
     private void broadcast(Supplier<SseEmitter.SseEventBuilder> event) {
-        for (SseEmitter emitter : emitters) {
+        for (SseEmitter emitter : emitters.keySet()) {
             send(emitter, event.get());
         }
     }

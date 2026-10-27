@@ -6,3 +6,8 @@ spring:
     password: ${DATABASE_PASSWORD:sofra}
     hikari:
       maximum-pool-size: 10
+      # Fail fast when the database is unreachable instead of hanging requests for 30 s.
+      connection-timeout: 5000
+      validation-timeout: 3000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000

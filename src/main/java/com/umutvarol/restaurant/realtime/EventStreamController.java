@@ -2,6 +2,7 @@ package com.umutvarol.restaurant.realtime;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.security.Principal;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,9 +21,11 @@ class EventStreamController {
     }
 
     @Operation(summary = "Subscribe to order events",
-            description = "text/event-stream of `order` events (created / status changed). Heartbeats every 20s.")
+            description = """
+                    text/event-stream of `order` events (created / status changed). Heartbeats every 20s.
+                    Each user may hold a limited number of open streams; beyond it the endpoint answers 429.""")
     @GetMapping(path = "/orders", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    SseEmitter orders() {
-        return broadcaster.subscribe();
+    SseEmitter orders(Principal principal) {
+        return broadcaster.subscribe(principal.getName());
     }
 }

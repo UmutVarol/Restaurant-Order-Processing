@@ -24,7 +24,8 @@ module.exports = defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /layout\.spec\.js/ },
   ],
   webServer: {
-    command: 'java -jar ../target/restaurant-order-processing.jar',
+    // The suite drives a whole service from one address, faster than any till would; lift the per-client budget.
+    command: 'java -jar ../target/restaurant-order-processing.jar --restaurant.security.rate-limit.api-requests-per-minute=100000',
     url: `${BASE_URL}/actuator/health/readiness`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

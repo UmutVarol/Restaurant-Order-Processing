@@ -265,6 +265,10 @@ const dictionaries = {
     'validation.phone': 'Enter a valid phone number',
 
     'error.BAD_CREDENTIALS': 'Invalid username or password.',
+    'error.LOGIN_LOCKED': 'Too many failed attempts. Try again in {retryAfterSeconds} seconds.',
+    'error.RATE_LIMITED': 'Too many requests. Wait {retryAfterSeconds} seconds and try again.',
+    'error.TOO_MANY_STREAMS': 'Too many open screens for this account. Close one and reload.',
+    'error.PAYLOAD_TOO_LARGE': 'That is too much data to send at once.',
     'error.UNAUTHORIZED': 'Your session has ended. Please sign in again.',
     'error.FORBIDDEN': 'Your role is not allowed to do that.',
     'error.VALIDATION_FAILED': 'Please check the highlighted fields.',
@@ -544,6 +548,10 @@ const dictionaries = {
     'validation.phone': 'Geçerli bir telefon numarası girin',
 
     'error.BAD_CREDENTIALS': 'Kullanıcı adı veya şifre hatalı.',
+    'error.LOGIN_LOCKED': 'Çok fazla hatalı deneme. {retryAfterSeconds} saniye sonra tekrar deneyin.',
+    'error.RATE_LIMITED': 'Çok fazla istek gönderildi. {retryAfterSeconds} saniye bekleyip tekrar deneyin.',
+    'error.TOO_MANY_STREAMS': 'Bu hesapla çok fazla ekran açık. Birini kapatıp sayfayı yenileyin.',
+    'error.PAYLOAD_TOO_LARGE': 'Tek seferde gönderilemeyecek kadar fazla veri.',
     'error.UNAUTHORIZED': 'Oturumunuz sona erdi. Lütfen tekrar giriş yapın.',
     'error.FORBIDDEN': 'Rolünüz bu işlem için yetkili değil.',
     'error.VALIDATION_FAILED': 'Lütfen işaretli alanları kontrol edin.',

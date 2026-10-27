@@ -99,6 +99,17 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report/
 
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Blocks pull requests that add dependencies with known high or critical vulnerabilities.
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+
   docker:
     name: Docker image
     needs: build
@@ -118,6 +129,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Fails the build on critical vulnerabilities that already have a fix (OWASP Docker Cheat Sheet, rule 9).
+      - name: Scan the image for vulnerabilities
+        # Pinned to a commit, not a tag: tags can be moved. In March 2026 most trivy-action tags were
+        # force-pushed to a credential stealer (CVE-2026-33634); a commit hash cannot be repointed.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: sofra-restaurant:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
       - name: Smoke test the container
         run: |
           docker run -d --name sofra -p 8080:8080 -e JWT_SECRET=ci-secret-that-is-long-enough-0123456789 sofra-restaurant:ci
@@ -131,6 +153,21 @@ jobs:
             -d '{"username":"admin","password":"admin123"}' | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
           curl -fs -H "Authorization: Bearer $TOKEN" "http://localhost:8080/api/v1/analytics/dashboard?days=7" | grep -q '"topItems"'
           echo "Container is healthy and serving the API"
+
+      - name: Check security headers and rate limiting on the running container
+        run: |
+          headers=$(curl -fsI http://localhost:8080/api/v1/menu)
+          for h in "x-content-type-options: nosniff" "x-frame-options: DENY" "cross-origin-opener-policy: same-origin" "permissions-policy:"; do
+            echo "$headers" | grep -qi "$h" || { echo "missing header: $h"; exit 1; }
+          done
+          for i in $(seq 1 6); do
+            curl -s -o /dev/null -X POST http://localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
+              -d '{"username":"ci-lockout","password":"wrong"}'
+          done
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/api/v1/auth/login \
+            -H 'Content-Type: application/json' -d '{"username":"ci-lockout","password":"wrong"}')
+          [ "$code" = "429" ] || { echo "expected account lockout (429), got $code"; exit 1; }
+          echo "Security headers present and brute-force lockout active"
 
       - name: Container logs
         if: failure()

@@ -13,6 +13,7 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param secret     shared HS256 key, at least 32 characters. <b>Override in production</b> via {@code JWT_SECRET}.
  * @param issuer     value of the {@code iss} claim, verified on every request
+ * @param audience   value of the {@code aud} claim, verified on every request
  * @param timeToLive how long a token stays valid — one restaurant shift by default
  */
 @Validated
@@ -20,5 +21,6 @@ import org.springframework.validation.annotation.Validated;
 public record JwtProperties(
         @NotBlank @Size(min = 32, message = "must be at least 32 characters for HS256") String secret,
         @DefaultValue("sofra") @NotBlank String issuer,
+        @DefaultValue("sofra-api") @NotBlank String audience,
         @DefaultValue("8h") @NotNull Duration timeToLive) {
 }

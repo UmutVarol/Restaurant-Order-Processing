@@ -44,7 +44,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 | **Orders** | Paginated history with full-text search (order #, guest, phone, table, address) and status, type and date filters kept in the URL. A detail drawer shows the audit timeline, cancellation with a reason and a printable receipt. |
 | **Dashboard** | Revenue, orders, average ticket and kitchen time against the previous period, with daily revenue, busiest hours, category mix, best sellers, channels and payment methods. |
 | **Menu management** | Create, edit and archive dishes, toggle sold-out, and set popularity and dietary tags. Deletes are soft, so history stays intact. |
-| **Security** | Stateless JWT (HS256) with three roles, **Manager**, **Waiter** and **Kitchen**, enforced on every endpoint. |
+| **Security** | Stateless JWT with three roles (**Manager**, **Waiter**, **Kitchen**) enforced on every endpoint, account lockout, rate limiting, token revocation on sign-out, and CodeQL, Trivy and Dependabot in CI. Details in [SECURITY.md](SECURITY.md). |
 | **Interface** | A documented design language ([DESIGN.md](DESIGN.md)), light and dark themes, English and Turkish, phone layouts, keyboard shortcuts and accessible markup, covered by Playwright browser tests. |
 
 ## Screenshots
@@ -211,9 +211,14 @@ order states.
 - **Preview without side effects.** Coupon validation returns a result object instead of throwing across the
   transactional boundary. A thrown exception would mark the caller's transaction rollback-only (a real bug the
   integration tests caught).
-- **Stateless JWT security.** HS256 tokens signed with a configurable secret, roles in a `roles` claim, issuer and
-  expiry verified with an injectable `Clock`. CSRF is unnecessary because nothing is authenticated by cookies.
-  A strict Content-Security-Policy and the usual security headers are sent on every response.
+- **Stateless JWT security, hardened per OWASP.** HS256 tokens typed `at+jwt`, with issuer, audience, expiry and
+  a `jti` all verified. Signing out puts the `jti` on a denylist. Failed sign-ins lock the account for a short,
+  doubling period, and Bucket4j token buckets rate-limit each client. CSRF protection is unnecessary because
+  nothing is authenticated by cookies. A strict Content-Security-Policy and the other OWASP-recommended headers
+  are sent on every response. The full list is in [SECURITY.md](SECURITY.md).
+- **Built to stay up.** Request bodies, slow clients, live connections, transactions and queries all have limits
+  and timeouts. Every in-memory structure is bounded. Open event streams are closed on shutdown, so a rolling
+  deploy takes about a second instead of waiting out the graceful-shutdown timeout.
 - **Validation at the edge, invariants in the core.** Bean Validation on request records — including a custom
   class-level constraint, [`@ValidFulfilment`](src/main/java/com/umutvarol/restaurant/order/validation/ValidFulfilment.java),
   that reports a missing table or address field by field — and the same rules re-checked by the aggregate.
@@ -287,14 +292,16 @@ smoke-tests the running container.
 
 | Variable | Default | Description |
 |---|---|---|
-| `JWT_SECRET` | dev-only value | HS256 signing key, **at least 32 characters; set it in production** |
+| `JWT_SECRET` | dev-only value | HS256 signing key, at least 256 bits (`openssl rand -base64 48`). **Required when `DEMO_MODE=false`**: the app will not start on the development key |
 | `DEMO_MODE` | `true` | Create demo accounts and history on an empty database |
 | `SPRING_PROFILES_ACTIVE` | — | `postgres` to use PostgreSQL |
 | `DATABASE_URL` / `DATABASE_USERNAME` / `DATABASE_PASSWORD` | `jdbc:postgresql://localhost:5432/sofra` | PostgreSQL connection (with the `postgres` profile) |
 | `RESTAURANT_BOOTSTRAP_ADMIN_PASSWORD` | — | Creates an `admin` account on first start when demo mode is off |
 | `PORT` | `8080` | HTTP port |
+| `SERVER_FORWARD_HEADERS_STRATEGY` | — | `native` behind a reverse proxy, so rate limits see the real client address |
 
-Business rules (tax rate, delivery fee, free-delivery threshold, time zone) are under `restaurant.*` in
+Business rules (tax rate, delivery fee, free-delivery threshold, time zone) and the abuse limits (lockout policy,
+rate limits, body size, live connections) are under `restaurant.*` in
 [`application.yml`](src/main/resources/application.yml) and validated on start-up.
 
 ## Project history

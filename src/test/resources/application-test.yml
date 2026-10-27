@@ -9,6 +9,10 @@ restaurant:
   security:
     jwt:
       secret: test-secret-that-is-long-enough-for-hs256-0123456789
+    # The whole suite runs from one address; dedicated tests cover the limits with tight values.
+    rate-limit:
+      api-requests-per-minute: 1000000
+      login-requests-per-minute: 1000000
 
 logging:
   level:

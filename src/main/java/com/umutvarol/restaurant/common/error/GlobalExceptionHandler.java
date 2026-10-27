@@ -50,6 +50,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, "Invalid state transition", ex);
     }
 
+    @ExceptionHandler(TooManyRequestsException.class)
+    ResponseEntity<ProblemDetail> handleTooManyRequests(TooManyRequestsException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(TooManyRequestsException.retryAfterSeconds(ex.getRetryAfter())))
+                .body(problem(HttpStatus.TOO_MANY_REQUESTS, "Too many requests", ex));
+    }
+
+    @ExceptionHandler(PayloadTooLargeException.class)
+    ProblemDetail handlePayloadTooLarge(PayloadTooLargeException ex) {
+        return payloadTooLarge(ex);
+    }
+
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     ProblemDetail handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
@@ -147,6 +159,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                                                                   HttpHeaders headers,
                                                                   HttpStatusCode status,
                                                                   WebRequest request) {
+        // A body cut off by the size limit surfaces here, wrapped by the JSON reader.
+        for (Throwable cause = ex.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof PayloadTooLargeException tooLarge) {
+                return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).headers(headers).body(payloadTooLarge(tooLarge));
+            }
+        }
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
                 "The request body is missing or is not valid JSON of the expected shape.");
         problem.setTitle("Malformed request");
@@ -160,6 +178,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "Cannot sort by '%s'.".formatted(ex.getPropertyName()));
         problem.setTitle("Invalid sort property");
         return withCode(problem, "INVALID_SORT");
+    }
+
+    private static ProblemDetail payloadTooLarge(PayloadTooLargeException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONTENT_TOO_LARGE,
+                "The request body is larger than the %d bytes this API accepts.".formatted(ex.getLimitBytes()));
+        problem.setTitle("Request too large");
+        return withCode(problem, "PAYLOAD_TOO_LARGE");
     }
 
     private static ProblemDetail problem(HttpStatus status, String title, DomainException ex) {
