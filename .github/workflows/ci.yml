@@ -156,7 +156,8 @@ jobs:
 
       - name: Check security headers and rate limiting on the running container
         run: |
-          headers=$(curl -fsI http://localhost:8080/api/v1/menu)
+          # GET, not HEAD: the menu is public for GET only, so a HEAD request is (rightly) refused.
+          headers=$(curl -fs -o /dev/null -D - http://localhost:8080/api/v1/menu)
           for h in "x-content-type-options: nosniff" "x-frame-options: DENY" "cross-origin-opener-policy: same-origin" "permissions-policy:"; do
             echo "$headers" | grep -qi "$h" || { echo "missing header: $h"; exit 1; }
           done
