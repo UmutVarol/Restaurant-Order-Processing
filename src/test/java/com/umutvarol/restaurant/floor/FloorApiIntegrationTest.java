@@ -40,7 +40,9 @@ class FloorApiIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath(TABLE + ".occupied").value(true))
                 .andExpect(jsonPath(TABLE + ".openOrders[0].status").value("SERVED"));
 
-        mvc.perform(as(WAITER, post("/api/v1/orders/{id}/advance", id)))
+        // Paying the bill in full completes the served order and frees the table.
+        payInFull(id, "CASH");
+        mvc.perform(as(WAITER, get("/api/v1/orders/{id}", id)))
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
         mvc.perform(as(WAITER, get("/api/v1/floor/tables")))
                 .andExpect(jsonPath(TABLE + ".occupied").value(false));

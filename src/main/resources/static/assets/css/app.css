@@ -955,3 +955,107 @@ body { -webkit-tap-highlight-color: transparent; }
 .chip { height: 40px; }
 .segmented button { height: 42px; }
 .pay-methods .segmented button { height: 40px; }
+
+/* ==========================================================================
+   Payments — bill, cashier, guest pay page
+   ========================================================================== */
+.modal.lg { width: min(980px, calc(100vw - 32px)); }
+.bill { display: flex; flex-direction: column; gap: 18px; }
+.bill-head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.bill-head > div:first-child { flex: 1; min-width: 0; }
+.bill-no { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -.02em; margin-bottom: 4px; }
+.bill-due { display: flex; flex-direction: column; align-items: flex-end; }
+.bill-due span { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.bill-due b { font-family: var(--font-display); font-size: 34px; font-weight: 600; letter-spacing: -.03em; color: var(--brand); font-variant-numeric: tabular-nums; }
+.bill-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); gap: 22px; align-items: start; }
+.bill-left { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.bill-lines { display: flex; flex-direction: column; gap: 10px; }
+.bill-order { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.bill-order.cancelled { opacity: .55; }
+.bill-order.cancelled .bill-line .n { text-decoration: line-through; }
+.bill-order-head { display: flex; align-items: center; gap: 8px; padding-bottom: 4px; }
+.bill-order-head .spacer, .guest-top .spacer, .sim-card .spacer { flex: 1; }
+.bill-line { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 4px 2px; border-radius: 8px; font-size: 13.5px; }
+.bill-line .emoji { font-size: 17px; text-align: center; }
+.bill-line .num, .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.bill-line.pick { grid-template-columns: 20px 28px 1fr auto; cursor: pointer; padding: 6px; }
+.bill-line.pick:hover { background: var(--surface-2); }
+.bill-line.pick.on { background: var(--brand-soft); }
+.bill-payments { display: flex; flex-direction: column; gap: 8px; }
+.bill-payment { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius); background: var(--surface-2); }
+.bill-payment .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--green-soft); color: var(--green); flex: none; }
+.bill-payment.p-FAILED .ic, .bill-payment.p-EXPIRED .ic { background: var(--slate-soft); color: var(--slate); }
+.bill-payment.p-PENDING .ic { background: var(--amber-soft); color: var(--amber); }
+.bill-payment .grow { flex: 1; min-width: 0; font-size: 13.5px; }
+.bill-payment .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.bill-payment .sub.warn { color: var(--amber); }
+.bill-payment .sub.refund { color: var(--red); display: flex; gap: 4px; align-items: center; }
+.pill.b-OPEN { background: var(--amber-soft); color: var(--amber); }
+.pill.b-CLOSED { background: var(--green-soft); color: var(--green); }
+.pill.b-VOID, .pill.p-FAILED, .pill.p-EXPIRED { background: var(--slate-soft); color: var(--slate); }
+.pill.p-PENDING { background: var(--amber-soft); color: var(--amber); }
+.bill-pay { padding: 16px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 0; }
+.num-input { font-family: var(--font-display); font-size: 24px; font-weight: 600; height: 54px; font-variant-numeric: tabular-nums; }
+.input.sm { height: 36px; font-size: 13px; }
+.tip-input { width: 110px; flex: none; }
+.split-chip { display: inline-flex; align-items: center; gap: 8px; padding-right: 4px; }
+.split-chip.active .stepper { background: rgba(255, 255, 255, .16); }
+.split-chip.active .stepper button { color: inherit; }
+.change { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--green-soft); color: var(--green); font-weight: 600; }
+.change b { font-family: var(--font-display); font-size: 22px; font-variant-numeric: tabular-nums; }
+.change.short { background: var(--red-soft); color: var(--red); }
+.qr-box { display: grid; grid-template-columns: 168px 1fr; gap: 14px; align-items: center; }
+.qr-box.empty-qr { grid-template-columns: 1fr; }
+.qr-info { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+svg.qr { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--border); background: #fff; }
+.cashier-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.data-table b.due { color: var(--brand); }
+.data-table b.settled { color: var(--green); }
+.z-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.z-table th, .z-table td { padding: 9px 4px; border-bottom: 1px solid var(--border); text-align: left; font-weight: 500; }
+.z-table thead th { color: var(--muted); font-size: 12px; font-weight: 600; }
+.z-table .right { text-align: right; }
+.z-table tr.total th, .z-table tr.total td { font-weight: 750; border-bottom: 0; }
+.expected-cash { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 16px 0; padding: 14px 16px; border-radius: var(--radius); background: var(--saffron-soft); }
+.expected-cash span { font-weight: 650; flex: 1; }
+.expected-cash b { font-family: var(--font-display); font-size: 26px; font-variant-numeric: tabular-nums; }
+.expected-cash small { flex-basis: 100%; }
+.close-day { display: flex; flex-direction: column; gap: 12px; }
+.short { color: var(--red); }
+.over { color: var(--amber); }
+.day-closed { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: var(--radius); background: var(--green-soft); }
+.day-closed .row { color: var(--green); gap: 8px; }
+
+/* Guest pages: a single centred card, comfortable on a phone. */
+.guest { min-height: 100vh; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 16px 16px 40px; }
+.guest-top { width: min(520px, 100%); display: flex; align-items: center; gap: 10px; }
+.guest-top .logo-mark { width: 34px; height: 34px; }
+.guest-top b { font-family: var(--font-display); font-size: 20px; }
+.guest-card { width: min(520px, 100%); padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+.guest-head .guest-title { font-family: var(--font-display); font-size: 30px; font-weight: 600; letter-spacing: -.02em; }
+.guest-lines { max-height: 40vh; overflow: auto; }
+.guest-pay { display: flex; flex-direction: column; gap: 14px; }
+.guest-share { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 14px; border-radius: var(--radius); background: var(--brand-soft); font-weight: 600; }
+.guest-share b { font-family: var(--font-display); font-size: 26px; color: var(--brand); }
+.guest-note, .guest-foot { font-size: 12px; text-align: center; }
+.guest-foot { width: min(520px, 100%); display: flex; gap: 6px; justify-content: center; align-items: center; }
+.guest-banner { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius); font-size: 13.5px; }
+.guest-banner .sub { font-size: 12.5px; opacity: .85; margin-top: 2px; }
+.guest-banner.success { background: var(--green-soft); color: var(--green); }
+.guest-banner.error { background: var(--red-soft); color: var(--red); }
+.guest-banner.info { background: var(--blue-soft); color: var(--blue); }
+.sim-badge { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-radius: 99px; background: var(--amber-soft); color: var(--amber); font-size: 12.5px; font-weight: 650; align-self: flex-start; }
+.sim-card { padding: 18px 20px; border-radius: 18px; color: #fff; display: flex; flex-direction: column; gap: 16px; background: linear-gradient(135deg, #2b211c, #e4572e); font-family: var(--font-mono); font-size: 13px; letter-spacing: .06em; }
+.sim-card .num { font-size: 18px; }
+.sim-card .chip-ic { width: 38px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #f2d27a, #c9a24a); }
+
+@media (max-width: 1080px) {
+  .bill-grid, .cashier-grid { grid-template-columns: 1fr; }
+  .bill-pay { position: static; }
+}
+@media (max-width: 720px) {
+  .modal.lg { width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; }
+  .bill-due b { font-size: 28px; }
+  .qr-box { grid-template-columns: 1fr; justify-items: center; }
+  .qr-box svg.qr { max-width: 240px; }
+}

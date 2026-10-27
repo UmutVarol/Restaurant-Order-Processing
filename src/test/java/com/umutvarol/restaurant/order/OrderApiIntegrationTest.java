@@ -53,6 +53,12 @@ class OrderApiIntegrationTest extends ApiIntegrationTest {
         advance(CHEF, id, "READY");
         advance(WAITER, id, "SERVED");
         mvc.perform(as(WAITER, post("/api/v1/orders/{id}/advance", id)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("BILL_NOT_PAID"))
+                .andExpect(jsonPath("$.parameters.balance").value(1366.20));
+
+        payInFull(id, "CARD");
+        mvc.perform(as(WAITER, get("/api/v1/orders/{id}", id)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
                 .andExpect(jsonPath("$.nextStatus").doesNotExist())
@@ -80,6 +86,8 @@ class OrderApiIntegrationTest extends ApiIntegrationTest {
         advance(CHEF, id, "PREPARING");
         advance(CHEF, id, "READY");
         advance(WAITER, id, "OUT_FOR_DELIVERY");
+        // The courier collects the payment at the door; delivery is confirmed separately.
+        payInFull(id, "CARD");
         advance(WAITER, id, "COMPLETED");
     }
 

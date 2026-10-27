@@ -113,6 +113,17 @@ restaurant:
   realtime:
     max-subscribers: 500
     max-subscribers-per-user: 10
+  payments:
+    # NONE, SIMULATED or IYZICO. Empty: SIMULATED in demo mode, NONE otherwise.
+    provider: ${PAYMENT_PROVIDER:}
+    # The address guests reach the app on (QR links, provider callbacks). Empty: taken from the request.
+    public-base-url: ${PUBLIC_BASE_URL:}
+    link-ttl: 2h
+    pending-ttl: 30m
+    iyzico:
+      api-key: ${IYZICO_API_KEY:}
+      secret-key: ${IYZICO_SECRET_KEY:}
+      base-url: ${IYZICO_BASE_URL:https://sandbox-api.iyzipay.com}
   demo:
     enabled: ${DEMO_MODE:true}
     history-days: 14

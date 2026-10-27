@@ -50,6 +50,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, "Invalid state transition", ex);
     }
 
+    @ExceptionHandler(UpstreamServiceException.class)
+    ProblemDetail handleUpstream(UpstreamServiceException ex) {
+        return problem(HttpStatus.BAD_GATEWAY, "Upstream service failed", ex);
+    }
+
     @ExceptionHandler(TooManyRequestsException.class)
     ResponseEntity<ProblemDetail> handleTooManyRequests(TooManyRequestsException ex) {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)

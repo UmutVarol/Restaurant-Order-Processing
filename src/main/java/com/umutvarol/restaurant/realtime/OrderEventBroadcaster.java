@@ -2,6 +2,7 @@ package com.umutvarol.restaurant.realtime;
 
 import com.umutvarol.restaurant.common.error.TooManyRequestsException;
 import com.umutvarol.restaurant.order.OrderChangedEvent;
+import com.umutvarol.restaurant.payment.PaymentChangedEvent;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
@@ -19,7 +20,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * Pushes order changes to every connected screen (kitchen display, floor plan, order list) over
+ * Pushes order and payment changes to every connected screen (kitchen display, floor plan, order list) over
  * Server-Sent Events. Events are only broadcast after the originating transaction commits.
  */
 @Component
@@ -73,6 +74,12 @@ public class OrderEventBroadcaster {
     public void onOrderChanged(OrderChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
         broadcast(() -> SseEmitter.event().id(id).name("order").data(event, MediaType.APPLICATION_JSON));
+    }
+
+    @TransactionalEventListener
+    public void onPaymentChanged(PaymentChangedEvent event) {
+        String id = Long.toString(sequence.incrementAndGet());
+        broadcast(() -> SseEmitter.event().id(id).name("payment").data(event, MediaType.APPLICATION_JSON));
     }
 
     /** Keeps idle connections alive through proxies and lets us detect clients that went away. */

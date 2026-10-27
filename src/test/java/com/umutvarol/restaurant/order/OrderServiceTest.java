@@ -69,7 +69,7 @@ class OrderServiceTest {
         PricingCalculator pricing = new PricingCalculator(
                 new PricingProperties(new BigDecimal("0.10"), new BigDecimal("39.90"), new BigDecimal("750.00")));
         service = new OrderService(orders, menuItems, tables, new CouponService(couponRepository, clock), pricing,
-                events, clock);
+                events, order -> { }, clock);
     }
 
     @Test

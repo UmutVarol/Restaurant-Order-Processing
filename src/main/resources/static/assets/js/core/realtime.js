@@ -1,4 +1,4 @@
-// Live order updates over Server-Sent Events. EventSource cannot send an Authorization header, so the stream is
+// Live order and payment updates over Server-Sent Events. EventSource cannot send an Authorization header, so the stream is
 // read with fetch() and parsed here; the connection is re-established with exponential back-off.
 import { authHeader, backendFetch, currentSession, EVENTS_URL, isCurrentSession } from './api.js';
 import { bus } from './store.js';
@@ -86,9 +86,9 @@ function parse(block) {
 }
 
 function dispatch(event) {
-  if (event.type !== 'order' || event.data.length === 0) return;
+  if (!['order', 'payment'].includes(event.type) || event.data.length === 0) return;
   try {
-    bus.emit('order', JSON.parse(event.data.join('\n')));
+    bus.emit(event.type, JSON.parse(event.data.join('\n')));
   } catch { /* ignore malformed event */ }
 }
 

@@ -49,10 +49,12 @@ import org.springframework.security.web.header.writers.StaticHeadersWriter;
  *
  * <table>
  *     <tr><th>Who</th><th>Can</th></tr>
- *     <tr><td>anyone</td><td>sign in, read the menu, open the web app, health and API docs</td></tr>
+ *     <tr><td>anyone</td><td>sign in, read the menu, open the web app, health and API docs; pay a bill
+ *     through a payment link</td></tr>
  *     <tr><td>any staff</td><td>view orders, the floor plan, coupons and live events; advance orders</td></tr>
- *     <tr><td>WAITER, ADMIN</td><td>price carts, place and cancel orders</td></tr>
- *     <tr><td>ADMIN</td><td>edit the menu, view analytics and actuator metrics</td></tr>
+ *     <tr><td>WAITER, ADMIN</td><td>price carts, place and cancel orders; view bills, take payments, create
+ *     payment links</td></tr>
+ *     <tr><td>ADMIN</td><td>edit the menu, view analytics and actuator metrics; refunds and the day report</td></tr>
  * </table>
  */
 @Configuration(proxyBeanMethods = false)
@@ -92,6 +94,12 @@ class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/actuator/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                        // Guests paying by QR link: the unguessable link token is their permission.
+                        .requestMatchers("/api/v1/public/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/callback/*").permitAll()
+                        .requestMatchers("/api/v1/payments/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers("/api/v1/bills", "/api/v1/bills/**")
+                                .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers(HttpMethod.GET, "/api/v1/menu", "/api/v1/menu/**").permitAll()
                         .requestMatchers("/api/v1/menu", "/api/v1/menu/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/analytics/**").hasRole(Role.ADMIN.name())

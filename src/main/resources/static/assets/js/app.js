@@ -14,6 +14,7 @@ const ROUTES = [
   { id: 'kitchen', icon: 'kitchen', roles: ALL, section: 'service', load: () => import('./views/kitchen.js') },
   { id: 'floor', icon: 'floor', roles: ALL, section: 'service', load: () => import('./views/floor.js') },
   { id: 'orders', icon: 'orders', roles: ALL, section: 'service', load: () => import('./views/orders.js') },
+  { id: 'cashier', icon: 'coins', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/cashier.js') },
   { id: 'dashboard', icon: 'dashboard', roles: ['ADMIN'], section: 'manage', load: () => import('./views/dashboard.js') },
   { id: 'menu', icon: 'menu', roles: ['ADMIN'], section: 'manage', load: () => import('./views/menu.js') },
 ];
@@ -47,6 +48,16 @@ async function render() {
   const token = ++renderToken;
   activeView?.destroy?.();
   activeView = null;
+
+  // A guest paying by QR code needs no account and sees none of the staff app.
+  const guest = parseHash().route.match(/^(pay|sim-checkout)\/([A-Za-z0-9_-]{8,100})$/);
+  if (guest) {
+    const { renderGuest } = await import('./views/pay.js');
+    if (token !== renderToken) return;
+    activeView = { destroy: renderGuest(root, guest[1], guest[2]) };
+    document.title = `${t('guest.yourBill')} · Sofra`;
+    return;
+  }
 
   if (!user) {
     const { default: login } = await import('./views/login.js');

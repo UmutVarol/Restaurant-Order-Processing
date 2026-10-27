@@ -15,6 +15,7 @@ import com.umutvarol.restaurant.order.OrderType;
 import com.umutvarol.restaurant.order.PaymentMethod;
 import com.umutvarol.restaurant.order.pricing.PriceBreakdown;
 import com.umutvarol.restaurant.order.pricing.PricingCalculator;
+import com.umutvarol.restaurant.payment.BillService;
 import com.umutvarol.restaurant.table.DiningTable;
 import com.umutvarol.restaurant.table.DiningTableRepository;
 import java.math.BigDecimal;
@@ -83,16 +84,19 @@ class DemoDataSeeder implements ApplicationRunner {
     private final DiningTableRepository tables;
     private final CouponRepository coupons;
     private final PricingCalculator pricing;
+    private final BillService bills;
     private final Clock clock;
 
     DemoDataSeeder(DemoProperties properties, OrderRepository orders, MenuItemRepository menuItems,
-                   DiningTableRepository tables, CouponRepository coupons, PricingCalculator pricing, Clock clock) {
+                   DiningTableRepository tables, CouponRepository coupons, PricingCalculator pricing,
+                   BillService bills, Clock clock) {
         this.properties = properties;
         this.orders = orders;
         this.menuItems = menuItems;
         this.tables = tables;
         this.coupons = coupons;
         this.pricing = pricing;
+        this.bills = bills;
         this.clock = clock;
     }
 
@@ -106,7 +110,20 @@ class DemoDataSeeder implements ApplicationRunner {
                 menuItems.findByArchivedFalse(), tables.findAllByOrderByIdAsc(), redeemableCoupons());
         List<Order> generated = generator.generate(properties.historyDays());
         orders.saveAll(generated);
+        Random tips = new Random(properties.seed() + 1);
+        generated.forEach(order -> bills.recordHistory(order, tipFor(order, tips)));
         log.info("Demo mode: seeded {} orders covering the last {} days", generated.size(), properties.historyDays());
+    }
+
+    /** About a third of guests tip, mostly 5 to 10 percent, rounded to whole lira; delivery guests rarely do. */
+    private static BigDecimal tipFor(Order order, Random random) {
+        double chance = order.getType() == OrderType.DELIVERY ? 0.1 : 0.35;
+        if (random.nextDouble() >= chance) {
+            return Money.ZERO;
+        }
+        double rate = 0.05 + random.nextInt(6) / 100.0;
+        return Money.normalize(order.getPricing().total().multiply(BigDecimal.valueOf(rate))
+                .setScale(0, java.math.RoundingMode.HALF_UP));
     }
 
     private List<Coupon> redeemableCoupons() {

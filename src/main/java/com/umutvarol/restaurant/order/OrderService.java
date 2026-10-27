@@ -51,17 +51,19 @@ public class OrderService {
     private final CouponService coupons;
     private final PricingCalculator pricing;
     private final ApplicationEventPublisher events;
+    private final SettlementPolicy settlement;
     private final Clock clock;
 
     public OrderService(OrderRepository orders, MenuItemRepository menuItems, DiningTableRepository tables,
                         CouponService coupons, PricingCalculator pricing, ApplicationEventPublisher events,
-                        Clock clock) {
+                        SettlementPolicy settlement, Clock clock) {
         this.orders = orders;
         this.menuItems = menuItems;
         this.tables = tables;
         this.coupons = coupons;
         this.pricing = pricing;
         this.events = events;
+        this.settlement = settlement;
         this.clock = clock;
     }
 
@@ -130,9 +132,16 @@ public class OrderService {
         return OrderResponse.from(find(id));
     }
 
+    /**
+     * Moves an order to its next status. Completing an order (served and paid, picked up, delivered) requires its
+     * bill to be paid in full.
+     */
     public OrderResponse advance(Long id, String actor) {
         Order order = find(id);
         OrderStatus previous = order.getStatus();
+        if (order.nextStatus().filter(next -> next == OrderStatus.COMPLETED).isPresent()) {
+            settlement.requireSettled(order);
+        }
         order.advance(clock.instant(), actor);
         events.publishEvent(OrderChangedEvent.statusChanged(order, previous));
         return OrderResponse.from(order);

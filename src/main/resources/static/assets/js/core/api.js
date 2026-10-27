@@ -43,7 +43,9 @@ export function errorMessage(error) {
   const key = `error.${error.code}`;
   if (!has(key)) return error.message || t('error.UNKNOWN');
   const params = { ...error.parameters };
-  if (params.minimumSubtotal != null) params.minimumSubtotal = money(params.minimumSubtotal);
+  for (const key of ['minimumSubtotal', 'balance', 'available', 'required', 'refundable']) {
+    if (params[key] != null) params[key] = money(params[key]);
+  }
   return t(key, params);
 }
 
@@ -95,9 +97,9 @@ function query(params = {}) {
   return text ? `?${text}` : '';
 }
 
-async function request(method, path, body, { auth = true } = {}) {
+async function request(method, path, body, { auth = true, headers: extra = {} } = {}) {
   const sentWith = auth ? session : null;
-  const headers = { Accept: 'application/json', ...(auth ? authHeader() : {}) };
+  const headers = { Accept: 'application/json', ...(auth ? authHeader() : {}), ...extra };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   let response;
@@ -154,6 +156,29 @@ export const api = {
   tables: () => request('GET', '/floor/tables'),
   coupons: () => request('GET', '/coupons'),
   dashboard: (days) => request('GET', `/analytics/dashboard${query({ days })}`),
+
+  openBills: () => request('GET', '/bills'),
+  bill: (id) => request('GET', `/bills/${id}`),
+  billForOrder: (orderId) => request('GET', `/bills/by-order/${orderId}`),
+  // The key makes a retry after a timeout safe: the server returns the payment already taken.
+  takePayment: (billId, payment, idempotencyKey) => request('POST', `/bills/${billId}/payments`, payment,
+    { headers: { 'Idempotency-Key': idempotencyKey } }),
+  createPaymentLink: (billId, amount) => request('POST', `/bills/${billId}/links`, amount ? { amount } : {}),
+  refund: (paymentId, amount, reason) => request('POST', `/payments/${paymentId}/refunds`, { amount, reason }),
+  dayReport: (date) => request('GET', `/payments/day${query({ date })}`),
+  closeDay: (date, countedCash, note) => request('POST', '/payments/day/close', { date, countedCash, note }),
+
+  // Guests paying from their phone: no session, the link token is the permission.
+  publicBill: (token) => request('GET', `/public/pay/${encodeURIComponent(token)}`, undefined, { auth: false }),
+  publicCheckout: (token, body) => request('POST', `/public/pay/${encodeURIComponent(token)}/checkout`, body, { auth: false }),
+  simulatedCheckout: (token) => request('GET', `/public/sim-checkout/${encodeURIComponent(token)}`, undefined, { auth: false }),
+  simulatedDecision: (token, approve) => request('POST', `/public/sim-checkout/${encodeURIComponent(token)}`, { approve }, { auth: false }),
 };
+
+/** A random key for one payment attempt; reused when the same attempt is retried. */
+export function newIdempotencyKey() {
+  return crypto.randomUUID ? crypto.randomUUID()
+    : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 export const EVENTS_URL = `${API_BASE}/events/orders`;

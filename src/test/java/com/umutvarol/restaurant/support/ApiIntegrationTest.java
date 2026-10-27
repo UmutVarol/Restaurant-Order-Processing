@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.support;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -108,5 +109,26 @@ public abstract class ApiIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(body, "$.id")).longValue();
+    }
+
+    /** The id of the bill an order is on. */
+    protected long billIdOf(long orderId) throws Exception {
+        String bill = mvc.perform(as(WAITER, get("/api/v1/bills/by-order/{id}", orderId)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(bill, "$.id")).longValue();
+    }
+
+    /** Pays whatever is still due on the order's bill, as the waiter, and returns the bill id. */
+    protected long payInFull(long orderId, String method) throws Exception {
+        String bill = mvc.perform(as(WAITER, get("/api/v1/bills/by-order/{id}", orderId)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        long billId = ((Number) JsonPath.read(bill, "$.id")).longValue();
+        Object balance = JsonPath.read(bill, "$.balance");
+        mvc.perform(json(as(WAITER, post("/api/v1/bills/{id}/payments", billId)), """
+                        {"method": "%s", "amount": %s}""".formatted(method, balance)))
+                .andExpect(status().isCreated());
+        return billId;
     }
 }

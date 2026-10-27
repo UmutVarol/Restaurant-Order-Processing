@@ -7,6 +7,7 @@ import { dateTime, money, time } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openDrawer, openModal, toast } from '../core/ui.js';
+import { openBill } from './bill.js';
 
 export const CATEGORIES = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'];
 export const TYPE_ICONS = { DINE_IN: 'dinein', TAKEAWAY: 'takeaway', DELIVERY: 'delivery' };
@@ -39,14 +40,22 @@ export function canTakeOrders(user) {
   return user.role === 'ADMIN' || user.role === 'WAITER';
 }
 
-/** Advances an order and reports the outcome with a toast. Resolves to the updated order, or null. */
-export async function advanceOrder(order) {
+/**
+ * Advances an order and reports the outcome with a toast. Resolves to the updated order, or null. An order whose
+ * bill is not paid yet cannot be completed: staff who take payments get the bill opened instead.
+ */
+export async function advanceOrder(order, user) {
   try {
     const updated = await api.advance(order.id);
     toast({ title: t('advanced', { id: updated.id, status: t(`status.${updated.status}`) }), kind: 'success', timeout: 2500 });
     return updated;
   } catch (error) {
-    toast({ title: errorMessage(error), kind: 'error' });
+    if (error.code === 'BILL_NOT_PAID' && user && canTakeOrders(user)) {
+      toast({ title: errorMessage(error), kind: 'info' });
+      openBill({ orderId: order.id }, user);
+    } else {
+      toast({ title: errorMessage(error), kind: 'error' });
+    }
     return null;
   }
 }
@@ -144,7 +153,9 @@ function drawerContent(order, user, handle, run) {
         },
       }, icon('x', 'sm'), t('detail.cancel')) : null,
       h('button', { class: 'btn', onclick: () => openReceipt(order) }, icon('printer', 'sm'), t('detail.print')),
-      order.nextStatus ? h('button', { class: 'btn primary', onclick: () => run(() => advanceOrder(order)) },
+      staff ? h('button', { class: 'btn', 'data-testid': 'open-bill', onclick: () => openBill({ orderId: order.id }, user) },
+        icon('receipt', 'sm'), t('bill.open')) : null,
+      order.nextStatus ? h('button', { class: 'btn primary', onclick: () => run(() => advanceOrder(order, user)) },
         advanceLabel(order), icon('arrowRight', 'sm')) : null),
   ];
 }

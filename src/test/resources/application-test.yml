@@ -6,6 +6,9 @@ spring:
 restaurant:
   demo:
     enabled: false
+  payments:
+    provider: SIMULATED
+    allow-simulated: true
   security:
     jwt:
       secret: test-secret-that-is-long-enough-for-hs256-0123456789

@@ -67,7 +67,7 @@ export default {
         onclick: async (event) => {
           event.stopPropagation();
           button.disabled = true;
-          if (await advanceOrder(order)) await load();
+          if (await advanceOrder(order, user)) await load();
           button.disabled = false;
         },
       }, label, icon('arrowRight', 'sm'));
