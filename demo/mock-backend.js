@@ -1,13 +1,14 @@
 // In-browser stand-in for the Sofra Spring Boot API, used by the static demo (GitHub Pages / embedded preview).
 //
 // It implements the same endpoints, payloads, roles, validation and error codes as the real backend — pricing,
-// coupons, the order state machine, analytics and the Server-Sent Events stream — so the unmodified web client runs
+// coupons, the order state machine, bills and payments (including the QR checkout with a simulated provider), analytics
+// and the Server-Sent Events stream — so the unmodified web client runs
 // against it. State lives in localStorage and is shared live between tabs through a BroadcastChannel, so a waiter
 // tab and a chef tab behave like two devices in the same restaurant.
 (function () {
   'use strict';
 
-  const STORE_KEY = 'sofra.demo.state.v1';
+  const STORE_KEY = 'sofra.demo.state.v2';
   const TAX_RATE_PERCENT = 10;
   const DELIVERY_FEE = 3990;           // in kuruş
   const FREE_DELIVERY_THRESHOLD = 75000;
@@ -121,7 +122,12 @@
   function freshState() {
     const menu = MENU.map((item) => ({ ...item, tags: [...item.tags] }));
     const orders = generateHistory(menu);
-    return { createdAt: Date.now(), nextOrderId: 1001 + orders.length, nextMenuId: MENU.length + 1, menu, orders };
+    const fresh = {
+      createdAt: Date.now(), nextOrderId: 1001 + orders.length, nextMenuId: MENU.length + 1, menu, orders,
+      bills: [], links: [], sims: {}, closings: {}, nextBillId: 5001, nextPaymentId: 1, nextRefundId: 1,
+    };
+    seedBills(fresh);
+    return fresh;
   }
 
   function load() {
@@ -143,8 +149,8 @@
   const streams = new Set();
 
   /** Pushes an order event to this tab's open event streams (the simulated SSE connections). */
-  function publish(event) {
-    const frame = new TextEncoder().encode(`id:${Date.now()}\nevent:order\ndata:${JSON.stringify(event)}\n\n`);
+  function publish(event, name = 'order') {
+    const frame = new TextEncoder().encode(`id:${Date.now()}\nevent:${name}\ndata:${JSON.stringify(event)}\n\n`);
     streams.forEach((controller) => { try { controller.enqueue(frame); } catch { streams.delete(controller); } });
   }
 
@@ -156,6 +162,9 @@
       if (index >= 0) state.orders[index] = data.order; else state.orders.push(data.order);
       state.nextOrderId = Math.max(state.nextOrderId, data.order.id + 1);
       publish(data.event);
+    } else if (data?.type === 'payments') {
+      Object.assign(state, data.payments);
+      publish(data.event, 'payment');
     } else if (data?.type === 'menu') {
       state.menu = data.menu;
       state.nextMenuId = Math.max(state.nextMenuId, data.nextMenuId);
@@ -510,6 +519,387 @@
     });
   }
 
+
+  // ------------------------------------------------------------------------------------------- bills and payments
+  // Mirrors the payment package of the real backend: one bill per dine-in seating or per takeaway/delivery order,
+  // payments that can never exceed what is due, refunds for cancelled orders, QR links paid through a simulated
+  // provider, and the end-of-day report.
+  // Declared as functions, not constants: the demo history is generated (and its bills seeded) before this point.
+  function pendingTtl() { return 30 * MINUTE; }
+  function linkTtl() { return 2 * 60 * MINUTE; }
+
+  function seedBills(target) {
+    const sorted = [...target.orders].sort((a, b) => a.createdAt - b.createdAt);
+    for (const order of sorted) {
+      if (ACTIVE.includes(order.status)) {
+        attach(target, order, order.createdAt);
+        continue;
+      }
+      const at = order.history[order.history.length - 1].at;
+      const bill = openBill(target, order, order.createdAt);
+      if (order.status === 'COMPLETED') {
+        const tipC = order.id % 3 === 0 && order.type !== 'DELIVERY' ? Math.round(order.pricing.total * (5 + (order.id % 6)) / 10000) * 100 : 0;
+        const payment = newPayment(target, order.paymentMethod, 'SUCCEEDED', order.pricing.total, tipC, at, order.history[order.history.length - 1].by);
+        if (order.paymentMethod === 'CASH') { payment.tenderedC = Math.ceil((order.pricing.total + tipC) / 5000) * 5000; payment.changeC = payment.tenderedC - order.pricing.total - tipC; }
+        if (order.paymentMethod === 'CARD') payment.approvalCode = String((order.id * 7919) % 1000000).padStart(6, '0');
+        if (order.paymentMethod === 'ONLINE') payment.provider = 'SIMULATED';
+        bill.payments.push(payment);
+      }
+      refresh(bill, at, target);
+    }
+  }
+
+  function openBill(target, order, at) {
+    const bill = { id: target.nextBillId++, status: 'OPEN', table: order.type === 'DINE_IN' && order.table ? { id: order.table.id, code: order.table.code } : null,
+      orderIds: [order.id], payments: [], openedAt: at, closedAt: null };
+    target.bills.push(bill);
+    return bill;
+  }
+
+  function newPayment(target, method, status, amountC, tipC, at, by) {
+    return { id: target.nextPaymentId++, method, status, amountC, tipC, tenderedC: null, changeC: null, refundedC: 0, approvalCode: null,
+      provider: null, link: null, failureReason: null, createdAt: at, completedAt: status === 'SUCCEEDED' ? at : null, createdBy: by, refunds: [] };
+  }
+
+  function ordersOf(bill, target = state) {
+    return bill.orderIds.map((id) => target.orders.find((o) => o.id === id)).filter(Boolean);
+  }
+
+  function hasActive(bill, target = state) {
+    return ordersOf(bill, target).some((o) => ACTIVE.includes(o.status));
+  }
+
+  function attach(target, order, at) {
+    if (order.type === 'DINE_IN' && order.table && ACTIVE.includes(order.status)) {
+      const open = target.bills.filter((b) => b.status === 'OPEN' && b.table && b.table.id === order.table.id && hasActive(b, target)).pop();
+      if (open) {
+        if (!open.orderIds.includes(order.id)) open.orderIds.push(order.id);
+        return open;
+      }
+    }
+    return openBill(target, order, at);
+  }
+
+  function billFor(order) {
+    return state.bills.find((b) => b.orderIds.includes(order.id)) || attach(state, order, Date.now());
+  }
+
+  function money(bill, target = state) {
+    sweep(bill);
+    const total = ordersOf(bill, target).filter((o) => o.status !== 'CANCELLED').reduce((sum, o) => sum + o.pricing.total, 0);
+    const ok = bill.payments.filter((p) => p.status === 'SUCCEEDED');
+    const paid = ok.reduce((sum, p) => sum + p.amountC - p.refundedC, 0);
+    const pending = bill.payments.filter((p) => p.status === 'PENDING').reduce((sum, p) => sum + p.amountC, 0);
+    const balance = total - paid;
+    return { total, paid, pending, balance, available: Math.max(0, balance - pending), tips: ok.reduce((sum, p) => sum + p.tipC, 0),
+      refunded: bill.payments.reduce((sum, p) => sum + p.refundedC, 0) };
+  }
+
+  /** Online payments the guest never finished are given up, like the real expiry job does. */
+  function sweep(bill) {
+    for (const p of bill.payments) {
+      if (p.status === 'PENDING' && Date.now() - p.createdAt > pendingTtl()) {
+        Object.assign(p, { status: 'EXPIRED', failureReason: 'The guest did not finish paying in time.', completedAt: Date.now() });
+      }
+    }
+  }
+
+  function refresh(bill, at, target = state) {
+    if (bill.status !== 'OPEN' || hasActive(bill, target)) return false;
+    const m = money(bill, target);
+    if (m.balance > 0 || bill.payments.some((p) => p.status === 'PENDING')) return false;
+    const allCancelled = ordersOf(bill, target).every((o) => o.status === 'CANCELLED');
+    bill.status = allCancelled && m.paid === 0 ? 'VOID' : 'CLOSED';
+    bill.closedAt = at;
+    return true;
+  }
+
+  function checkPayable(bill, amountC, tipC) {
+    if (bill.status !== 'OPEN') throw new Problem(409, 'BILL_NOT_OPEN', `Bill #${bill.id} is ${bill.status}`, { parameters: { billId: String(bill.id), status: bill.status } });
+    if (!(amountC > 0)) throw new Problem(422, 'PAYMENT_AMOUNT_INVALID', 'A payment must be more than zero');
+    const { available } = money(bill);
+    if (amountC > available) throw new Problem(422, 'PAYMENT_EXCEEDS_BALANCE', `Only ${toLira(available)} is still due on bill #${bill.id}`, { parameters: { available: toLira(available) } });
+    if (tipC < 0 || tipC > amountC) throw new Problem(422, 'TIP_INVALID', 'A tip cannot be negative or larger than the payment');
+  }
+
+  function refundOverpayment(bill, reason, at, by) {
+    let excess = -money(bill).balance;
+    const newest = bill.payments.filter((p) => p.status === 'SUCCEEDED' && p.amountC > p.refundedC).sort((a, b) => b.createdAt - a.createdAt || b.id - a.id);
+    for (const p of newest) {
+      if (excess <= 0) break;
+      const portion = Math.min(excess, p.amountC - p.refundedC);
+      giveBack(p, portion, reason, at, by);
+      excess -= portion;
+    }
+  }
+
+  // The simulated provider confirms refunds at once, so every refund here is done straight away.
+  function giveBack(payment, amountC, reason, at, by) {
+    payment.refundedC += amountC;
+    payment.refunds.push({ id: state.nextRefundId++, amountC, status: 'SUCCEEDED', reason, failureReason: null, createdAt: at, createdBy: by });
+  }
+
+  /** A paid dine-in bill completes the orders that have been served, as on the real server. */
+  function afterPayment(bill, by) {
+    if (money(bill).balance <= 0) {
+      for (const order of ordersOf(bill)) {
+        if (order.type === 'DINE_IN' && order.status === 'SERVED') {
+          transition(order, 'COMPLETED', Date.now(), by);
+          changed(order, 'STATUS_CHANGED', 'SERVED');
+        }
+      }
+    }
+    refresh(bill, Date.now());
+  }
+
+  function paymentsChanged(bill, payment, kind = 'PAYMENT') {
+    save();
+    const m = money(bill);
+    const event = { kind, billId: bill.id, billStatus: bill.status, balance: toLira(m.balance), paymentId: payment ? payment.id : null,
+      method: payment ? payment.method : null, paymentStatus: payment ? payment.status : null, amount: payment ? toLira(payment.amountC) : null,
+      tableCode: bill.table ? bill.table.code : null, occurredAt: iso(Date.now()) };
+    publish(event, 'payment');
+    const payments = { bills: state.bills, links: state.links, sims: state.sims, closings: state.closings,
+      nextBillId: state.nextBillId, nextPaymentId: state.nextPaymentId, nextRefundId: state.nextRefundId };
+    channel?.postMessage({ type: 'payments', event, payments });
+  }
+
+  const refundView = (r) => ({ id: r.id, amount: toLira(r.amountC), status: r.status, reason: r.reason, failureReason: r.failureReason,
+    createdAt: iso(r.createdAt), createdBy: r.createdBy });
+  const paymentView = (bill, p) => ({
+    id: p.id, billId: bill.id, method: p.method, status: p.status, amount: toLira(p.amountC), tip: toLira(p.tipC),
+    tendered: p.tenderedC == null ? null : toLira(p.tenderedC), changeDue: p.changeC == null ? null : toLira(p.changeC),
+    refunded: toLira(p.refundedC), refundable: p.status === 'SUCCEEDED' ? toLira(p.amountC - p.refundedC) : 0,
+    approvalCode: p.approvalCode, provider: p.provider, viaLink: p.link != null, failureReason: p.failureReason,
+    createdAt: iso(p.createdAt), completedAt: p.completedAt ? iso(p.completedAt) : null, createdBy: p.createdBy, refunds: p.refunds.map(refundView),
+  });
+
+  function billView(bill) {
+    const m = money(bill);
+    const orders = ordersOf(bill);
+    return {
+      id: bill.id, status: bill.status, table: bill.table,
+      orders: orders.map((o) => ({ id: o.id, type: o.type, status: o.status, customerName: o.customerName, subtotal: toLira(o.pricing.subtotal),
+        total: toLira(o.pricing.total), lines: o.lines.map((l) => ({ name: l.name, icon: l.icon, quantity: l.quantity, unitPrice: toLira(l.unitPriceC), lineTotal: toLira(l.lineTotalC) })) })),
+      total: toLira(m.total), paid: toLira(m.paid), pending: toLira(m.pending), balance: toLira(m.balance), available: toLira(m.available),
+      tips: toLira(m.tips), refunded: toLira(m.refunded), settled: m.balance <= 0,
+      preferredMethod: orders.length ? orders[orders.length - 1].paymentMethod : null,
+      openedAt: iso(bill.openedAt), closedAt: bill.closedAt ? iso(bill.closedAt) : null,
+      payments: bill.payments.map((p) => paymentView(bill, p)),
+    };
+  }
+
+  function findBill(id) {
+    const bill = state.bills.find((b) => b.id === Number(id));
+    if (!bill) throw new Problem(404, 'BILL_NOT_FOUND', `Bill ${id} was not found`, { parameters: { id: String(id) } });
+    return bill;
+  }
+
+  function newToken(bytes = 32) {
+    const raw = crypto.getRandomValues(new Uint8Array(bytes));
+    return btoa(String.fromCharCode(...raw)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function findLink(token) {
+    const link = state.links.find((l) => l.token === token);
+    if (!link) throw new Problem(404, 'PAYMENT_LINK_NOT_FOUND', 'Payment link ? was not found', { parameters: { id: '?' } });
+    return link;
+  }
+
+  function dayReport(date) {
+    const from = new Date(`${date}T00:00:00`).getTime();
+    const to = from + 24 * 60 * MINUTE;
+    const all = state.bills.flatMap((b) => b.payments);
+    const taken = all.filter((p) => p.status === 'SUCCEEDED' && p.createdAt >= from && p.createdAt < to);
+    const refunds = all.flatMap((p) => p.refunds.map((r) => ({ ...r, method: p.method }))).filter((r) => r.status !== 'FAILED' && r.createdAt >= from && r.createdAt < to);
+    const methods = ['CASH', 'CARD', 'ONLINE'].map((method) => {
+      const list = taken.filter((p) => p.method === method);
+      return { method, count: list.length, amount: list.reduce((s, p) => s + p.amountC, 0), tips: list.reduce((s, p) => s + p.tipC, 0),
+        refunds: refunds.filter((r) => r.method === method).reduce((s, r) => s + r.amountC, 0) };
+    });
+    const sum = (key) => methods.reduce((s, m) => s + m[key], 0);
+    const cash = methods[0];
+    const summary = {
+      date, methods: methods.map((m) => ({ ...m, amount: toLira(m.amount), tips: toLira(m.tips), refunds: toLira(m.refunds) })),
+      sales: toLira(sum('amount')), tips: toLira(sum('tips')), refunds: toLira(sum('refunds')),
+      expectedCash: toLira(cash.amount + cash.tips - cash.refunds), payments: taken.length,
+    };
+    return { summary, closing: state.closings[date] || null };
+  }
+
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+  const paymentRoutes = [
+    ['GET', /^bills$/, 'till', () => state.bills.filter((b) => b.status === 'OPEN').sort((a, b) => a.openedAt - b.openedAt).map((bill) => {
+      const m = money(bill);
+      const orders = ordersOf(bill);
+      return { id: bill.id, status: bill.status, tableCode: bill.table ? bill.table.code : null, customerName: orders.length ? orders[0].customerName : null,
+        orderIds: [...bill.orderIds], total: toLira(m.total), paid: toLira(m.paid), balance: toLira(m.balance), pending: toLira(m.pending),
+        hasActiveOrders: hasActive(bill), openedAt: iso(bill.openedAt) };
+    })],
+    ['GET', /^bills\/(\d+)$/, 'till', ({ params }) => billView(findBill(params[0]))],
+    ['GET', /^bills\/by-order\/(\d+)$/, 'till', ({ params }) => {
+      const bill = billFor(findOrder(params[0]));
+      save();
+      return billView(bill);
+    }],
+    ['POST', /^bills\/(\d+)\/payments$/, 'till', ({ params, user, headers }, body) => {
+      const key = headers['Idempotency-Key'] || headers['idempotency-key'] || null;
+      const bill = findBill(params[0]);
+      if (key) {
+        for (const b of state.bills) {
+          const earlier = b.payments.find((p) => p.idempotencyKey === key);
+          if (earlier) {
+            if (b.id !== bill.id) throw new Problem(422, 'IDEMPOTENCY_KEY_REUSED', 'This Idempotency-Key was already used for another bill');
+            return [201, { payment: paymentView(b, earlier), bill: billView(b) }];
+          }
+        }
+      }
+      requireFields({
+        method: blank(body.method) ? 'must not be null' : body.method === 'ONLINE' ? 'Online payments are taken through a payment link, not at the till.' : null,
+        amount: body.amount == null ? 'must not be null' : null,
+      });
+      const amountC = toCents(body.amount);
+      const tipC = toCents(body.tip || 0);
+      checkPayable(bill, amountC, tipC);
+      const payment = newPayment(state, body.method, 'SUCCEEDED', amountC, tipC, Date.now(), user.username);
+      payment.idempotencyKey = key;
+      if (body.method === 'CASH') {
+        const tenderedC = body.tendered == null ? amountC + tipC : toCents(body.tendered);
+        if (tenderedC < amountC + tipC) throw new Problem(422, 'CASH_NOT_ENOUGH', 'The cash handed over does not cover the payment', { parameters: { required: toLira(amountC + tipC) } });
+        payment.tenderedC = tenderedC;
+        payment.changeC = tenderedC - amountC - tipC;
+      } else {
+        payment.approvalCode = clean(body.approvalCode);
+      }
+      bill.payments.push(payment);
+      afterPayment(bill, user.username);
+      paymentsChanged(bill, payment);
+      return [201, { payment: paymentView(bill, payment), bill: billView(bill) }];
+    }],
+    ['POST', /^bills\/(\d+)\/links$/, 'till', ({ params, user }, body) => {
+      const bill = findBill(params[0]);
+      if (bill.status !== 'OPEN') throw new Problem(409, 'BILL_NOT_OPEN', `Bill #${bill.id} is ${bill.status}`, { parameters: { billId: String(bill.id), status: bill.status } });
+      const { available } = money(bill);
+      if (available <= 0) throw new Problem(422, 'BILL_ALREADY_PAID', `Nothing is left to pay on bill #${bill.id}`);
+      const amountC = body && body.amount != null ? toCents(body.amount) : null;
+      if (amountC != null && amountC > available) throw new Problem(422, 'PAYMENT_EXCEEDS_BALANCE', `Only ${toLira(available)} is still due`, { parameters: { available: toLira(available) } });
+      const link = { token: newToken(), billId: bill.id, amountC, expiresAt: Date.now() + linkTtl(), createdBy: user.username };
+      state.links.push(link);
+      save();
+      channel?.postMessage({ type: 'payments', event: { kind: 'BILL', billId: bill.id }, payments: { links: state.links } });
+      const base = `${location.origin}${location.pathname}${location.search}`;
+      return [201, { token: link.token, url: `${base}#/pay/${link.token}`, amount: amountC == null ? null : toLira(amountC), expiresAt: iso(link.expiresAt) }];
+    }],
+    ['POST', /^payments\/(\d+)\/refunds$/, 'manager', ({ params, user }, body) => {
+      requireFields({ amount: body.amount == null ? 'must not be null' : null, reason: blank(body.reason) ? 'must not be blank' : null });
+      const bill = state.bills.find((b) => b.payments.some((p) => p.id === Number(params[0])));
+      if (!bill) throw new Problem(404, 'PAYMENT_NOT_FOUND', `Payment ${params[0]} was not found`, { parameters: { id: String(params[0]) } });
+      const payment = bill.payments.find((p) => p.id === Number(params[0]));
+      const amountC = toCents(body.amount);
+      if (payment.status !== 'SUCCEEDED') throw new Problem(422, 'PAYMENT_NOT_REFUNDABLE', 'Only successful payments can be refunded', { parameters: { status: payment.status } });
+      if (!(amountC > 0) || amountC > payment.amountC - payment.refundedC) {
+        throw new Problem(422, 'REFUND_EXCEEDS_PAYMENT', 'Too much', { parameters: { refundable: toLira(payment.amountC - payment.refundedC) } });
+      }
+      giveBack(payment, amountC, String(body.reason).trim(), Date.now(), user.username);
+      paymentsChanged(bill, payment, 'REFUND');
+      return [201, paymentView(bill, payment)];
+    }],
+    ['GET', /^payments\/day$/, 'manager', ({ query }) => dayReport(query.get('date') || today())],
+    ['POST', /^payments\/day\/close$/, 'manager', ({ user }, body) => {
+      requireFields({ date: blank(body.date) ? 'must not be null' : null, countedCash: body.countedCash == null ? 'must not be null' : null });
+      if (body.date > today()) throw new Problem(422, 'DAY_NOT_OVER', 'A day can only be closed once it has started', { parameters: { date: body.date } });
+      if (state.closings[body.date]) throw new Problem(409, 'DAY_ALREADY_CLOSED', `${body.date} has already been closed`, { parameters: { date: body.date } });
+      const report = dayReport(body.date);
+      const counted = toCents(body.countedCash);
+      state.closings[body.date] = { countedCash: toLira(counted), variance: toLira(counted - toCents(report.summary.expectedCash)),
+        note: clean(body.note), closedAt: iso(Date.now()), closedBy: user.username };
+      save();
+      return [201, dayReport(body.date)];
+    }],
+
+    // Guests: no sign-in, the link token is the permission.
+    ['GET', /^public\/pay\/([A-Za-z0-9_-]+)$/, 'public', ({ params }) => {
+      const link = findLink(params[0]);
+      const bill = findBill(link.billId);
+      const m = money(bill);
+      const lines = new Map();
+      for (const order of ordersOf(bill).filter((o) => o.status !== 'CANCELLED')) {
+        for (const l of order.lines) {
+          const line = lines.get(l.name) || { name: l.name, icon: l.icon, quantity: 0, lineTotal: 0 };
+          line.quantity += l.quantity; line.lineTotal += l.lineTotalC; lines.set(l.name, line);
+        }
+      }
+      const reason = bill.status !== 'OPEN' || m.available <= 0 ? 'PAID' : Date.now() > link.expiresAt ? 'EXPIRED' : null;
+      const last = bill.payments.filter((p) => p.link === link.token).pop();
+      return {
+        restaurant: 'Sofra Bistro', tableCode: bill.table ? bill.table.code : null,
+        lines: [...lines.values()].map((l) => ({ ...l, lineTotal: toLira(l.lineTotal) })),
+        total: toLira(m.total), paid: toLira(m.paid), due: toLira(m.available),
+        share: link.amountC == null ? null : toLira(Math.min(link.amountC, m.available)),
+        payable: reason == null, reason, expiresAt: iso(link.expiresAt), provider: 'SIMULATED',
+        lastPayment: last ? { status: last.status, amount: toLira(last.amountC), tip: toLira(last.tipC), failureReason: last.failureReason, at: iso(last.completedAt || last.createdAt) } : null,
+      };
+    }],
+    ['POST', /^public\/pay\/([A-Za-z0-9_-]+)\/checkout$/, 'public', ({ params }, body) => {
+      const link = findLink(params[0]);
+      const bill = findBill(link.billId);
+      if (Date.now() > link.expiresAt || bill.status !== 'OPEN') {
+        throw new Problem(422, bill.status === 'OPEN' ? 'PAYMENT_LINK_EXPIRED' : 'BILL_NOT_OPEN', 'This payment link can no longer be used. Ask your waiter for a new one.');
+      }
+      const { available } = money(bill);
+      if (available <= 0) throw new Problem(422, 'BILL_ALREADY_PAID', 'This bill has already been paid.');
+      const amountC = link.amountC != null ? Math.min(link.amountC, available) : body.amount != null ? toCents(body.amount) : available;
+      const tipC = toCents(body.tip || 0);
+      checkPayable(bill, amountC, tipC);
+      const payment = newPayment(state, 'ONLINE', 'PENDING', amountC, tipC, Date.now(), 'guest');
+      payment.provider = 'SIMULATED';
+      payment.link = link.token;
+      const sim = `sim_${newToken(16).replace(/[-_]/g, 'x')}`;
+      payment.providerToken = sim;
+      state.sims[sim] = { paymentId: payment.id, link: link.token, decision: null };
+      bill.payments.push(payment);
+      paymentsChanged(bill, payment);
+      return { paymentPageUrl: `/#/sim-checkout/${sim}` };
+    }],
+    ['GET', /^public\/sim-checkout\/([A-Za-z0-9_]+)$/, 'public', ({ params }) => simView(params[0])],
+    ['POST', /^public\/sim-checkout\/([A-Za-z0-9_]+)$/, 'public', ({ params }, body) => {
+      const view = simView(params[0]);
+      const sim = state.sims[params[0]];
+      if (sim.decision == null) sim.decision = Boolean(body.approve);
+      save();
+      return view;
+    }],
+    ['POST', /^payments\/callback\/simulated$/, 'public', ({ query }, body) => {
+      const sim = state.sims[body.token];
+      const bill = sim && state.bills.find((b) => b.payments.some((p) => p.id === sim.paymentId));
+      if (sim && bill) {
+        const payment = bill.payments.find((p) => p.id === sim.paymentId);
+        if (payment.status === 'PENDING' && sim.decision != null) {
+          if (sim.decision) {
+            Object.assign(payment, { status: 'SUCCEEDED', completedAt: Date.now(), providerPaymentId: `simpay_${payment.id}` });
+            refundOverpayment(bill, 'Paid more than was due', Date.now(), 'system');
+            afterPayment(bill, 'guest');
+          } else {
+            Object.assign(payment, { status: 'FAILED', completedAt: Date.now(), failureReason: 'The card was declined (simulated).' });
+          }
+          paymentsChanged(bill, payment);
+        }
+      }
+      const link = query.get('link');
+      return { redirect: link && state.links.some((l) => l.token === link) ? `/#/pay/${link}` : '/' };
+    }],
+  ];
+
+  function simView(token) {
+    const sim = state.sims[token];
+    const bill = sim && state.bills.find((b) => b.payments.some((p) => p.id === sim.paymentId));
+    if (!bill) throw new Problem(404, 'CHECKOUT_NOT_FOUND', 'Checkout ? was not found', { parameters: { id: '?' } });
+    const payment = bill.payments.find((p) => p.id === sim.paymentId);
+    return { token, amount: toLira(payment.amountC + payment.tipC), description: `Sofra Bistro${bill.table ? ` - ${bill.table.code}` : ''}`,
+      callbackUrl: `api/v1/payments/callback/simulated?link=${encodeURIComponent(sim.link)}` };
+  }
+
   const routes = [
     ['POST', /^auth\/login$/, 'public', (_, body) => {
       const user = USERS[String(body.username || '').toLowerCase()];
@@ -605,6 +995,7 @@
       }
       const order = createOrder({ ...body, table: table ? { ...table } : null }, lines, coupon, Date.now(), user.username);
       state.orders.push(order);
+      attach(state, order, order.createdAt);
       changed(order, 'CREATED', null);
       return [201, orderView(order)];
     }],
@@ -634,8 +1025,17 @@
       const order = findOrder(params[0]);
       const next = nextStatus(order.status, order.type);
       if (!next) throw new Problem(409, 'ORDER_NOT_ADVANCEABLE', `Order #${order.id} is ${order.status} and cannot be advanced`, { parameters: { orderId: String(order.id), status: order.status } });
+      if (next === 'COMPLETED') {
+        const bill = billFor(order);
+        const { balance } = money(bill);
+        if (balance > 0) throw new Problem(422, 'BILL_NOT_PAID', `Bill #${bill.id} still has ${toLira(balance)} to pay`, { parameters: { billId: bill.id, balance: toLira(balance) } });
+      }
       const previous = order.status;
       transition(order, next, Date.now(), user.username);
+      if (next === 'COMPLETED') {
+        const bill = billFor(order);
+        if (refresh(bill, Date.now())) paymentsChanged(bill, null, 'BILL');
+      }
       changed(order, 'STATUS_CHANGED', previous);
       return orderView(order);
     }],
@@ -648,6 +1048,10 @@
       const previous = order.status;
       order.cancellationReason = String(body.reason).trim();
       transition(order, 'CANCELLED', Date.now(), user.username);
+      const bill = billFor(order);
+      const before = money(bill).refunded;
+      refundOverpayment(bill, `Order #${order.id} was cancelled`, Date.now(), user.username);
+      if (refresh(bill, Date.now()) || money(bill).refunded !== before) paymentsChanged(bill, null, 'REFUND');
       changed(order, 'STATUS_CHANGED', previous);
       return orderView(order);
     }],
@@ -669,6 +1073,7 @@
       }
       return dashboard(days);
     }],
+    ...paymentRoutes,
   ];
 
   function json(status, body, contentType = 'application/json') {
@@ -706,10 +1111,14 @@
         if (!match) continue;
         const user = authenticate(headers, access);
         let body = {};
-        if (init.body) {
+        const contentType = headers['Content-Type'] || headers['content-type'] || '';
+        if (init.body && contentType.startsWith('application/x-www-form-urlencoded')) {
+          body = Object.fromEntries(new URLSearchParams(init.body));
+        } else if (init.body) {
           try { body = JSON.parse(init.body); } catch { throw new Problem(400, 'MALFORMED_REQUEST', 'The request body is missing or is not valid JSON of the expected shape.'); }
         }
-        const result = handler({ params: match.slice(1), query: resolved.searchParams, user }, body);
+        const result = handler({ params: match.slice(1), query: resolved.searchParams, user, headers }, body);
+        if (result && typeof result.redirect === 'string') return new Response(null, { status: 303, headers: { Location: result.redirect } });
         return Array.isArray(result) && typeof result[0] === 'number' ? json(result[0], result[1]) : json(200, result);
       }
       throw new Problem(404, 'NOT_FOUND', `No endpoint for ${method} /${path}`);
@@ -754,6 +1163,7 @@
       deliveryAddress: type === 'DELIVERY' ? 'Caferağa Mah. Moda Cad. 88, Kadıköy' : null, paymentMethod: type === 'DELIVERY' ? 'ONLINE' : 'CARD',
     }, lines, null, Date.now(), 'waiter');
     state.orders.push(order);
+    attach(state, order, order.createdAt);
     changed(order, 'CREATED', null);
   }
   setInterval(autopilot, 70_000);

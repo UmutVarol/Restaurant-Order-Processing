@@ -2,7 +2,7 @@
 const { test, expect } = require('@playwright/test');
 const { signIn } = require('./helpers');
 
-const ROUTES = ['dashboard', 'pos', 'kitchen', 'floor', 'orders', 'menu'];
+const ROUTES = ['dashboard', 'pos', 'kitchen', 'floor', 'orders', 'cashier', 'menu'];
 
 for (const theme of ['light', 'dark']) {
   test(`every screen fits the viewport in the ${theme} theme`, async ({ page }) => {

@@ -1008,7 +1008,10 @@ body { -webkit-tap-highlight-color: transparent; }
 .qr-box.empty-qr { grid-template-columns: 1fr; }
 .qr-info { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 svg.qr { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--border); background: #fff; }
+.date-pick { width: 150px; flex: none; }
 .cashier-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.cashier-grid > * { min-width: 0; }
+.cashier-kpis .row { flex-wrap: wrap; gap: 4px 8px; }
 .data-table b.due { color: var(--brand); }
 .data-table b.settled { color: var(--green); }
 .z-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }

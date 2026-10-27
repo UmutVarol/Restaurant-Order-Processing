@@ -6,7 +6,7 @@ import { t } from '../core/i18n.js';
 import { money, time } from '../core/format.js';
 import { api, backendFetch, errorMessage } from '../core/api.js';
 import { langButton, themeButton } from '../core/ui.js';
-import { parseCents } from './bill.js';
+import { parseCents, typed } from './bill.js';
 
 const TIP_RATES = [0, 0.05, 0.1, 0.15];
 const lira = (value) => (value / 100).toFixed(2);
@@ -94,7 +94,7 @@ function payPage(root, token) {
       fixed
         ? h('div', { class: 'guest-share' }, h('span', null, t('guest.yourShare')), h('b', null, money(lira(amount))))
         : h('div', { class: 'field' }, h('label', { for: 'guest-amount' }, t('guest.howMuch')),
-          h('input', { class: 'input num-input', id: 'guest-amount', inputmode: 'decimal', value: lira(amount),
+          h('input', { class: 'input num-input', id: 'guest-amount', inputmode: 'decimal', value: typed(amount),
             onchange: (event) => { state.amount = lira(Math.min(parseCents(event.target.value), due)); render(); } }),
           h('div', { class: 'chips' }, [1, 2, 3, 4].map((n) => h('button', {
             class: ['chip', amount === Math.ceil(due / n) ? 'active' : ''],
@@ -117,8 +117,9 @@ function payPage(root, token) {
             const { paymentPageUrl } = await api.publicCheckout(token, {
               amount: fixed ? null : lira(amount), tip: lira(tip), name: state.name.trim() || null,
             });
-            // Only the app itself or a secure provider page.
-            if (/^\/#\//.test(paymentPageUrl) || /^https:\/\//.test(paymentPageUrl)) location.assign(paymentPageUrl);
+            // Only the app itself (the simulated provider) or a secure provider page.
+            if (/^\/#\//.test(paymentPageUrl)) location.hash = paymentPageUrl.slice(2);
+            else if (/^https:\/\//.test(paymentPageUrl)) location.assign(paymentPageUrl);
           } catch (error) {
             state.busy = false;
             state.formError = errorMessage(error);

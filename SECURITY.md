@@ -46,6 +46,18 @@ payment and similar off), `Cross-Origin-Opener-Policy` and `Cross-Origin-Resourc
 `Cache-Control: no-store`, and HSTS over HTTPS. CORS is not enabled, so only the app's own pages can call the
 API. The client builds the DOM from text nodes only, so guest names and notes can never inject markup.
 
+### Payments
+
+| Control | Details |
+|---|---|
+| Card data | Cards are only ever entered on the payment provider's hosted page (iyzico Checkout Form, 3-D Secure). Sofra never sees card numbers |
+| Provider answers | The guest's return to the callback is never trusted. The result is fetched server to server, its HMAC-SHA256 signature checked in constant time, and its conversation id, checkout token and amount must match what Sofra started |
+| Request signing | Calls to iyzico are signed with `IYZWSv2` (HMAC-SHA256 over a random key, path and body) |
+| Payment links | 256-bit random tokens, stored only as SHA-256 hashes, valid for 2 hours and only while the bill is open. The guest page shows items and totals, nothing about staff or other guests |
+| Double charging | Bills are changed under a row lock; payments taken at the till carry an `Idempotency-Key`, so a retried request returns the payment already taken |
+| Test provider | The simulated provider marks payments as paid without charging anything, so the app refuses to start with it when demo mode is off unless `restaurant.payments.allow-simulated` is set |
+| Roles | Waiters and managers take payments; only managers refund and close the day |
+
 ### Audit
 
 Sign-ins, failures, lockouts and sign-outs are written to the `security.audit` logger. User-supplied values in

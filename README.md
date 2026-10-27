@@ -42,6 +42,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 | **Kitchen display** | Kanban board fed by **Server-Sent Events** with no polling or refresh. SLA timers turn amber, then red. One tap moves a ticket on, a time bar on each ticket shows how much of its time budget is used, and new tickets are highlighted, with an optional chime. |
 | **Floor plan** | Every table with its seats, open check, status and time seated. Tap a free table to start an order for it. |
 | **Orders** | Paginated history with full-text search (order #, guest, phone, table, address) and status, type and date filters kept in the URL. A detail drawer shows the audit timeline, cancellation with a reason and a printable receipt. |
+| **Payments** | One bill per table seating or order: split it equally or by item, take cash (with change) or card (with the terminal's approval code), add tips, or show a **QR code** so guests pay their share from their phone through **iyzico** with 3-D Secure. Orders complete only when paid; cancelled orders are refunded. A cashier screen with the end-of-day Z report and cash count. Details in [docs/PAYMENTS.md](docs/PAYMENTS.md). |
 | **Dashboard** | Revenue, orders, average ticket and kitchen time against the previous period, with daily revenue, busiest hours, category mix, best sellers, channels and payment methods. |
 | **Menu management** | Create, edit and archive dishes, toggle sold-out, and set popularity and dietary tags. Deletes are soft, so history stays intact. |
 | **Security** | Stateless JWT with three roles (**Manager**, **Waiter**, **Kitchen**) enforced on every endpoint, account lockout, rate limiting, token revocation on sign-out, and CodeQL, Trivy and Dependabot in CI. Details in [SECURITY.md](SECURITY.md). |
@@ -169,7 +170,7 @@ stateDiagram-v2
     PENDING --> PREPARING
     PREPARING --> READY
     READY --> SERVED: dine-in
-    SERVED --> COMPLETED: bill closed
+    SERVED --> COMPLETED: bill paid
     READY --> COMPLETED: takeaway picked up
     READY --> OUT_FOR_DELIVERY: delivery
     OUT_FOR_DELIVERY --> COMPLETED: delivered
@@ -248,7 +249,12 @@ All endpoints live under `/api/v1` and are documented in Swagger UI. Responses a
 | `GET` | `/floor/tables` | staff | Tables with their open checks |
 | `GET` | `/coupons` | staff | Coupons that can be redeemed now |
 | `GET` | `/analytics/dashboard?days=7` | Manager | KPIs, trends and breakdowns |
-| `GET` | `/events/orders` | staff | `text/event-stream` of order events |
+| `GET` | `/events/orders` | staff | `text/event-stream` of order and payment events |
+| `GET` `POST` | `/bills/**` | Waiter, Manager | Bills, cash and card payments, QR payment links |
+| `POST` `GET` | `/payments/**` | Manager | Refunds and the end-of-day report |
+| `GET` `POST` | `/public/pay/{token}/**` | anyone with the link | The guest's QR payment page |
+
+The payment endpoints are described in [docs/PAYMENTS.md](docs/PAYMENTS.md).
 
 ```bash
 TOKEN=$(curl -s -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
@@ -266,7 +272,7 @@ curl -s -X POST localhost:8080/api/v1/orders -H "Authorization: Bearer $TOKEN" -
 ./mvnw verify      # all tests + JaCoCo coverage gate (≥ 80 % lines)
 ```
 
-**100+ tests, ~95 % line coverage**, in four layers:
+**150+ tests, ~92 % line coverage**, in four layers:
 
 | Layer | Examples |
 |---|---|
@@ -281,7 +287,8 @@ Browser tests ([`e2e/`](e2e)) drive the real web client with Playwright, at desk
 cd e2e && npm install && npx playwright install chromium && npm test   # with the app running on :8080
 ```
 
-They cover the waiter-to-kitchen loop over Server-Sent Events, the POS rules (server-side pricing, coupons,
+They cover the waiter-to-kitchen loop over Server-Sent Events, splitting a bill and paying cash with change, a
+guest paying their share by QR code while the till updates live, the POS rules (server-side pricing, coupons,
 the 50-per-line limit, clear and undo, the kitchen note), filters kept in the URL, keyboard access to dialogs, and a check that
 no screen scrolls sideways at 390px, in either theme.
 
@@ -299,6 +306,10 @@ smoke-tests the running container.
 | `RESTAURANT_BOOTSTRAP_ADMIN_PASSWORD` | — | Creates an `admin` account on first start when demo mode is off |
 | `PORT` | `8080` | HTTP port |
 | `SERVER_FORWARD_HEADERS_STRATEGY` | — | `native` behind a reverse proxy, so rate limits see the real client address |
+| `PAYMENT_PROVIDER` | `SIMULATED` in demo mode, else `NONE` | `IYZICO` for QR payments, `NONE` for cash and card only |
+| `IYZICO_API_KEY` / `IYZICO_SECRET_KEY` | — | iyzico merchant keys (required with `PAYMENT_PROVIDER=IYZICO`) |
+| `IYZICO_BASE_URL` | `https://sandbox-api.iyzipay.com` | `https://api.iyzipay.com` when live |
+| `PUBLIC_BASE_URL` | taken from the request | The HTTPS address guests reach, used in QR links and the provider callback |
 
 Business rules (tax rate, delivery fee, free-delivery threshold, time zone) and the abuse limits (lockout policy,
 rate limits, body size, live connections) are under `restaurant.*` in
@@ -325,8 +336,9 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 - Sipariş, **Server-Sent Events** sayesinde sayfa yenilemeden anında **mutfak ekranına** düşer; şef tek dokunuşla durumu ilerletir.
 - **Salon planı** hangi masanın dolu olduğunu, açık hesabı ve oturma süresini canlı gösterir.
 - **Yönetici paneli** ciro, sipariş sayısı, ortalama sepet ve mutfak süresini önceki dönemle karşılaştırır; en yoğun saatleri ve en çok satanları gösterir.
+- **Ödeme altyapısı:** her masa oturumu için tek hesap; eşit ya da ürüne göre bölme, nakit (para üstü), kart (POS onay kodu), bahşiş ve **QR kodla telefondan iyzico (3D Secure) ödemesi**. Ödenmeyen sipariş kapanmaz, iptal edilen sipariş iade edilir; Kasa ekranında gün sonu Z raporu ve kasa sayımı. Ayrıntılar: [docs/PAYMENTS.md](docs/PAYMENTS.md).
 - JWT ile rol bazlı yetkilendirme (Yönetici / Garson / Mutfak), Flyway, PostgreSQL, Docker, OpenAPI, Prometheus metrikleri.
-- 100'ü aşkın test (birim, entegrasyon, mimari, Testcontainers) ve ~%95 kod kapsamı.
+- 150'yi aşkın test (birim, entegrasyon, mimari, Testcontainers) ve ~%92 kod kapsamı.
 - [DESIGN.md](DESIGN.md) ile belgelenmiş sıcak lokanta tasarımı: açık/koyu tema, Türkçe/İngilizce arayüz, mobil uyumlu düzen.
 - Playwright tarayıcı testleri: garsondan mutfağa canlı akış, POS kuralları ve 390px genişlikte taşma kontrolü.
 

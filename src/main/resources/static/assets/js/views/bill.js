@@ -1,7 +1,7 @@
 // The bill: what a table or order owes, split it, take cash or card, show a QR code for paying by phone, refund.
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
-import { t } from '../core/i18n.js';
+import { locale, t } from '../core/i18n.js';
 import { dateTime, money, time } from '../core/format.js';
 import { api, ApiError, errorMessage, newIdempotencyKey } from '../core/api.js';
 import { bus } from '../core/store.js';
@@ -17,6 +17,8 @@ const TIP_RATES = [0, 0.05, 0.1, 0.15];
 
 const cents = (value) => Math.round(Number(value || 0) * 100);
 const lira = (value) => (value / 100).toFixed(2);
+/** Kuruş as typed in the till's language: "401,50" in Turkish, "401.50" in English. */
+export const typed = (value) => (value / 100).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
 /**
  * Opens the bill of an order (or a bill by id) for staff who take payments.
@@ -165,7 +167,7 @@ export function openBill(ref, user) {
     }
 
     const amountInput = h('input', {
-      class: 'input num-input', id: 'pay-amount', inputmode: 'decimal', value: lira(amount), 'aria-label': t('bill.amount'),
+      class: 'input num-input', id: 'pay-amount', inputmode: 'decimal', value: typed(amount), 'aria-label': t('bill.amount'),
       onchange: (event) => { state.amount = parseAmount(event.target.value, available); state.split = 1; state.picked.clear(); render(); },
     });
 
@@ -184,7 +186,7 @@ export function openBill(ref, user) {
       onclick: () => { state.tipRate = rate; state.tip = ''; render(); },
     }, rate === 0 ? t('bill.noTip') : `%${Math.round(rate * 100)}`)),
     h('input', {
-      class: 'input sm tip-input', inputmode: 'decimal', placeholder: t('bill.otherTip'), value: state.tip, 'aria-label': t('bill.otherTip'),
+      class: 'input sm tip-input', inputmode: 'decimal', placeholder: t('bill.otherTip'), value: state.tip === '' ? '' : typed(parseCents(state.tip)), 'aria-label': t('bill.otherTip'),
       onchange: (event) => { state.tip = event.target.value.trim() ? lira(parseCents(event.target.value)) : ''; render(); },
     }));
 
@@ -221,7 +223,7 @@ export function openBill(ref, user) {
       h('div', { class: 'chips' }, notes.map((value) => h('button', {
         class: ['chip', tendered === value ? 'active' : ''], onclick: () => { state.tendered = lira(value); render(); },
       }, value === charge ? t('bill.exact') : money(lira(value)))),
-      h('input', { class: 'input sm tip-input', id: 'pay-tendered', inputmode: 'decimal', placeholder: t('bill.otherAmount'), value: state.tendered,
+      h('input', { class: 'input sm tip-input', id: 'pay-tendered', inputmode: 'decimal', placeholder: t('bill.otherAmount'), value: state.tendered === '' ? '' : typed(parseCents(state.tendered)),
         onchange: (event) => { state.tendered = event.target.value.trim() ? lira(parseCents(event.target.value)) : ''; render(); } })),
       h('div', { class: ['change', change < 0 ? 'short' : ''] },
         h('span', null, change < 0 ? t('bill.short') : t('bill.change')), h('b', { 'data-testid': 'change-due' }, money(lira(Math.abs(change))))));
@@ -318,7 +320,7 @@ export function openBill(ref, user) {
   }
 
   function refundDialog(payment) {
-    const amountInput = h('input', { class: 'input', id: 'refund-amount', inputmode: 'decimal', value: payment.refundable });
+    const amountInput = h('input', { class: 'input', id: 'refund-amount', inputmode: 'decimal', value: typed(cents(payment.refundable)) });
     const reasonInput = h('textarea', { class: 'textarea', id: 'refund-reason', rows: 2, maxlength: 255, placeholder: t('bill.refundReasonPlaceholder') });
     openModal({
       title: t('bill.refundTitle', { amount: money(payment.amount) }),

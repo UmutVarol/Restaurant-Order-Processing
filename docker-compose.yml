@@ -37,6 +37,12 @@ services:
       # With DEMO_MODE=false the app refuses to start on the built-in development key.
       JWT_SECRET: ${JWT_SECRET:-local-compose-secret-change-me-0123456789abcdef}
       DEMO_MODE: ${DEMO_MODE:-true}
+      # Online (QR) payments: IYZICO with merchant keys, or NONE. Empty means SIMULATED in demo mode, NONE otherwise.
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-}
+      IYZICO_API_KEY: ${IYZICO_API_KEY:-}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:-}
+      IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://sandbox-api.iyzipay.com}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
     ports:
       - "8080:8080"
     read_only: true

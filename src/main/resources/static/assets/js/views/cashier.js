@@ -35,8 +35,8 @@ export default {
         return;
       }
       mount(billsCard, head, h('div', { class: 'table-wrap' }, h('table', { class: 'data-table' },
-        h('thead', null, h('tr', null, h('th', null, t('cashier.who')), h('th', null, t('cashier.since')),
-          h('th', { class: 'right' }, t('bill.total')), h('th', { class: 'right' }, t('bill.paidSoFar')), h('th', { class: 'right' }, t('bill.due')))),
+        h('thead', null, h('tr', null, h('th', null, t('cashier.who')), h('th', { class: 'hide-sm' }, t('cashier.since')),
+          h('th', { class: 'right hide-sm' }, t('bill.total')), h('th', { class: 'right hide-sm' }, t('bill.paidSoFar')), h('th', { class: 'right' }, t('bill.due')))),
         h('tbody', null, bills.map((bill) => h('tr', {
           tabindex: 0, 'data-bill': bill.id,
           onclick: () => openBill({ billId: bill.id }, user),
@@ -44,16 +44,16 @@ export default {
         },
         h('td', { class: 'customer' }, h('b', null, bill.tableCode ? `${t('pos.table')} ${bill.tableCode}` : bill.customerName),
           h('small', null, `${t('bill.number', { id: bill.id })} · ${bill.orderIds.map((id) => `#${id}`).join(', ')}`)),
-        h('td', { class: 'when' }, elapsed(bill.openedAt)),
-        h('td', { class: 'right num' }, money(bill.total)),
-        h('td', { class: 'right num' }, money(bill.paid)),
+        h('td', { class: 'when hide-sm' }, elapsed(bill.openedAt)),
+        h('td', { class: 'right num hide-sm' }, money(bill.total)),
+        h('td', { class: 'right num hide-sm' }, money(bill.paid)),
         h('td', { class: 'right num' }, h('b', { class: Number(bill.balance) > 0 ? 'due' : 'settled' }, money(bill.balance)),
           Number(bill.pending) > 0 ? h('div', { class: 'faint', style: { fontSize: '11.5px' } }, t('cashier.pendingOnline', { amount: money(bill.pending) })) : null)))))));
     }
 
     function renderReport() {
       if (!manager) return;
-      const picker = h('input', { type: 'date', class: 'input sm', value: date, max: today(), 'aria-label': t('cashier.date'),
+      const picker = h('input', { type: 'date', class: 'input sm date-pick', value: date, max: today(), 'aria-label': t('cashier.date'),
         onchange: (event) => { date = event.target.value || today(); report = null; renderReport(); loadReport(); } });
       const head = h('div', { class: 'card-head' }, h('div', null, h('div', { class: 'card-title' }, t('cashier.zReport')),
         h('div', { class: 'card-sub' }, t('cashier.zSub'))), h('div', { class: 'spacer', style: { flex: 1 } }), picker);
