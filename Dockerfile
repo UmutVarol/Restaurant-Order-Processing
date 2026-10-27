@@ -14,7 +14,8 @@ RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -q package -DskipTests \
 
 # ---- Runtime stage: slim JRE, non-root user, layered for fast rebuilds ----
 FROM eclipse-temurin:21-jre-alpine
-RUN addgroup -S sofra && adduser -S sofra -G sofra
+# Pick up Alpine security fixes released since the base image was built.
+RUN apk upgrade --no-cache && addgroup -S sofra && adduser -S sofra -G sofra
 WORKDIR /app
 
 COPY --from=build /workspace/extracted/dependencies/ ./

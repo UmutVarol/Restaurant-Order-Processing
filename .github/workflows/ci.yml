@@ -171,4 +171,4 @@ jobs:
 
       - name: Container logs
         if: failure()
-        run: docker logs sofra
+        run: docker logs sofra || echo "The container was not started."
