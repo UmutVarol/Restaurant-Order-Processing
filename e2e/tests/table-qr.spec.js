@@ -61,4 +61,8 @@ test('a guest orders from the table QR code and a waiter accepts it', async ({ p
   // the guest sees it went through
   await expect(guest.getByTestId('sent-status')).toContainText('Your order is with the kitchen', { timeout: 15_000 });
   await expect(guest.getByTestId('call-CALL_WAITER')).toHaveText('Call the waiter', { timeout: 15_000 });
+
+  // leave the table free for the tests that need one
+  const placed = (await api(page, 'GET', '/orders/active')).find((o) => o.customerName === name);
+  await api(page, 'POST', `/orders/${placed.id}/cancel`, { reason: 'E2E clean-up' });
 });

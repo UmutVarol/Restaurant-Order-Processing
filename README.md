@@ -43,14 +43,19 @@ the floor plan tracks every open check, and the manager watches it all on a live
 | **Table service** | **Void** or **comp** (on the house) single units of a line, a **manual discount**, **move** a seating to another table or **merge** two tables onto one bill. A waiter needs a manager to approve with their PIN at the till; every change is repriced, audited and refused once the bill has been paid beyond it. |
 | **Ordering from the table** | Each table's **QR code** opens its menu on the guest's phone: build a cart with options, **call the waiter** or **ask for the bill**. Carts wait in the staff inbox (live, with a chime) until a waiter accepts them. |
 | **Staff PINs** | On a till a manager registered, staff switch users by tapping their name and typing a PIN; the till locks itself when idle. A PIN never authorises refunds or closing the day. |
-| **Kitchen and bar printers** | New orders print on network (ESC/POS) printers by menu category, with Turkish characters, big type for table and dishes, retries, failure alerts, reprints and a ticket preview. |
-| **Kitchen display** | Kanban board fed by **Server-Sent Events** with no polling or refresh. SLA timers turn amber, then red. One tap moves a ticket on, a time bar on each ticket shows how much of its time budget is used, and new tickets are highlighted, with an optional chime. |
+| **Courses and stations** | Dishes are made at **stations** (cold kitchen, grill, desserts, bar, or your own). A waiter can **hold later courses** and **fire** them when the table is ready; held dishes neither print nor show in the kitchen until then, and a voided dish that was already fired prints a VOID slip. |
+| **Kitchen and bar printers** | Orders print on network (ESC/POS) printers by station, with Turkish characters, big type for table and dishes, retries, failure alerts, reprints and a ticket preview. |
+| **Kitchen display** | Kanban board fed by **Server-Sent Events** with no polling or refresh. Each screen can follow one station, cooks tick dishes off one by one, and the station's own time target drives the amber and red timers. New tickets are highlighted, with an optional chime. |
+| **Stock and recipe costing** | Ingredients in grams, millilitres or pieces, recipes per dish and per option, deliveries, waste with a reason and counts on an **append-only ledger**. Completed orders use their recipes; a dish **sells out by itself** when an ingredient runs out; low stock warns managers. **Food cost %** per dish and a theoretical-against-actual use report. |
+| **Offline till** | A **service worker** keeps the app shell, so tills keep taking orders (and cash or card) when the internet drops. Orders wait in the till's own queue and are sent **exactly once** (Idempotency-Key) when the connection is back; a cart whose prices changed waits for the waiter. |
+| **Delivery platforms** | **Yemeksepeti, Getir Yemek and Trendyol Go** orders arrive through signed webhooks and go to the kitchen like takeaways the courier collects. Items are mapped to our dishes; nothing unmapped is guessed. Accepted, ready, picked up and sold-out dishes are sent back. |
+| **Legal receipts** | Every paid bill gets one legal document: a **yeni nesil ÖKC** receipt for cash and card, or an **e-Arşiv** invoice for online payments and guests who ask with their VKN/TCKN. Retried until issued, reconciled against the ÖKC's **Z report**. |
 | **Floor plan** | Every table with its seats, open check, status and time seated. Tap a free table to start an order for it. |
 | **Orders** | Paginated history with full-text search (order #, guest, phone, table, address) and status, type and date filters kept in the URL. A detail drawer shows the audit timeline, cancellation with a reason and a printable receipt. |
 | **Payments** | One bill per table seating or order: split it equally or by item, take cash (with change) or card (with the terminal's approval code), add tips, or show a **QR code** so guests pay their share from their phone through **iyzico** with 3-D Secure. Orders complete only when paid; cancelled orders are refunded. A cashier screen with the end-of-day Z report and cash count. Details in [docs/PAYMENTS.md](docs/PAYMENTS.md). |
 | **Dashboard** | Revenue, orders, average ticket and kitchen time against the previous period, with daily revenue, busiest hours, category mix, best sellers, channels and payment methods. |
 | **Menu management** | Create, edit and archive dishes, toggle sold-out, and set popularity and dietary tags. Deletes are soft, so history stays intact. |
-| **Security** | Stateless JWT with three roles (**Manager**, **Waiter**, **Kitchen**) enforced on every endpoint, account lockout, rate limiting, token revocation on sign-out, a same-origin-only CSP with **Trusted Types** and violation reports, step-up sign-in for refunds, an audited and tamper-checked payment flow, and CodeQL, Trivy, OWASP ZAP, Gitleaks and Dependabot in CI. Details and the payment threat model in [SECURITY.md](SECURITY.md). |
+| **Security** | Stateless JWT with three roles (**Manager**, **Waiter**, **Kitchen**) enforced on every endpoint, **two-step sign-in (TOTP)** for managers, account lockout, rate limiting, token revocation on sign-out, a same-origin-only CSP with **Trusted Types** and violation reports, step-up sign-in for refunds, an audited and tamper-checked payment flow, and CodeQL, Trivy, OWASP ZAP, Gitleaks and Dependabot in CI. Details and the payment threat model in [SECURITY.md](SECURITY.md). |
 | **Interface** | A documented design language ([DESIGN.md](DESIGN.md)), light and dark themes, English and Turkish, phone layouts, keyboard shortcuts and accessible markup, covered by Playwright browser tests. |
 
 ## Screenshots
@@ -269,6 +274,16 @@ All endpoints live under `/api/v1` and are documented in Swagger UI. Responses a
 | `GET` `POST` | `/guest-requests/**` | Waiter, Manager | The inbox: accept, reject, done |
 | `GET` `POST` `PUT` `DELETE` | `/printers/**`, `/print-jobs` | Manager | Printers, test page, ticket preview |
 | `POST` | `/orders/{id}/reprint` | Waiter, Manager | Print an order's tickets again |
+| `GET` `POST` | `/auth/totp/**` | Manager | Two-step sign-in: set up, turn on or off, new recovery codes |
+| `POST` | `/orders` with `Idempotency-Key` | Waiter, Manager | A retry returns the order already placed (`200`, `Idempotent-Replayed: true`) |
+| `POST` | `/orders/{id}/courses/{course}/fire` | Waiter, Manager | Send a held course to the kitchen |
+| `POST` | `/orders/{id}/lines/{lineId}/ready` | staff | Tick a dish off at its station |
+| `GET` `POST` `PUT` `DELETE` | `/stations/**` | read: staff, write: Manager | Kitchen stations and their time targets |
+| `GET` `POST` `PUT` `DELETE` | `/stock/**`, `/recipes/**` | Manager | Ingredients, deliveries, waste, counts, use report, recipes and food cost |
+| `POST` | `/channels/{platform}/webhook` | the platform (signed) | Receive a platform order |
+| `GET` `POST` `PUT` `DELETE` | `/channels/**` | Manager | Platforms, item mapping, waiting orders, test orders |
+| `GET` `POST` | `/fiscal/**` | Waiter, Manager | Legal documents, invoice requests, retries |
+| `GET` | `/fiscal/z-report` | Manager | The day's documents against the ÖKC's own total |
 
 The payment endpoints are described in [docs/PAYMENTS.md](docs/PAYMENTS.md).
 
@@ -288,7 +303,7 @@ curl -s -X POST localhost:8080/api/v1/orders -H "Authorization: Bearer $TOKEN" -
 ./mvnw verify      # all tests + JaCoCo coverage gate (≥ 80 % lines)
 ```
 
-**200 tests, ~93 % line coverage**, in four layers:
+**231 tests, ~92 % line coverage**, in four layers:
 
 | Layer | Examples |
 |---|---|
@@ -331,6 +346,12 @@ smoke-tests the running container.
 | `RESTAURANT_PRINTING_ENABLED` | `true` | `false` keeps kitchen tickets queued instead of sending them |
 | `RESTAURANT_PRINTING_MIN_PORT` / `RESTAURANT_PRINTING_MAX_PORT` | `9100` / `9109` | Ports printers may be reached on (printer hosts must be on a private network) |
 | `RESTAURANT_PRINTING_LANGUAGE` | `tr` | Language of kitchen tickets, `tr` or `en` |
+| `TOTP_ENCRYPTION_KEY` | throwaway key in demo mode | Seals managers' two-step secrets (`openssl rand -base64 32`) |
+| `TOTP_REQUIRED_FOR_MANAGERS` | `false` | `true` makes every manager set up two-step sign-in |
+| `YEMEKSEPETI_WEBHOOK_SECRET`, `GETIR_WEBHOOK_SECRET`, `TRENDYOL_WEBHOOK_SECRET` | — | Connects that platform: its signed webhooks are accepted. Without one it is simulated in demo mode and off otherwise |
+| `…_API_BASE_URL` / `…_API_TOKEN` (per platform) | — | Where status and sold-out updates go (the platform's API or the integrator in front of it) |
+| `FISCAL_OKC_BRIDGE_URL` / `FISCAL_OKC_API_KEY` | — | The ÖKC vendor's bridge on the till's network. Not set: simulated in demo mode, no receipts otherwise |
+| `FISCAL_EARSIV_BASE_URL` / `FISCAL_EARSIV_API_KEY` | — | The GİB-authorised e-Arşiv integrator |
 
 Business rules (tax rate, delivery fee, free-delivery threshold, time zone) and the abuse limits (lockout policy,
 rate limits, body size, live connections) are under `restaurant.*` in
@@ -362,10 +383,16 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 - **Masa işlemleri:** adet bazında iptal ve ikram, manuel indirim, masa taşıma ve birleştirme; garson için yönetici PIN onayı, her değişiklik denetim kaydında, ödenmiş hesap sessizce ucuzlatılamaz.
 - **Masadan QR sipariş:** misafir masadaki kodu okutup menüden sepet oluşturur, garson çağırır ya da hesap ister; sepet garson onaylayınca mutfağa gider.
 - **Personel PIN'i:** yöneticinin kaydettiği kasada adını seçip PIN ile hızlı geçiş, boşta kalınca otomatik kilit; PIN ile iade ve gün kapama yapılamaz.
-- **Mutfak/bar yazıcıları:** kategoriye göre ESC/POS ağ yazıcılarına Türkçe karakterli fiş, yeniden deneme, arıza uyarısı, tekrar baskı ve önizleme.
+- **Mutfak/bar yazıcıları:** istasyona göre ESC/POS ağ yazıcılarına Türkçe karakterli fiş, yeniden deneme, arıza uyarısı, tekrar baskı ve önizleme.
+- **Yöneticiler için iki adımlı giriş (TOTP):** QR ile kurulum, tek kullanımlık kurtarma kodları, şifreli saklanan anahtar; iade ve gün kapamada şifre + kod.
+- **Kurslar ve mutfak istasyonları:** başlangıç/ana yemek/tatlı sırası, "kursu ateşle", istasyona özel mutfak ekranı, satır satır "hazır" işareti, istasyon hedef süresine göre renkler.
+- **Stok ve reçete maliyeti:** değiştirilemez stok defteri (alım, fire, sayım, satış), seçeneklere göre reçete, yemek başına maliyet yüzdesi, malzeme bitince otomatik "tükendi", azalan stok uyarısı ve kullanım/fark raporu.
+- **Çevrimdışı kasa:** internet kesilince sipariş ve nakit/kart ödemesi kasada saklanır, bağlantı gelince bir kez gönderilir; fiyatı değişen sepet garsonun onayını bekler.
+- **Yemeksepeti, Getir, Trendyol:** imzalı webhook ile gelen siparişler mutfağa düşer, eşlenmemiş ürün tahmin edilmez; durum ve tükenen ürünler platforma bildirilir.
+- **Yasal belge:** ödenen her hesaba tek belge — ÖKC fişi ya da (online ödeme veya VKN/TCKN ile istenirse) e-Arşiv fatura; kesilene kadar yeniden denenir, ÖKC Z raporuyla mutabakat yapılır.
 - **Güvenlik:** yalnızca kendi kaynağına izin veren CSP + Trusted Types (XSS/kart hırsızı script'lere karşı tarayıcı düzeyinde engel), iade ve gün kapamada yeniden şifre, sahte ödeme bildirimlerine karşı sunucudan sunucuya doğrulama, ödeme denetim kaydı; CI'da CodeQL, Trivy, OWASP ZAP ve Gitleaks.
 - JWT ile rol bazlı yetkilendirme (Yönetici / Garson / Mutfak), Flyway, PostgreSQL, Docker, OpenAPI, Prometheus metrikleri.
-- 200 test (birim, entegrasyon, mimari, Testcontainers) ve ~%93 kod kapsamı; 32 Playwright tarayıcı testi.
+- 231 test (birim, entegrasyon, mimari, Testcontainers) ve ~%92 kod kapsamı; 40 Playwright tarayıcı testi.
 - [DESIGN.md](DESIGN.md) ile belgelenmiş sıcak lokanta tasarımı: açık/koyu tema, Türkçe/İngilizce arayüz, mobil uyumlu düzen.
 - Playwright tarayıcı testleri: garsondan mutfağa canlı akış, POS kuralları ve 390px genişlikte taşma kontrolü.
 

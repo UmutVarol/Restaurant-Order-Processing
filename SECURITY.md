@@ -27,7 +27,8 @@ covered by an automated test.
 | Authorisation | Role checks on every endpoint (`ADMIN`, `WAITER`, `KITCHEN`). Anything not explicitly allowed is denied |
 | Staff PINs | 4 to 6 digits, bcrypt-hashed, runs and repeats (`1234`, `1111`, `1212`) refused, and setting one needs the password. A PIN works only on a till a manager registered: the till holds a 256-bit device token (stored as SHA-256, revocable at any time) sent as `X-Device-Token` |
 | PIN guessing | Failed PINs count against their own lockout key, so a PIN attack cannot lock out the password; after three lockouts in a row the PIN is cleared and must be set again with the password. The PIN sign-in shares the 60-per-minute sign-in budget |
-| How a session signed in | Tokens carry an RFC 8176 `amr` claim (`pwd` or `pin`). Step-up actions refuse PIN sessions, so four digits watched over a shoulder never move money or register a till |
+| How a session signed in | Tokens carry an RFC 8176 `amr` claim (`pwd`, `pin`, and `otp` after a two-step sign-in). Step-up actions refuse PIN sessions, so four digits watched over a shoulder never move money or register a till |
+| Two-step sign-in for managers | TOTP (RFC 6238: SHA-1, 30 s, 6 digits, ±1 step of drift), enrolled from Settings with a QR code drawn by the app itself. A code that was already used is refused (the last accepted step is stored). The secret is sealed with AES-256-GCM under `TOTP_ENCRYPTION_KEY`; with `TOTP_REQUIRED_FOR_MANAGERS=true` the app refuses to start without that key, and managers who have not enrolled are sent to enrol before anything else. Ten single-use recovery codes, stored as bcrypt hashes. Wrong codes count against the account lockout like wrong passwords. Refunds, closing the day and registering tills then need password **and** code |
 | Idle tills | A registered till returns to the staff list after a few idle minutes (configurable per till; kitchen screens stay signed in) |
 
 ### Abuse and availability
@@ -36,6 +37,7 @@ covered by an automated test.
 | --- | --- |
 | API rate limit | Token bucket ([Bucket4j](https://github.com/bucket4j/bucket4j)), 600 requests per minute per client address. Over budget: `429` with `Retry-After` |
 | Public endpoints | What needs no sign-in (guest payment pages, provider callbacks and notifications, browser reports) has its own budget of 120 requests per minute per address |
+| Platform webhooks | Delivery platforms' signed order webhooks have their own budget of 300 requests per minute per address, so a lunchtime burst neither starves nor is starved by the rest |
 | Request size | API bodies over 64 KB get `413`. A declared `Content-Length` is checked before reading, and chunked bodies are cut off while reading |
 | Slow clients | Tomcat drops connections that do not send their request within 10 s, and idle keep-alive connections after 20 s |
 | Live connections | At most 10 event streams per user and 500 in total. They are closed on shutdown, so graceful shutdown is not held up |
@@ -48,10 +50,11 @@ covered by an automated test.
 | Control | Details |
 |---|---|
 | Content Security Policy | Scripts, styles, fonts and connections from the app's own origin only: no third party at all, no inline script or style, no `eval`, objects or framing |
-| Trusted Types | `require-trusted-types-for 'script'` with no policies allowed. The client builds the DOM from elements and text nodes (icons included), never from HTML strings, so the browser itself blocks any attempt to inject markup or script through `innerHTML` and similar sinks: DOM-based XSS and payment-page skimmers fail even if a bug let one in |
+| Trusted Types | `require-trusted-types-for 'script'` with a single policy, `sofra-sw`, which accepts nothing but the URL of the app's own service worker and creates no HTML or scripts. The client builds the DOM from elements and text nodes (icons included), never from HTML strings, so the browser itself blocks any attempt to inject markup or script through `innerHTML` and similar sinks: DOM-based XSS and payment-page skimmers fail even if a bug let one in |
 | Violation reports | Browsers report CSP violations to `/api/v1/csp-reports` (`report-uri` and the Reporting API). Each is logged to `security.csp` and counted in `sofra.security.csp_violation`, so a tampered page raises an alert. This is the change and tamper detection PCI DSS v4 asks for on pages that lead to a payment page (6.4.3, 11.6.1) |
 | Self-hosted fonts | Inter and Fraunces are served by the app ([Fontsource](https://fontsource.org) builds, SIL OFL), so no third party learns who opens the app and nothing outside the origin is allowed |
 | Other headers | `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy` (camera, microphone, geolocation, payment and similar off), `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy: same-origin`, `Cache-Control: no-store`, and HSTS over HTTPS. CORS is not enabled |
+| Offline app shell | The service worker caches only same-origin static files (network first, so a release is picked up at once). API responses, which hold guest names, phone numbers and bills, and any request carrying a bearer token are never cached. Orders taken offline are kept in IndexedDB per user and per till, sent with an `Idempotency-Key` so a retry never places an order twice, priced again before they go, and dropped only after a warning when that user signs out |
 | API docs | Swagger UI needs inline styles, so it gets its own looser policy. Turn it off in production with `SPRINGDOC_SWAGGER_UI_ENABLED=false` |
 | Security contact | [`/.well-known/security.txt`](src/main/resources/static/.well-known/security.txt) (RFC 9116) |
 
@@ -97,6 +100,25 @@ covered by an automated test.
 | Guest carts | Never reach the kitchen on their own: a waiter accepts each one, and it is then placed and priced exactly like an order from the till. Smaller limits than the till (20 lines, 20 each), at most five open requests per table, 15 s between carts and 30 s between calls, repeated calls fold into the one already waiting, request ids are random UUIDs bound to the table's token, and the public rate limit applies. Everything is written to `guest.audit` |
 | Printers (SSRF) | The server connects to printer addresses staff type in, so only private-network addresses are allowed (RFC 1918, CGNAT, loopback, IPv6 unique-local; never link-local, so not the cloud metadata service) and only ports 9100–9109 by default. The address is checked when a printer is saved and again, on the resolved IP, before every connection (DNS rebinding). Connections have connect and write timeouts and run outside database transactions |
 
+### Delivery platforms
+
+| Control | Details |
+|---|---|
+| Webhook authenticity | `X-Sofra-Signature` must be the HMAC-SHA256 of `timestamp.body` under the platform's secret, compared in constant time; `X-Sofra-Timestamp` must be within five minutes. The body is not read before the signature checks out. A platform without a secret takes no webhooks at all (`404`) |
+| Replays and duplicates | Each platform order id is stored once (unique per platform), and its order is placed with that id as the idempotency key, so a replayed or redelivered webhook changes nothing |
+| Nothing is guessed | An item or option nobody mapped, or a sold-out dish, stops the order for a manager instead of guessing; totals that differ from our menu are flagged |
+| Credentials | Webhook secrets and API tokens come from the environment only, never from the database or the API, and are never shown |
+| Audit | Every order in and every update out is written to `channel.audit` (no guest details) |
+
+### Stock and legal documents
+
+| Control | Details |
+|---|---|
+| Stock ledger | Movements are inserted, never updated or deleted (immutable entity, a repository without update or delete); the balance is the sum, so two tills cannot lose an update, and counts lock the ingredient. People's deliveries, waste and counts go to `stock.audit` |
+| One legal document per bill | The bill id is unique on `fiscal_documents`; a document is immutable once issued; issuing carries the bill as idempotency key, runs outside database transactions and is retried with growing pauses, staying visible to the cashier until issued |
+| Guest tax numbers | VKN/TCKN check digits are verified at the till; the numbers are masked on every screen and API list and never written to logs |
+| Device bridge | The ÖKC bridge address must be loopback or a private network address, checked at start-up; credentials come from the environment |
+
 #### Threat model: tills and tables
 
 | Threat | How it is stopped |
@@ -115,7 +137,8 @@ checkouts. They are counted in `sofra.payments`, `sofra.refunds` and `sofra.paym
 the last one. Route `payment.audit` and `security.audit` to append-only storage in production.
 
 Voids, comps, discounts, table moves and merges go to `order.audit`; guest carts, calls and QR codes to
-`guest.audit`.
+`guest.audit`; platform orders and updates to `channel.audit`; stock movements to `stock.audit`; legal documents
+to `fiscal.audit`.
 
 Sign-ins (password and PIN), failures, lockouts, sign-outs, PIN changes and till registrations are written to the
 `security.audit` logger. User-supplied values in
@@ -146,5 +169,8 @@ can be scraped by Prometheus at `/actuator/prometheus` (admin only).
    not trusted by default, because any client can forge them.
 4. Keep `/actuator` (other than health) on a private network, and switch off the API docs:
    `SPRINGDOC_SWAGGER_UI_ENABLED=false`, `SPRINGDOC_API_DOCS_ENABLED=false`.
-5. The rate limits and the token denylist are kept per instance. If you run several instances, put them in a
+5. For managers' two-step sign-in, set `TOTP_ENCRYPTION_KEY=$(openssl rand -base64 32)` and, to require it,
+   `TOTP_REQUIRED_FOR_MANAGERS=true`. Keep the key with the database backups: without it the stored secrets
+   cannot be read.
+6. The rate limits and the token denylist are kept per instance. If you run several instances, put them in a
    shared store (Bucket4j and Caffeine both have Redis-backed equivalents).

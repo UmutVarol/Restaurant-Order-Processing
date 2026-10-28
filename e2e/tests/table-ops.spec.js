@@ -67,4 +67,8 @@ test('a waiter voids, comps with a manager PIN, discounts and moves a table', as
   await modal.getByTestId('transfer-confirm').click();
   await expect(page.locator('.toast', { hasText: `${from.code} moved to ${to.code}` })).toBeVisible();
   await expect(page.locator('.table-card', { hasText: to.code })).toContainText(guest);
+
+  // leave the table free for the tests that need one
+  const moved = (await api(page, 'GET', '/orders/active')).find((o) => o.customerName === guest);
+  await api(page, 'POST', `/orders/${moved.id}/cancel`, { reason: 'E2E clean-up' });
 });

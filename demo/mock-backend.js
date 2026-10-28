@@ -1030,6 +1030,68 @@
       .forEach((m) => recordUpdate(m.channel, 'availability', m.externalId, available ? 'ON' : 'OFF'));
   }
 
+  // ------------------------------------------------------------------------------------------- legal documents
+  // Mirrors FiscalService with simulated devices: one document per closed bill, an ÖKC receipt for cash and card, an
+  // e-Arşiv invoice when part was paid online or the guest asked for one. Nothing is declared to GİB.
+  function fiscalState() {
+    state.fiscal ??= { documents: [], nextId: 1, receipts: 0, invoices: 0 };
+    return state.fiscal;
+  }
+
+  function isTckn(v) {
+    if (!/^[1-9][0-9]{10}$/.test(v)) return false;
+    const d = [...v].map(Number);
+    const tenth = (((d[0] + d[2] + d[4] + d[6] + d[8]) * 7 - (d[1] + d[3] + d[5] + d[7])) % 10 + 10) % 10;
+    return d[9] === tenth && d[10] === d.slice(0, 10).reduce((a, b) => a + b, 0) % 10;
+  }
+
+  function isVkn(v) {
+    if (!/^[0-9]{10}$/.test(v)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+      const tmp = (Number(v[i]) + 9 - i) % 10;
+      sum += tmp === 9 ? 9 : (tmp * 2 ** (9 - i)) % 9;
+    }
+    return Number(v[9]) === (10 - (sum % 10)) % 10;
+  }
+
+  const maskTaxId = (v) => (v ? '•'.repeat(v.length - 3) + v.slice(-3) : null);
+
+  function fiscalView(d) {
+    return {
+      id: d.id, billId: d.billId, kind: d.kind, status: d.status, provider: d.status === 'ISSUED' ? 'SIMULATED' : null, reference: d.reference,
+      documentNumber: d.number, pdfUrl: null, total: d.totalC != null ? toLira(d.totalC) : null, tax: d.taxC != null ? toLira(d.taxC) : null,
+      buyerName: d.buyerName, buyerTaxId: maskTaxId(d.buyerTaxId), attempts: d.attempts, lastError: null, nextAttemptAt: null,
+      createdAt: iso(d.createdAt), issuedAt: d.issuedAt ? iso(d.issuedAt) : null, simulated: true,
+    };
+  }
+
+  function issueFiscal(bill) {
+    const data = fiscalState();
+    let doc = data.documents.find((d) => d.billId === bill.id);
+    if (doc && doc.status !== 'WAITING') return;
+    const online = bill.payments.some((p) => p.status === 'SUCCEEDED' && p.method === 'ONLINE');
+    if (!doc) {
+      doc = { id: data.nextId++, billId: bill.id, kind: online ? 'E_ARSIV' : 'RECEIPT', status: 'PENDING', createdAt: Date.now(), attempts: 0 };
+      data.documents.push(doc);
+    }
+    const orders = ordersOf(bill).filter((o) => o.status !== 'CANCELLED');
+    const sequence = doc.kind === 'RECEIPT' ? ++data.receipts : ++data.invoices;
+    Object.assign(doc, {
+      status: 'ISSUED', attempts: doc.attempts + 1, issuedAt: Date.now(),
+      totalC: orders.reduce((sum, o) => sum + o.pricing.total, 0), taxC: orders.reduce((sum, o) => sum + o.pricing.tax, 0),
+      reference: `SIM-${doc.kind === 'RECEIPT' ? 'OKC' : 'EARSIV'}-${sequence}`,
+      number: doc.kind === 'RECEIPT' ? `F${String(sequence).padStart(6, '0')}` : `SIM${new Date().getFullYear()}${String(sequence).padStart(9, '0')}`,
+    });
+    publish({ documentId: doc.id, billId: bill.id, status: doc.status, occurredAt: iso(Date.now()) }, 'fiscal');
+  }
+
+  const dayRange = (day) => {
+    const from = new Date(`${day}T00:00:00`).getTime();
+    return [from, from + 24 * 60 * MINUTE];
+  };
+  const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
   // ------------------------------------------------------------------------------------------- two-step sign-in
   // Mirrors TwoFactorService with the browser's Web Crypto: RFC 6238 codes, replay protection, recovery codes.
   const totpState = () => (state.totp ??= {});
@@ -1261,6 +1323,8 @@
     const allCancelled = ordersOf(bill, target).every((o) => o.status === 'CANCELLED');
     bill.status = allCancelled && m.paid === 0 ? 'VOID' : 'CLOSED';
     bill.closedAt = at;
+    // the demo's history is seeded into a fresh state: only live bills get a legal document
+    if (bill.status === 'CLOSED' && target === state) issueFiscal(bill);
     return true;
   }
 
@@ -2069,6 +2133,48 @@
       };
     })],
     ['GET', /^coupons$/, 'staff', () => COUPONS.filter((c) => !c.validUntil || Date.now() < Date.parse(c.validUntil)).map((c) => ({ ...c }))],
+    ['GET', /^fiscal\/documents$/, 'till', ({ query }) => {
+      const [from, to] = dayRange(query.get('date') || todayIso());
+      return fiscalState().documents.filter((d) => d.createdAt >= from && d.createdAt < to).sort((a, b) => b.createdAt - a.createdAt).map(fiscalView);
+    }],
+    ['GET', /^fiscal\/bills\/(\d+)$/, 'till', ({ params }) => {
+      const doc = fiscalState().documents.find((d) => d.billId === Number(params[0]));
+      if (!doc) throw new Problem(404, 'FISCAL_DOCUMENT_NOT_FOUND', `Fiscal document ${params[0]} was not found`);
+      return fiscalView(doc);
+    }],
+    ['POST', /^fiscal\/bills\/(\d+)\/invoice$/, 'till', ({ params }, body) => {
+      const taxId = String(body.taxId ?? '').trim();
+      requireFields({ name: blank(body.name) ? 'must not be blank' : null, taxId: blank(taxId) ? 'must not be blank' : null });
+      if (!(taxId.length === 10 ? isVkn(taxId) : taxId.length === 11 && isTckn(taxId))) {
+        throw new Problem(422, 'TAX_ID_INVALID', 'Enter a valid VKN (10 digits) or TCKN (11 digits)');
+      }
+      const bill = findBill(params[0]);
+      const data = fiscalState();
+      let doc = data.documents.find((d) => d.billId === bill.id);
+      if (doc && doc.status !== 'WAITING') throw new Problem(409, 'FISCAL_ALREADY_ISSUED', 'This bill already has its legal document', { parameters: { billId: bill.id } });
+      if (!doc) {
+        doc = { id: data.nextId++, billId: bill.id, status: 'WAITING', createdAt: Date.now(), attempts: 0 };
+        data.documents.push(doc);
+      }
+      Object.assign(doc, { kind: 'E_ARSIV', buyerName: String(body.name).trim(), buyerTaxId: taxId, buyerAddress: clean(body.address) });
+      if (bill.status === 'CLOSED') issueFiscal(bill);
+      save();
+      return fiscalView(doc);
+    }],
+    ['POST', /^fiscal\/documents\/(\d+)\/retry$/, 'till', ({ params }) => {
+      const doc = fiscalState().documents.find((d) => d.id === Number(params[0]));
+      if (!doc) throw new Problem(404, 'FISCAL_DOCUMENT_NOT_FOUND', `Fiscal document ${params[0]} was not found`);
+      throw new Problem(409, 'FISCAL_NOT_RETRYABLE', 'Only a document that was not issued can be tried again', { parameters: { status: doc.status } });
+    }],
+    ['GET', /^fiscal\/z-report$/, 'manager', ({ query }) => {
+      const day = query.get('date') || todayIso();
+      const [from, to] = dayRange(day);
+      const issued = fiscalState().documents.filter((d) => d.status === 'ISSUED' && d.issuedAt >= from && d.issuedAt < to);
+      const sum = (kind) => toLira(issued.filter((d) => d.kind === kind).reduce((total, d) => total + d.totalC, 0));
+      return { date: day, receipts: issued.filter((d) => d.kind === 'RECEIPT').length, receiptTotal: sum('RECEIPT'),
+        invoices: issued.filter((d) => d.kind === 'E_ARSIV').length, invoiceTotal: sum('E_ARSIV'),
+        deviceReceiptTotal: sum('RECEIPT'), difference: 0, waiting: 0 };
+    }],
     ['GET', /^channels$/, 'manager', () => Object.entries(CHANNELS).map(([channel, [label]]) => ({
       channel, label, mode: 'SIMULATED', attention: channelState().orders.filter((o) => o.channel === channel && o.status === 'ATTENTION').length,
       mappings: channelState().mappings.filter((m) => m.channel === channel).length,

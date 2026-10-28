@@ -23,7 +23,27 @@ Every sprint uses the same **definition of done**:
 | S1.5 | **Kitchen and bar printers** | ESC/POS network printers by menu category, Turkish code page, retries, failure alerts, reprint, preview. Private-network addresses only (SSRF guard). | `printing`, V10 |
 | S1.6 | **Settings** | My PIN, this till, registered tills, table QR codes, printers. | `views/settings.js` |
 
-## Sprint 2: run the business
+## Sprint 2: run the business (done)
+
+| | Feature | What it gives the restaurant | Where |
+|---|---|---|---|
+| S2.1 | **Two-step sign-in for managers** | TOTP with recovery codes, the secret sealed with AES-GCM, replays refused; step-up actions need password and code | `security`, V11 |
+| S2.2 | **Courses and kitchen stations** | Hold and fire courses; stations instead of categories for printers and kitchen screens; tick-off per dish; station time targets; VOID slips | `menu`, `order`, `printing`, V12 |
+| S2.3 | **Stock and recipe costing** | Append-only stock ledger, recipes per dish and option, deduction on completion, automatic sell-out, low-stock alerts, food cost %, use report | `inventory`, V13 |
+| S2.4 | **Offline-capable till** | Service worker app shell, IndexedDB outbox per user and till, idempotent order placement, re-pricing before sending, offline cash and card | `sw.js`, `core/offline.js`, V14 |
+| S2.5 | **Delivery platform orders** | Signed webhooks, idempotent ingestion, item mapping, attention queue, status and availability back to the platform | `channel`, V15 |
+| S2.6 | **Fiscal receipts** | One legal document per bill (ÖKC receipt or e-Arşiv invoice), retried until issued, VKN/TCKN checks, Z report reconciliation | `fiscal`, V16 |
+
+**What a live restaurant still needs.** The platform and fiscal integrations are built as ports with a generic
+JSON adapter and a simulation. Connecting to the real services takes the partners' contracts and credentials:
+
+- **Yemeksepeti, Getir Yemek, Trendyol Go:** each platform's order and menu API (partner or integrator access)
+  mapped onto the canonical webhook and the adapter's status and availability calls.
+- **Yeni nesil ÖKC:** the device vendor's GMP-3 bridge software on the till's network.
+- **e-Arşiv:** a contract with a GİB-authorised özel entegratör and its API keys; a certified PDF comes back from
+  the integrator.
+
+The plan the sprint was built from follows.
 
 Six epics, in the order they should be built. Estimates are in developer-days for one person and include tests,
 documentation and the demo.
@@ -173,6 +193,11 @@ Smaller items that came up in the research, not yet scheduled:
 **Sprint 1 (tamamlandı):** ürün seçenekleri, kayıtlı kasada PIN ile personel geçişi, masa işlemleri (iptal, ikram,
 indirim, taşıma, birleştirme; yönetici PIN onayı), masadan QR sipariş ve garson/hesap çağrısı, mutfak/bar ESC/POS
 yazıcıları ve bunları yöneten Ayarlar ekranı.
+
+**Sprint 2 (tamamlandı):** yöneticiler için iki adımlı giriş, kurslar ve mutfak istasyonları, stok ve reçete
+maliyeti, çevrimdışı kasa, Yemeksepeti/Getir/Trendyol siparişleri ve yasal belge (ÖKC fişi, e-Arşiv fatura).
+Platform ve mali entegrasyonlar port + genel JSON adaptör + simülasyon olarak hazır; canlıya bağlamak için
+platformların, ÖKC üreticisinin ve özel entegratörün sözleşme ve erişim bilgileri gerekir.
 
 **Sprint 2 (plan), sırasıyla:**
 

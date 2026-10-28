@@ -800,6 +800,12 @@ p { margin: 0; }
    Toasts
    ========================================================================== */
 .toasts { position: fixed; right: 20px; bottom: 20px; z-index: 80; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+/* An open drawer keeps its action buttons at the bottom right: toasts move beside it instead of over them. */
+body:has(.drawer) .toasts { right: calc(min(480px, 100vw) + 20px); }
+@media (max-width: 960px) {
+  body:has(.drawer) .toasts { right: 12px; left: 12px; top: 12px; bottom: auto; align-items: stretch; }
+  body:has(.drawer) .toast { min-width: 0; max-width: none; }
+}
 .toast {
   display: flex; align-items: flex-start; gap: 12px; min-width: 300px; max-width: 420px; padding: 14px 16px;
   border-radius: 16px; background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg);

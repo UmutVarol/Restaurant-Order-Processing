@@ -61,7 +61,7 @@ test('completing an unpaid order opens its bill; paying it in two cash halves co
 
 test('a guest pays their share by QR code and the bill updates live', async ({ page, request, context }) => {
   const guest = uniqueGuest('QR');
-  await servedDineInOrder(request, guest);
+  const order = await servedDineInOrder(request, guest);
   await signIn(page, 'waiter');
   const bill = await openBillFromOrders(page, guest);
 
@@ -88,6 +88,13 @@ test('a guest pays their share by QR code and the bill updates live', async ({ p
   // The till sees the payment arrive without a reload.
   await expect(bill.getByTestId('bill-due')).toHaveText('₺649.00');
   await expect(bill.locator('.bill-payment').first()).toContainText('by the guest (QR)');
+
+  // the rest is paid at the till, so the table is free for the tests that need one
+  const login = await request.post('/api/v1/auth/login', { data: { username: 'waiter', password: 'waiter123' } });
+  const headers = { Authorization: `Bearer ${(await login.json()).accessToken}` };
+  const open = await (await request.get(`/api/v1/bills/by-order/${order.id}`, { headers })).json();
+  const paid = await request.post(`/api/v1/bills/${open.id}/payments`, { headers, data: { method: 'CASH', amount: open.balance } });
+  expect(paid.ok()).toBeTruthy();
 });
 
 test('the cashier screen lists open bills and the day report for managers', async ({ page }) => {
