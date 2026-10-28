@@ -25,6 +25,10 @@ covered by an automated test.
 | Sign-out | `POST /api/v1/auth/logout` puts the token's `jti` on a denylist until it would have expired |
 | Signing key | Must be at least 256 bits. With demo mode off, the app refuses to start on the development key that ships in `application.yml` |
 | Authorisation | Role checks on every endpoint (`ADMIN`, `WAITER`, `KITCHEN`). Anything not explicitly allowed is denied |
+| Staff PINs | 4 to 6 digits, bcrypt-hashed, runs and repeats (`1234`, `1111`, `1212`) refused, and setting one needs the password. A PIN works only on a till a manager registered: the till holds a 256-bit device token (stored as SHA-256, revocable at any time) sent as `X-Device-Token` |
+| PIN guessing | Failed PINs count against their own lockout key, so a PIN attack cannot lock out the password; after three lockouts in a row the PIN is cleared and must be set again with the password. The PIN sign-in shares the 60-per-minute sign-in budget |
+| How a session signed in | Tokens carry an RFC 8176 `amr` claim (`pwd` or `pin`). Step-up actions refuse PIN sessions, so four digits watched over a shoulder never move money or register a till |
+| Idle tills | A registered till returns to the staff list after a few idle minutes (configurable per till; kitchen screens stay signed in) |
 
 ### Abuse and availability
 
@@ -83,6 +87,26 @@ covered by an automated test.
 | Provider down or slow | Calls outside database transactions with 5 s / 20 s timeouts, retries for refunds, checks for unfinished checkouts |
 
 
+### Tables, guests and printers
+
+| Control | Details |
+|---|---|
+| Voids, comps and discounts | A waiter needs a manager to approve with their PIN at the till (except voiding before the kitchen starts); a wrong PIN counts against that manager's PIN lockout. Each change is repriced like a new order and refused (`ADJUSTMENT_BELOW_PAID`) when more has been paid, or is being paid online, than the bill would come to, so a paid bill is never quietly made cheaper. Every change is kept on the order and written to `order.audit` with who asked and who approved |
+| Moving and merging tables | A seating only moves to a free table; a bill that has taken any money is never merged into another, and the emptied bill is voided so its QR payment links stop working. Both bills are locked in id order |
+| Table QR codes | 256-bit tokens stored as SHA-256 hashes, replaceable per table at any time; a code that has been replaced opens nothing |
+| Guest carts | Never reach the kitchen on their own: a waiter accepts each one, and it is then placed and priced exactly like an order from the till. Smaller limits than the till (20 lines, 20 each), at most five open requests per table, 15 s between carts and 30 s between calls, repeated calls fold into the one already waiting, request ids are random UUIDs bound to the table's token, and the public rate limit applies. Everything is written to `guest.audit` |
+| Printers (SSRF) | The server connects to printer addresses staff type in, so only private-network addresses are allowed (RFC 1918, CGNAT, loopback, IPv6 unique-local; never link-local, so not the cloud metadata service) and only ports 9100–9109 by default. The address is checked when a printer is saved and again, on the resolved IP, before every connection (DNS rebinding). Connections have connect and write timeouts and run outside database transactions |
+
+#### Threat model: tills and tables
+
+| Threat | How it is stopped |
+|---|---|
+| A waiter giving away food or discounts | Manager PIN approval, audit trail with requester and approver, metrics `sofra.orders.adjusted` |
+| A stolen or photographed PIN | Works only on a registered till, never for refunds or closing the day, lockout and clearing after repeated failures |
+| A lost tablet | Revoke the device in Settings: PIN sign-in stops on it at once |
+| Spam orders from a photographed QR code | Waiter acceptance, per-table limits and pauses, public rate limit, replace the code |
+| Using the printer setting to probe the network or cloud metadata | Private addresses and printer ports only, re-checked on the resolved address |
+
 ### Audit
 
 Payments, refunds, payment links, released checkouts and day closings are written to the `payment.audit` logger,
@@ -90,7 +114,11 @@ together with anything suspicious: unknown checkouts, unverifiable provider answ
 checkouts. They are counted in `sofra.payments`, `sofra.refunds` and `sofra.payments.suspicious{reason}`; alert on
 the last one. Route `payment.audit` and `security.audit` to append-only storage in production.
 
-Sign-ins, failures, lockouts and sign-outs are written to the `security.audit` logger. User-supplied values in
+Voids, comps, discounts, table moves and merges go to `order.audit`; guest carts, calls and QR codes to
+`guest.audit`.
+
+Sign-ins (password and PIN), failures, lockouts, sign-outs, PIN changes and till registrations are written to the
+`security.audit` logger. User-supplied values in
 these entries are stripped of control characters so they cannot forge log lines. The events are also counted in
 Micrometer as `sofra.security.login{outcome}`, `sofra.security.logout` and `sofra.security.rate_limited`, which
 can be scraped by Prometheus at `/actuator/prometheus` (admin only).

@@ -31,6 +31,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 - [REST API](#rest-api)
 - [Testing](#testing)
 - [Configuration](#configuration)
+- [Roadmap](docs/ROADMAP.md)
 - [Project history](#project-history)
 - [Türkçe özet](#türkçe-özet)
 
@@ -38,7 +39,11 @@ the floor plan tracks every open check, and the manager watches it all on a live
 
 | Area | What it does |
 |---|---|
-| **Point of sale** | Menu grouped by category, with search and dietary filters. Dine-in, takeaway or delivery, a table picker with live occupancy, per-line kitchen notes and coupons. The server prices the ticket live, and <kbd>Ctrl</kbd>+<kbd>Enter</kbd> sends it. |
+| **Point of sale** | Menu grouped by category, with search and dietary filters. Dine-in, takeaway or delivery, a table picker with live occupancy, **product options** (spice level, extras, sugar) with their extra prices, per-line kitchen notes and coupons. The server prices the ticket live, and <kbd>Ctrl</kbd>+<kbd>Enter</kbd> sends it. |
+| **Table service** | **Void** or **comp** (on the house) single units of a line, a **manual discount**, **move** a seating to another table or **merge** two tables onto one bill. A waiter needs a manager to approve with their PIN at the till; every change is repriced, audited and refused once the bill has been paid beyond it. |
+| **Ordering from the table** | Each table's **QR code** opens its menu on the guest's phone: build a cart with options, **call the waiter** or **ask for the bill**. Carts wait in the staff inbox (live, with a chime) until a waiter accepts them. |
+| **Staff PINs** | On a till a manager registered, staff switch users by tapping their name and typing a PIN; the till locks itself when idle. A PIN never authorises refunds or closing the day. |
+| **Kitchen and bar printers** | New orders print on network (ESC/POS) printers by menu category, with Turkish characters, big type for table and dishes, retries, failure alerts, reprints and a ticket preview. |
 | **Kitchen display** | Kanban board fed by **Server-Sent Events** with no polling or refresh. SLA timers turn amber, then red. One tap moves a ticket on, a time bar on each ticket shows how much of its time budget is used, and new tickets are highlighted, with an optional chime. |
 | **Floor plan** | Every table with its seats, open check, status and time seated. Tap a free table to start an order for it. |
 | **Orders** | Paginated history with full-text search (order #, guest, phone, table, address) and status, type and date filters kept in the URL. A detail drawer shows the audit timeline, cancellation with a reason and a printable receipt. |
@@ -253,6 +258,17 @@ All endpoints live under `/api/v1` and are documented in Swagger UI. Responses a
 | `GET` `POST` | `/bills/**` | Waiter, Manager | Bills, cash and card payments, QR payment links |
 | `POST` `GET` | `/payments/**` | Manager | Refunds and the end-of-day report |
 | `GET` `POST` | `/public/pay/{token}/**` | anyone with the link | The guest's QR payment page |
+| `POST` | `/auth/pin-login`, `GET /auth/pin-staff` | a registered till (`X-Device-Token`) | Switch users with a PIN |
+| `PUT` | `/auth/pin` | staff, with their password | Set my PIN |
+| `GET` `POST` `DELETE` | `/devices/**` | Manager, recent password sign-in | Register and revoke tills |
+| `POST` | `/orders/{id}/lines/{lineId}/adjust` | Waiter (with a manager's PIN), Manager | Void or comp units of a line |
+| `PUT` | `/orders/{id}/discount` | Waiter (with a manager's PIN), Manager | Set or remove a manual discount |
+| `POST` | `/tables/{id}/move`, `/tables/{id}/merge` | Waiter, Manager | Move a seating, merge two tables' bills |
+| `POST` | `/tables/{id}/qr` | Manager | A new QR code for a table (shown once) |
+| `GET` `POST` | `/public/table/{token}/**` | anyone with the table's code | Menu page, carts, calls, request status |
+| `GET` `POST` | `/guest-requests/**` | Waiter, Manager | The inbox: accept, reject, done |
+| `GET` `POST` `PUT` `DELETE` | `/printers/**`, `/print-jobs` | Manager | Printers, test page, ticket preview |
+| `POST` | `/orders/{id}/reprint` | Waiter, Manager | Print an order's tickets again |
 
 The payment endpoints are described in [docs/PAYMENTS.md](docs/PAYMENTS.md).
 
@@ -272,7 +288,7 @@ curl -s -X POST localhost:8080/api/v1/orders -H "Authorization: Bearer $TOKEN" -
 ./mvnw verify      # all tests + JaCoCo coverage gate (≥ 80 % lines)
 ```
 
-**150+ tests, ~92 % line coverage**, in four layers:
+**200 tests, ~93 % line coverage**, in four layers:
 
 | Layer | Examples |
 |---|---|
@@ -289,7 +305,9 @@ cd e2e && npm install && npx playwright install chromium && npm test   # with th
 
 They cover the waiter-to-kitchen loop over Server-Sent Events, splitting a bill and paying cash with change, a
 guest paying their share by QR code while the till updates live, the POS rules (server-side pricing, coupons,
-the 50-per-line limit, clear and undo, the kitchen note), filters kept in the URL, keyboard access to dialogs, and a check that
+the 50-per-line limit, clear and undo, the kitchen note), product options, PIN switching on a registered till,
+voids, comps and discounts with a manager's PIN, moving tables, a guest ordering from the table's QR code while
+the inbox updates live, printer setup, filters kept in the URL, keyboard access to dialogs, and a check that
 no screen scrolls sideways at 390px, in either theme.
 
 CI runs the Maven build, then the browser tests against the packaged jar, then builds the Docker image and
@@ -310,6 +328,9 @@ smoke-tests the running container.
 | `IYZICO_API_KEY` / `IYZICO_SECRET_KEY` | — | iyzico merchant keys (required with `PAYMENT_PROVIDER=IYZICO`) |
 | `IYZICO_BASE_URL` | `https://sandbox-api.iyzipay.com` | `https://api.iyzipay.com` when live |
 | `PUBLIC_BASE_URL` | taken from the request | The HTTPS address guests reach, used in QR links and the provider callback |
+| `RESTAURANT_PRINTING_ENABLED` | `true` | `false` keeps kitchen tickets queued instead of sending them |
+| `RESTAURANT_PRINTING_MIN_PORT` / `RESTAURANT_PRINTING_MAX_PORT` | `9100` / `9109` | Ports printers may be reached on (printer hosts must be on a private network) |
+| `RESTAURANT_PRINTING_LANGUAGE` | `tr` | Language of kitchen tickets, `tr` or `en` |
 
 Business rules (tax rate, delivery fee, free-delivery threshold, time zone) and the abuse limits (lockout policy,
 rate limits, body size, live connections) are under `restaurant.*` in
@@ -337,9 +358,14 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 - **Salon planı** hangi masanın dolu olduğunu, açık hesabı ve oturma süresini canlı gösterir.
 - **Yönetici paneli** ciro, sipariş sayısı, ortalama sepet ve mutfak süresini önceki dönemle karşılaştırır; en yoğun saatleri ve en çok satanları gösterir.
 - **Ödeme altyapısı:** her masa oturumu için tek hesap; eşit ya da ürüne göre bölme, nakit (para üstü), kart (POS onay kodu), bahşiş ve **QR kodla telefondan iyzico (3D Secure) ödemesi**. Ödenmeyen sipariş kapanmaz, iptal edilen sipariş iade edilir; Kasa ekranında gün sonu Z raporu ve kasa sayımı. Ayrıntılar: [docs/PAYMENTS.md](docs/PAYMENTS.md).
+- **Ürün seçenekleri:** acılık, ekstra, şeker gibi seçenekler ve ek fiyatları; mutfak fişinde ve hesapta görünür.
+- **Masa işlemleri:** adet bazında iptal ve ikram, manuel indirim, masa taşıma ve birleştirme; garson için yönetici PIN onayı, her değişiklik denetim kaydında, ödenmiş hesap sessizce ucuzlatılamaz.
+- **Masadan QR sipariş:** misafir masadaki kodu okutup menüden sepet oluşturur, garson çağırır ya da hesap ister; sepet garson onaylayınca mutfağa gider.
+- **Personel PIN'i:** yöneticinin kaydettiği kasada adını seçip PIN ile hızlı geçiş, boşta kalınca otomatik kilit; PIN ile iade ve gün kapama yapılamaz.
+- **Mutfak/bar yazıcıları:** kategoriye göre ESC/POS ağ yazıcılarına Türkçe karakterli fiş, yeniden deneme, arıza uyarısı, tekrar baskı ve önizleme.
 - **Güvenlik:** yalnızca kendi kaynağına izin veren CSP + Trusted Types (XSS/kart hırsızı script'lere karşı tarayıcı düzeyinde engel), iade ve gün kapamada yeniden şifre, sahte ödeme bildirimlerine karşı sunucudan sunucuya doğrulama, ödeme denetim kaydı; CI'da CodeQL, Trivy, OWASP ZAP ve Gitleaks.
 - JWT ile rol bazlı yetkilendirme (Yönetici / Garson / Mutfak), Flyway, PostgreSQL, Docker, OpenAPI, Prometheus metrikleri.
-- 150'yi aşkın test (birim, entegrasyon, mimari, Testcontainers) ve ~%92 kod kapsamı.
+- 200 test (birim, entegrasyon, mimari, Testcontainers) ve ~%93 kod kapsamı; 32 Playwright tarayıcı testi.
 - [DESIGN.md](DESIGN.md) ile belgelenmiş sıcak lokanta tasarımı: açık/koyu tema, Türkçe/İngilizce arayüz, mobil uyumlu düzen.
 - Playwright tarayıcı testleri: garsondan mutfağa canlı akış, POS kuralları ve 390px genişlikte taşma kontrolü.
 
