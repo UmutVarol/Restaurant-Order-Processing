@@ -145,9 +145,11 @@ public class OnlinePaymentService {
         Instant now = clock.instant();
         List<Order> orders = bill.getOrders().stream().filter(order -> order.getStatus() != OrderStatus.CANCELLED).toList();
         Map<String, Line> lines = new LinkedHashMap<>();
-        orders.stream().flatMap(order -> order.getLines().stream()).forEach(line -> lines.merge(line.getItemName(),
-                new Line(line.getItemName(), line.getItemIcon(), line.getQuantity(), line.getLineTotal()),
-                (a, b) -> new Line(a.name(), a.icon(), a.quantity() + b.quantity(), a.lineTotal().add(b.lineTotal()))));
+        orders.stream().flatMap(order -> order.getLines().stream()).forEach(line -> lines.merge(
+                line.getItemName() + '|' + line.optionSummary(),
+                new Line(line.getItemName(), line.getItemIcon(), line.optionSummary(), line.getQuantity(), line.getLineTotal()),
+                (a, b) -> new Line(a.name(), a.icon(), a.options(), a.quantity() + b.quantity(),
+                        a.lineTotal().add(b.lineTotal()))));
 
         BigDecimal due = bill.available();
         String reason = !online.enabled() ? "DISABLED"

@@ -8,6 +8,7 @@ import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openDrawer, openModal, toast } from '../core/ui.js';
 import { openBill } from './bill.js';
+import { optionsText } from './options.js';
 
 export const CATEGORIES = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'];
 export const TYPE_ICONS = { DINE_IN: 'dinein', TAKEAWAY: 'takeaway', DELIVERY: 'delivery' };
@@ -174,6 +175,7 @@ function lineItem(line) {
     h('div', null,
       h('div', { class: 'n' }, `${line.quantity} × ${line.name}`),
       h('div', { class: 'sub' }, money(line.unitPrice)),
+      line.options?.length ? h('div', { class: 'opts' }, optionsText(line.options)) : null,
       line.note ? h('div', { class: 'note' }, `“${line.note}”`) : null),
     h('div', { class: 't' }, money(line.lineTotal)));
 }
@@ -243,6 +245,7 @@ function receiptElement(order) {
     h('hr'),
     order.lines.map((line) => [
       row(`${line.quantity} × ${line.name}`, money(line.lineTotal)),
+      line.options?.length ? h('div', { style: { paddingLeft: '14px' } }, `+ ${optionsText(line.options)}`) : null,
       line.note ? h('div', { style: { paddingLeft: '14px', fontStyle: 'italic' } }, `– ${line.note}`) : null,
     ]),
     h('hr'),

@@ -8,7 +8,7 @@
 (function () {
   'use strict';
 
-  const STORE_KEY = 'sofra.demo.state.v2';
+  const STORE_KEY = 'sofra.demo.state.v3';
   const TAX_RATE_PERCENT = 10;
   const DELIVERY_FEE = 3990;           // in kuruş
   const FREE_DELIVERY_THRESHOLD = 75000;
@@ -46,6 +46,17 @@
   ].map(([id, name, description, category, price, icon, prepTimeMinutes, popular, tags]) => ({
     id, name, description, category, priceC: price * 100, icon, prepTimeMinutes, popular, tags, available: true, archived: false,
   }));
+
+  // Product options, as seeded by V6__product_options.sql: [dish id, [group, min, max, [[choice, extra lira], …]], …]
+  const OPTIONS = [
+    [7, ['Acılık', 1, 1, [['Normal', 0], ['Az acılı', 0], ['Bol acılı', 0]]], ['Ekstra', 0, 2, [['Közlenmiş domates', 25], ['Ekstra lavaş', 20]]]],
+    [8, ['Tereyağı', 1, 1, [['Normal', 0], ['Az', 0], ['Bol', 0]]], ['Ekstra', 0, 1, [['Ekstra yoğurt', 30]]]],
+    [9, ['Acılık', 1, 1, [['Acısız', 0], ['Acılı', 0]]]],
+    [10, ['Sos', 1, 1, [['Sarımsaklı yoğurt', 0], ['Sarımsaksız yoğurt', 0]]], ['Ekstra', 0, 1, [['Ekstra tereyağı', 25]]]],
+    [16, ['Yanında', 0, 2, [['Dondurma', 60], ['Kaymak', 50]]]],
+    [20, ['Şeker', 1, 1, [['Sade', 0], ['Az şekerli', 0], ['Orta', 0], ['Şekerli', 0]]]],
+    [21, ['Bardak', 1, 1, [['İnce belli', 0], ['Büyük bardak', 15]]]],
+  ];
 
   const TABLES = [['A1', 2, 'INDOOR'], ['A2', 4, 'INDOOR'], ['A3', 4, 'INDOOR'], ['A4', 6, 'INDOOR'], ['A5', 4, 'INDOOR'],
     ['A6', 8, 'INDOOR'], ['W1', 2, 'WINDOW'], ['W2', 2, 'WINDOW'], ['T1', 4, 'TERRACE'], ['T2', 4, 'TERRACE'],
@@ -120,10 +131,17 @@
   let state = null;
 
   function freshState() {
-    const menu = MENU.map((item) => ({ ...item, tags: [...item.tags] }));
+    const menu = MENU.map((item) => ({ ...item, tags: [...item.tags], optionGroups: [] }));
+    const ids = { group: 1, choice: 1 };
+    for (const [dishId, ...groups] of OPTIONS) {
+      menu.find((m) => m.id === dishId).optionGroups = groups.map(([name, minSelect, maxSelect, choices]) => ({
+        id: ids.group++, name, minSelect, maxSelect, choices: choices.map(([choice, extra]) => ({ id: ids.choice++, name: choice, priceDeltaC: extra * 100 })),
+      }));
+    }
     const orders = generateHistory(menu);
     const fresh = {
       createdAt: Date.now(), nextOrderId: 1001 + orders.length, nextMenuId: MENU.length + 1, menu, orders,
+      nextGroupId: ids.group, nextChoiceId: ids.choice,
       bills: [], links: [], sims: {}, closings: {}, nextBillId: 5001, nextPaymentId: 1, nextRefundId: 1,
     };
     seedBills(fresh);
@@ -193,12 +211,35 @@
       if (!dish || dish.archived) throw new Problem(422, 'MENU_ITEM_NOT_FOUND', `Menu item ${item.menuItemId} does not exist`, { parameters: { menuItemId: item.menuItemId } });
       if (!dish.available) throw new Problem(422, 'MENU_ITEM_UNAVAILABLE', `${dish.name} is sold out`, { parameters: { menuItemId: dish.id, name: dish.name } });
       const quantity = Number(item.quantity);
+      const options = resolveOptions(dish, item.optionIds || []);
+      const unitPriceC = dish.priceC + options.reduce((sum, o) => sum + o.priceDeltaC, 0);
       return {
-        menuItemId: dish.id, name: dish.name, icon: dish.icon, category: dish.category, unitPriceC: dish.priceC,
-        quantity, note: clean(item.note), lineTotalC: dish.priceC * quantity,
+        menuItemId: dish.id, name: dish.name, icon: dish.icon, category: dish.category, unitPriceC,
+        quantity, note: clean(item.note), lineTotalC: unitPriceC * quantity, options,
       };
     });
   }
+
+  /** Same rules as MenuItem.resolveOptions: known choices only, no group over its maximum, required groups defaulted. */
+  function resolveOptions(dish, ids) {
+    const groups = dish.optionGroups || [];
+    const wanted = new Set(ids.map(Number));
+    for (const id of wanted) {
+      if (!groups.some((g) => g.choices.some((c) => c.id === id))) {
+        throw new Problem(422, 'OPTION_NOT_FOUND', `That option does not belong to ${dish.name}`, { parameters: { menuItemId: String(id), name: dish.name } });
+      }
+    }
+    return groups.flatMap((group) => {
+      let picked = group.choices.filter((c) => wanted.has(c.id));
+      if (picked.length > group.maxSelect) {
+        throw new Problem(422, 'OPTION_LIMIT', `${group.name} allows at most ${group.maxSelect} choices`, { parameters: { group: group.name, max: group.maxSelect } });
+      }
+      if (picked.length < group.minSelect) picked = [...picked, ...group.choices.filter((c) => !picked.includes(c)).slice(0, group.minSelect - picked.length)];
+      return picked.map((c) => ({ choiceId: c.id, group: group.name, choice: c.name, priceDeltaC: c.priceDeltaC }));
+    });
+  }
+
+  const optionText = (line) => (line.options?.length ? line.options.map((o) => o.choice).join(' · ') : null);
 
   function createOrder(details, lines, coupon, at, actor) {
     const subtotal = lines.reduce((sum, line) => sum + line.lineTotalC, 0);
@@ -260,11 +301,14 @@
   const lineView = (line) => ({
     menuItemId: line.menuItemId, name: line.name, icon: line.icon, category: line.category, unitPrice: toLira(line.unitPriceC),
     quantity: line.quantity, note: line.note, lineTotal: toLira(line.lineTotalC),
+    options: (line.options || []).map((o) => ({ choiceId: o.choiceId, group: o.group, choice: o.choice, priceDelta: toLira(o.priceDeltaC) })),
   });
   const pricingView = (p) => ({ subtotal: toLira(p.subtotal), discount: toLira(p.discount), tax: toLira(p.tax), deliveryFee: toLira(p.deliveryFee), total: toLira(p.total) });
   const menuView = (m) => ({
     id: m.id, name: m.name, description: m.description, category: m.category, price: toLira(m.priceC), icon: m.icon,
     prepTimeMinutes: m.prepTimeMinutes, popular: m.popular, available: m.available && !m.archived, tags: [...m.tags].sort(),
+    optionGroups: (m.optionGroups || []).map((g) => ({ id: g.id, name: g.name, minSelect: g.minSelect, maxSelect: g.maxSelect,
+      choices: g.choices.map((c) => ({ id: c.id, name: c.name, priceDelta: toLira(c.priceDeltaC) })) })),
   });
 
   // ------------------------------------------------------------------------------------------- demo history
@@ -506,13 +550,40 @@
       price: !(Number(body.price) > 0) ? 'must be greater than or equal to 0.01' : null,
       prepTimeMinutes: body.prepTimeMinutes != null && (body.prepTimeMinutes < 0 || body.prepTimeMinutes > 240) ? 'must be between 0 and 240' : null,
     });
+    if (body.optionGroups != null) validateOptions(body.optionGroups);
     const name = String(body.name).trim();
     if (state.menu.some((m) => !m.archived && m.id !== exceptId && m.name.toLowerCase() === name.toLowerCase())) {
       throw new Problem(422, 'MENU_ITEM_NAME_TAKEN', `A menu item named '${name}' already exists`, { parameters: { name } });
     }
   }
 
+  function validateOptions(groups) {
+    const invalid = (message) => new Problem(422, 'MENU_OPTIONS_INVALID', message);
+    if (groups.length > 8) throw invalid('A dish can have at most 8 option groups');
+    const names = new Set();
+    for (const group of groups) {
+      const name = String(group.name || '').trim();
+      const choices = group.choices || [];
+      if (!name || names.has(name.toLowerCase())) throw invalid('Option groups need distinct names');
+      names.add(name.toLowerCase());
+      if (!choices.length || choices.length > 12) throw invalid(`${name} needs 1 to 12 choices`);
+      if (!(group.minSelect >= 0 && group.minSelect <= group.maxSelect && group.maxSelect <= choices.length)) throw invalid(`${name}: min ≤ max ≤ choices`);
+      const choiceNames = new Set(choices.map((c) => String(c.name || '').trim().toLowerCase()));
+      if (choiceNames.has('') || choiceNames.size !== choices.length) throw invalid(`${name}: choices need distinct names`);
+      if (choices.some((c) => Number(c.priceDelta || 0) < 0)) throw invalid('An option cannot lower the price');
+    }
+  }
+
   function applyDish(dish, body) {
+    if (body.optionGroups != null) {
+      state.nextGroupId ??= 1000;
+      state.nextChoiceId ??= 1000;
+      dish.optionGroups = body.optionGroups.map((g) => ({
+        id: state.nextGroupId++, name: String(g.name).trim(), minSelect: Number(g.minSelect), maxSelect: Number(g.maxSelect),
+        choices: g.choices.map((c) => ({ id: state.nextChoiceId++, name: String(c.name).trim(), priceDeltaC: toCents(c.priceDelta || 0) })),
+      }));
+    }
+    dish.optionGroups ??= [];
     Object.assign(dish, {
       name: String(body.name).trim(), description: clean(body.description), category: body.category, priceC: toCents(body.price),
       icon: clean(body.icon), prepTimeMinutes: Number(body.prepTimeMinutes || 0), popular: Boolean(body.popular), tags: [...(body.tags || [])],
@@ -680,7 +751,7 @@
     return {
       id: bill.id, status: bill.status, table: bill.table,
       orders: orders.map((o) => ({ id: o.id, type: o.type, status: o.status, customerName: o.customerName, subtotal: toLira(o.pricing.subtotal),
-        total: toLira(o.pricing.total), lines: o.lines.map((l) => ({ name: l.name, icon: l.icon, quantity: l.quantity, unitPrice: toLira(l.unitPriceC), lineTotal: toLira(l.lineTotalC) })) })),
+        total: toLira(o.pricing.total), lines: o.lines.map((l) => ({ name: l.name, icon: l.icon, options: optionText(l), quantity: l.quantity, unitPrice: toLira(l.unitPriceC), lineTotal: toLira(l.lineTotalC) })) })),
       total: toLira(m.total), paid: toLira(m.paid), pending: toLira(m.pending), balance: toLira(m.balance), available: toLira(m.available),
       tips: toLira(m.tips), refunded: toLira(m.refunded), settled: m.balance <= 0,
       preferredMethod: orders.length ? orders[orders.length - 1].paymentMethod : null,
@@ -842,8 +913,9 @@
       const lines = new Map();
       for (const order of ordersOf(bill).filter((o) => o.status !== 'CANCELLED')) {
         for (const l of order.lines) {
-          const line = lines.get(l.name) || { name: l.name, icon: l.icon, quantity: 0, lineTotal: 0 };
-          line.quantity += l.quantity; line.lineTotal += l.lineTotalC; lines.set(l.name, line);
+          const key = `${l.name}|${optionText(l)}`;
+          const line = lines.get(key) || { name: l.name, icon: l.icon, options: optionText(l), quantity: 0, lineTotal: 0 };
+          line.quantity += l.quantity; line.lineTotal += l.lineTotalC; lines.set(key, line);
         }
       }
       const reason = bill.status !== 'OPEN' || m.available <= 0 ? 'PAID' : Date.now() > link.expiresAt ? 'EXPIRED' : null;

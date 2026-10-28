@@ -210,7 +210,7 @@ class OrderServiceTest {
     }
 
     private static OrderLineRequest line(long menuItemId, int quantity) {
-        return new OrderLineRequest(menuItemId, quantity, null);
+        return new OrderLineRequest(menuItemId, quantity, null, null);
     }
 
     private static Order withId(Order order, long id) {

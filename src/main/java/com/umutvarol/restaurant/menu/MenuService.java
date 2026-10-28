@@ -4,6 +4,7 @@ import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.menu.dto.MenuItemRequest;
 import com.umutvarol.restaurant.menu.dto.MenuItemResponse;
+import com.umutvarol.restaurant.menu.dto.OptionGroupRequest;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -49,7 +50,8 @@ public class MenuService {
         }
         MenuItem item = new MenuItem(request.name(), request.description(), request.category(), request.price(),
                 request.icon(), request.prepTimeMinutesOrDefault(), request.popularOrDefault(), request.tags());
-        return MenuItemResponse.from(repository.save(item));
+        item.replaceOptions(specs(request));
+        return MenuItemResponse.from(repository.saveAndFlush(item));
     }
 
     public MenuItemResponse update(Long id, MenuItemRequest request) {
@@ -59,7 +61,17 @@ public class MenuService {
         }
         item.update(request.name(), request.description(), request.category(), request.price(), request.icon(),
                 request.prepTimeMinutesOrDefault(), request.popularOrDefault(), request.tags());
+        // Left out of the request, the options stay as they are; an empty list removes them.
+        if (request.optionGroups() != null) {
+            item.replaceOptions(specs(request));
+            repository.flush();
+        }
         return MenuItemResponse.from(item);
+    }
+
+    private static List<OptionGroupSpec> specs(MenuItemRequest request) {
+        return request.optionGroups() == null ? List.of()
+                : request.optionGroups().stream().map(OptionGroupRequest::toSpec).toList();
     }
 
     public MenuItemResponse changeAvailability(Long id, boolean available) {

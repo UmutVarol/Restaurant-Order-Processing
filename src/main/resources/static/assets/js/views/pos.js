@@ -6,6 +6,7 @@ import { itemCount, money } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { toast } from '../core/ui.js';
+import { chooseOptions, chosen, defaultOptionIds, optionKey, optionsPrice } from './options.js';
 import { CATEGORIES, openOrderDrawer, PAY_ICONS, totals, TYPE_ICONS } from './shared.js';
 
 const TAGS = ['VEGETARIAN', 'VEGAN', 'GLUTEN_FREE', 'SPICY'];
@@ -201,11 +202,29 @@ export default {
       return menu?.find((item) => item.id === id);
     }
 
+    // A line is "this dish, with these options, with this note"; adding the same again only raises its quantity.
+    const sameLine = (a, b) => a !== b && a.menuItemId === b.menuItemId && a.note.trim() === b.note.trim()
+      && optionKey(a.optionIds) === optionKey(b.optionIds);
+
     function addItem(item) {
-      const line = ticket.lines.find((l) => l.menuItemId === item.id && !l.note);
+      const added = { menuItemId: item.id, quantity: 1, note: '', optionIds: defaultOptionIds(item) };
+      const line = ticket.lines.find((l) => sameLine(l, added));
       if (line && line.quantity >= MAX_QUANTITY) return;
       if (line) line.quantity += 1;
-      else ticket.lines.push({ menuItemId: item.id, quantity: 1, note: '' });
+      else ticket.lines.push(added);
+      cartChanged();
+    }
+
+    async function editOptions(line) {
+      const item = menuItem(line.menuItemId);
+      const ids = await chooseOptions(item, line.optionIds);
+      if (!ids || !ticket.lines.includes(line)) return;
+      line.optionIds = ids;
+      const twin = ticket.lines.find((l) => sameLine(l, line));
+      if (twin) {
+        twin.quantity = Math.min(MAX_QUANTITY, twin.quantity + line.quantity);
+        ticket.lines.splice(ticket.lines.indexOf(line), 1);
+      }
       cartChanged();
     }
 
@@ -293,14 +312,21 @@ export default {
       mount(linesSection, h('div', { class: 'cart-lines' }, ticket.lines.map((line) => {
         const item = menuItem(line.menuItemId);
         const name = item?.name ?? `#${line.menuItemId}`;
-        const priced = quote?.lines.find((q) => q.menuItemId === line.menuItemId && (q.note || '') === (line.note || '').trim());
-        const lineTotal = priced?.lineTotal ?? (item ? item.price * line.quantity : 0);
+        const priced = quote?.lines.find((q) => q.menuItemId === line.menuItemId && (q.note || '') === (line.note || '').trim()
+          && optionKey(q.options.map((o) => o.choiceId)) === optionKey(line.optionIds));
+        const unitPrice = item ? Number(item.price) + optionsPrice(item, line.optionIds) : 0;
+        const lineTotal = priced?.lineTotal ?? unitPrice * line.quantity;
         const editing = openNote === line;
+        const picked = chosen(item, line.optionIds);
         return h('div', { class: 'cart-line' },
           h('div', { class: 'emoji' }, item?.icon || '🍽️'),
           h('div', { class: 'info' },
             h('div', { class: 'name' }, item?.name ?? `#${line.menuItemId}`),
-            h('div', { class: 'meta' }, money(item?.price ?? 0),
+            item?.optionGroups?.length ? h('button', {
+              class: 'line-options', 'data-testid': 'line-options', 'aria-label': t('options.edit', { name }),
+              onclick: () => editOptions(line),
+            }, icon('edit', 'sm'), picked.length ? picked.map((o) => o.choice).join(' · ') : t('options.choose')) : null,
+            h('div', { class: 'meta' }, money(unitPrice),
               h('button', {
                 class: ['note-btn', line.note ? 'has-note' : ''],
                 onclick: () => { openNote = editing ? null : line; renderLines(); },
@@ -429,6 +455,10 @@ export default {
     }
 
     // ------------------------------------------------------------------ server round-trips
+    const requestItems = () => ticket.lines.map(({ menuItemId, quantity, note, optionIds }) => ({
+      menuItemId, quantity, note: note.trim() || null, optionIds,
+    }));
+
     let quoteSeq = 0;
     const requestQuote = debounce(async () => {
       if (!ticket.lines.length) {
@@ -445,7 +475,7 @@ export default {
         const result = await api.quote({
           type: ticket.type,
           couponCode: ticket.couponCode || null,
-          items: ticket.lines.map(({ menuItemId, quantity, note }) => ({ menuItemId, quantity, note: note.trim() || null })),
+          items: requestItems(),
         });
         if (seq !== quoteSeq) return;
         quote = result;
@@ -478,7 +508,7 @@ export default {
           note: ticket.note.trim() || null,
           paymentMethod: ticket.paymentMethod,
           couponCode: ticket.couponCode || null,
-          items: ticket.lines.map(({ menuItemId, quantity, note }) => ({ menuItemId, quantity, note: note.trim() || null })),
+          items: requestItems(),
         });
         toast({
           title: t('pos.placed', { id: order.id }),
@@ -516,6 +546,12 @@ export default {
       if (menuResult.status === 'rejected') toast({ title: errorMessage(menuResult.reason), kind: 'error' });
       // drop lines whose dish disappeared from the menu since the ticket was started
       ticket.lines = ticket.lines.filter((line) => menuItem(line.menuItemId)?.available);
+      // options may have changed in the meantime too; keep only choices the dish still offers
+      for (const line of ticket.lines) {
+        const offered = new Set(menuItem(line.menuItemId).optionGroups?.flatMap((g) => g.choices.map((c) => c.id)) ?? []);
+        const kept = (line.optionIds ?? []).filter((id) => offered.has(id));
+        line.optionIds = kept.length || !offered.size ? kept : defaultOptionIds(menuItem(line.menuItemId));
+      }
       renderFilters();
       renderGrid();
       refreshAll();

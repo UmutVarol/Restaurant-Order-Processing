@@ -63,6 +63,6 @@ class FulfilmentValidatorTest {
 
     private static PlaceOrderRequest request(OrderType type, Long tableId, String address, String phone) {
         return new PlaceOrderRequest(type, "Ayşe", phone, tableId, address, null, PaymentMethod.CARD, null,
-                List.of(new OrderLineRequest(1L, 1, null)));
+                List.of(new OrderLineRequest(1L, 1, null, null)));
     }
 }

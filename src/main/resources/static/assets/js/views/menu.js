@@ -5,6 +5,7 @@ import { t } from '../core/i18n.js';
 import { money } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
+import { optionGroupsEditor } from './options.js';
 import { CATEGORIES } from './shared.js';
 
 const TAGS = ['VEGETARIAN', 'VEGAN', 'GLUTEN_FREE', 'SPICY'];
@@ -104,6 +105,7 @@ export default {
       };
       const popular = h('input', { type: 'checkbox', checked: draft.popular });
       const tags = TAGS.map((tag) => h('label', null, h('input', { type: 'checkbox', value: tag, checked: draft.tags.includes(tag) }), t(`tag.${tag}`)));
+      const options = optionGroupsEditor(draft.optionGroups ?? []);
       const errors = {};
       const field = (name, label, control) => {
         errors[name] = h('div', { class: 'error' });
@@ -120,6 +122,7 @@ export default {
           h('div', { class: 'grid-2' }, field('prepTimeMinutes', t('menu.prep'), inputs.prepTimeMinutes),
             h('div', { class: 'field', style: { justifyContent: 'flex-end' } }, h('label', { class: 'checkbox', style: { height: '42px' } }, popular, t('menu.popular')))),
           h('div', { class: 'field' }, h('label', null, t('menu.tags')), h('div', { class: 'tag-picker' }, tags)),
+          h('div', { class: 'field' }, h('label', null, t('options.title')), h('small', { class: 'faint' }, t('options.editorHint')), options.element),
         ],
         footer: (handle) => {
           const save = h('button', {
@@ -134,6 +137,7 @@ export default {
                 prepTimeMinutes: Number(inputs.prepTimeMinutes.value || 0),
                 popular: popular.checked,
                 tags: tags.map((label) => label.querySelector('input')).filter((box) => box.checked).map((box) => box.value),
+                optionGroups: options.value(),
               };
               save.disabled = true;
               Object.values(errors).forEach((el) => { el.textContent = ''; el.parentElement.classList.remove('invalid'); });

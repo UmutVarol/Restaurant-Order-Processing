@@ -180,7 +180,7 @@ public class OrderService {
                         "%s is sold out".formatted(menuItem.getName()),
                         Map.of("menuItemId", menuItem.getId(), "name", menuItem.getName()));
             }
-            return OrderLine.of(menuItem, item.quantity(), item.note());
+            return OrderLine.of(menuItem, item.quantity(), item.note(), menuItem.resolveOptions(item.optionIds()));
         }).toList();
     }
 

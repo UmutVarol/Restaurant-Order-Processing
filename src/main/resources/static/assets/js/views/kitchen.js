@@ -6,6 +6,7 @@ import { elapsed, minutesSince, number } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus, chime, prefs } from '../core/store.js';
 import { toast } from '../core/ui.js';
+import { optionsText } from './options.js';
 import { advanceLabel, advanceOrder, openOrderDrawer, STATUS_COLORS, typeBadge } from './shared.js';
 
 const COLUMNS = ['PENDING', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
@@ -86,6 +87,7 @@ export default {
         h('div', { class: 'ticket-items' }, order.lines.map((line) => h('div', { class: 'ticket-item' },
           h('span', { class: 'q' }, `${line.quantity}×`),
           h('span', { class: 'n' }, `${line.icon || ''} ${line.name}`),
+          line.options?.length ? h('span', { class: 'opts' }, optionsText(line.options)) : null,
           line.note ? h('span', { class: 'note' }, `↳ ${line.note}`) : null))),
         label ? h('div', { class: 'actions' }, button) : null);
     }

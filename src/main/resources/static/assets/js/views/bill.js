@@ -94,8 +94,8 @@ export function openBill(ref, user) {
           h('span', { class: 'spacer' }), h('span', { class: 'num' }, money(order.total))),
         order.lines.map((line, index) => {
           const id = `${order.id}:${index}`;
-          const content = [h('span', { class: 'emoji' }, line.icon || '🍽️'), h('span', { class: 'n' }, `${line.quantity} × ${line.name}`),
-            h('span', { class: 'num' }, money(line.lineTotal))];
+          const content = [h('span', { class: 'emoji' }, line.icon || '🍽️'), h('span', { class: 'n' }, `${line.quantity} × ${line.name}`,
+            line.options ? h('small', { class: 'opts' }, line.options) : null), h('span', { class: 'num' }, money(line.lineTotal))];
           if (!splitting || order.status === 'CANCELLED') return h('div', { class: 'bill-line' }, content);
           return h('label', { class: ['bill-line', 'pick', state.picked.has(id) ? 'on' : ''] },
             h('input', { type: 'checkbox', class: 'checkbox', checked: state.picked.has(id), onchange: (event) => {

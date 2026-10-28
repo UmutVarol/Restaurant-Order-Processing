@@ -4,6 +4,7 @@ import com.umutvarol.restaurant.payment.PaymentStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What a guest sees after scanning the QR code: the items and totals, nothing about staff or other guests.
@@ -27,7 +28,7 @@ public record PublicBillResponse(
         String provider,
         LastPayment lastPayment) {
 
-    public record Line(String name, String icon, int quantity, BigDecimal lineTotal) {
+    public record Line(String name, String icon, @Nullable String options, int quantity, BigDecimal lineTotal) {
     }
 
     public record LastPayment(PaymentStatus status, BigDecimal amount, BigDecimal tip, String failureReason,

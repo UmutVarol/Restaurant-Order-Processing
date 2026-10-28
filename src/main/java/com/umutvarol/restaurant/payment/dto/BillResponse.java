@@ -9,6 +9,7 @@ import com.umutvarol.restaurant.payment.BillStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A bill with its orders and payments. {@code balance} is what is still due, {@code available} what may still be
@@ -40,7 +41,8 @@ public record BillResponse(
                             BigDecimal total, List<Line> lines) {
     }
 
-    public record Line(String name, String icon, int quantity, BigDecimal unitPrice, BigDecimal lineTotal) {
+    public record Line(String name, String icon, @Nullable String options, int quantity, BigDecimal unitPrice,
+                       BigDecimal lineTotal) {
     }
 
     public static BillResponse from(Bill bill) {
@@ -68,7 +70,7 @@ public record BillResponse(
         return new BillOrder(order.getId(), order.getType(), order.getStatus(), order.getCustomerName(),
                 order.getPricing().subtotal(), order.getPricing().total(),
                 order.getLines().stream()
-                        .map(line -> new Line(line.getItemName(), line.getItemIcon(), line.getQuantity(),
+                        .map(line -> new Line(line.getItemName(), line.getItemIcon(), line.optionSummary(), line.getQuantity(),
                                 line.getUnitPrice(), line.getLineTotal()))
                         .toList());
     }
