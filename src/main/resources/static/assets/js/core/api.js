@@ -166,7 +166,12 @@ async function request(method, path, body, { auth = true, headers: extra = {} } 
 }
 
 export const api = {
-  login: (username, password) => request('POST', '/auth/login', { username, password }, { auth: false }),
+  login: (username, password, code) => request('POST', '/auth/login', code ? { username, password, code } : { username, password }, { auth: false }),
+  totpStatus: () => request('GET', '/auth/totp'),
+  totpSetup: (password) => request('POST', '/auth/totp/setup', { password }),
+  totpEnable: (code) => request('POST', '/auth/totp/enable', { code }),
+  totpDisable: (password, code) => request('POST', '/auth/totp/disable', { password, code }),
+  totpRecoveryCodes: (code) => request('POST', '/auth/totp/recovery-codes', { code }),
   me: () => request('GET', '/auth/me'),
   logout: () => request('POST', '/auth/logout'),
   pinLogin: (username, pin) => request('POST', '/auth/pin-login', { username, pin }, { auth: false, headers: deviceHeader() }),

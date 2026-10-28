@@ -132,6 +132,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/pin-login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/pin-staff").permitAll()
                         .requestMatchers("/api/v1/devices", "/api/v1/devices/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers("/api/v1/auth/totp", "/api/v1/auth/totp/**").hasRole(Role.ADMIN.name())
                         // Guests paying by QR link: the unguessable link token is their permission.
                         .requestMatchers("/api/v1/public/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/callback/*", "/api/v1/payments/webhook/*").permitAll()

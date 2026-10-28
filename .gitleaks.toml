@@ -12,4 +12,5 @@ regexes = [
   '''ci-secret-that-is-long-enough-0123456789''',
   '''dev-only-secret-change-me-0123456789abcdef''',
   '''local-compose-secret-change-me-0123456789abcdef''',
+  '''dGVzdC1vbmx5LWtleS10b3RwLTMyLWJ5dGVzLWxvbmc=''',
 ]

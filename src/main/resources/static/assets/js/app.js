@@ -240,6 +240,12 @@ async function onSignedIn(tokenResponse) {
   startRealtime();
   refreshKitchenBadge();
   refreshGuestBadge();
+  if (user.mfaSetupRequired) {
+    // the restaurant requires two-step sign-in for managers: set it up before anything money-sensitive
+    toast({ title: t('totp.setupRequired'), kind: 'info', timeout: 9000 });
+    navigate('settings');
+    return;
+  }
   navigate(HOME[user.role]);
 }
 

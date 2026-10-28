@@ -19,6 +19,9 @@ restaurant:
       public-requests-per-minute: 1000000
     # Tokens are cached for the whole test run; a dedicated test covers the step-up window.
     step-up-window: 1h
+    totp:
+      # a throwaway test key (32 zero-free bytes), never used outside the tests
+      encryption-key: dGVzdC1vbmx5LWtleS10b3RwLTMyLWJ5dGVzLWxvbmc=
 
 logging:
   level:

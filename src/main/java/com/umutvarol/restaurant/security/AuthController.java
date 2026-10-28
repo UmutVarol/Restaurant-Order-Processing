@@ -1,12 +1,18 @@
 package com.umutvarol.restaurant.security;
 
+import com.umutvarol.restaurant.common.error.AccessRefusedException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.common.error.TooManyRequestsException;
 import com.umutvarol.restaurant.security.dto.LoginRequest;
 import com.umutvarol.restaurant.security.dto.PinLoginRequest;
+import com.umutvarol.restaurant.security.dto.RecoveryCodesResponse;
 import com.umutvarol.restaurant.security.dto.SetPinRequest;
 import com.umutvarol.restaurant.security.dto.StaffTile;
 import com.umutvarol.restaurant.security.dto.TokenResponse;
+import com.umutvarol.restaurant.security.dto.TotpCodeRequest;
+import com.umutvarol.restaurant.security.dto.TotpPasswordRequest;
+import com.umutvarol.restaurant.security.dto.TotpSetupResponse;
+import com.umutvarol.restaurant.security.dto.TwoFactorStatus;
 import com.umutvarol.restaurant.security.dto.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -48,9 +54,11 @@ class AuthController {
     private final TokenDenylist denylist;
     private final SecurityAuditLog audit;
     private final StaffPinService pins;
+    private final TwoFactorService twoFactor;
 
     AuthController(AuthenticationManager authenticationManager, AppUserRepository users, JwtTokenService tokens,
-                   LoginAttemptService attempts, TokenDenylist denylist, SecurityAuditLog audit, StaffPinService pins) {
+                   LoginAttemptService attempts, TokenDenylist denylist, SecurityAuditLog audit, StaffPinService pins,
+                   TwoFactorService twoFactor) {
         this.authenticationManager = authenticationManager;
         this.users = users;
         this.tokens = tokens;
@@ -58,6 +66,7 @@ class AuthController {
         this.denylist = denylist;
         this.audit = audit;
         this.pins = pins;
+        this.twoFactor = twoFactor;
     }
 
     @Operation(summary = "Sign in", description = """
@@ -87,9 +96,27 @@ class AuthController {
             // response never tells an attacker which usernames exist (OWASP Authentication Cheat Sheet).
             throw new BadCredentialsException("Invalid username or password", ex);
         }
+        AppUser user = findUser(authentication.getName());
+        List<String> methods = List.of(JwtTokenService.PASSWORD);
+        if (user.isTotpEnabled()) {
+            if (request.code() == null || request.code().isBlank()) {
+                // The password was right; the client asks for the code and sends both again.
+                throw new AccessRefusedException("TOTP_REQUIRED", "Enter the code from your authenticator app.");
+            }
+            if (!twoFactor.verify(user, request.code())) {
+                audit.totpFailed(request.username(), client);
+                Optional<Duration> lockout = attempts.failed(request.username());
+                if (lockout.isPresent()) {
+                    audit.accountLocked(request.username(), client, lockout.get());
+                    throw tooManyAttempts(lockout.get());
+                }
+                throw new AccessRefusedException("TOTP_INVALID", "That code is not right.");
+            }
+            methods = List.of(JwtTokenService.PASSWORD, JwtTokenService.OTP);
+        }
         attempts.succeeded(request.username());
         audit.loginSucceeded(authentication.getName(), client);
-        return tokens.issue(findUser(authentication.getName()));
+        return tokens.issue(user, methods);
     }
 
     @Operation(summary = "Sign in with a PIN", description = """
@@ -116,6 +143,38 @@ class AuthController {
         pins.setPin(authentication.getName(), request.password(), request.pin(), http.getRemoteAddr());
     }
 
+    @Operation(summary = "Two-step sign-in status")
+    @GetMapping("/totp")
+    TwoFactorStatus totpStatus(Authentication authentication) {
+        return twoFactor.status(authentication.getName());
+    }
+
+    @Operation(summary = "Start setting up two-step sign-in", description = "Needs the password; returns the secret once.")
+    @PostMapping("/totp/setup")
+    TotpSetupResponse totpSetup(Authentication authentication, @Valid @RequestBody TotpPasswordRequest request,
+                                HttpServletRequest http) {
+        return twoFactor.setup(authentication.getName(), request.password(), http.getRemoteAddr());
+    }
+
+    @Operation(summary = "Confirm two-step sign-in with a first code", description = "Returns ten recovery codes, once.")
+    @PostMapping("/totp/enable")
+    RecoveryCodesResponse totpEnable(Authentication authentication, @Valid @RequestBody TotpCodeRequest request) {
+        return new RecoveryCodesResponse(twoFactor.enable(authentication.getName(), request.code()));
+    }
+
+    @Operation(summary = "Turn two-step sign-in off", description = "Needs the password and a code.")
+    @PostMapping("/totp/disable")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void totpDisable(Authentication authentication, @Valid @RequestBody TotpPasswordRequest request, HttpServletRequest http) {
+        twoFactor.disable(authentication.getName(), request.password(), request.code(), http.getRemoteAddr());
+    }
+
+    @Operation(summary = "New recovery codes", description = "The old ones stop working.")
+    @PostMapping("/totp/recovery-codes")
+    RecoveryCodesResponse recoveryCodes(Authentication authentication, @Valid @RequestBody TotpCodeRequest request) {
+        return new RecoveryCodesResponse(twoFactor.regenerateRecoveryCodes(authentication.getName(), request.code()));
+    }
+
     @Operation(summary = "Sign out", description = "Revokes the current access token before it expires.")
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -135,7 +194,7 @@ class AuthController {
         AppUser user = findUser(authentication.getName());
         List<String> methods = authentication.getToken().getClaimAsStringList(JwtTokenService.AMR_CLAIM);
         String method = methods == null || methods.isEmpty() ? JwtTokenService.PASSWORD : methods.getFirst();
-        return new UserResponse(user.getUsername(), user.getDisplayName(), user.getRole(), user.hasPin(), method);
+        return tokens.userResponse(user, method);
     }
 
     private AppUser findUser(String username) {

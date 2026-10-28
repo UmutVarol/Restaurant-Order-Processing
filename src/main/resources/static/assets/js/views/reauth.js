@@ -20,6 +20,8 @@ function confirmPassword() {
   return new Promise((resolve) => {
     let settled = false;
     const password = h('input', { class: 'input', id: 'reauth-password', type: 'password', autocomplete: 'current-password', autofocus: true });
+    const withCode = Boolean(currentSession()?.user?.totpEnabled);
+    const code = h('input', { class: 'input pin-input', id: 'reauth-code', autocomplete: 'one-time-code', inputmode: 'numeric', maxlength: 11 });
     const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
     const modal = openModal({
       title: t('reauth.title'),
@@ -27,6 +29,7 @@ function confirmPassword() {
       body: [
         h('p', { class: 'muted' }, t('reauth.text')),
         h('div', { class: 'field' }, h('label', { for: 'reauth-password' }, t('login.password')), password),
+        withCode ? h('div', { class: 'field' }, h('label', { for: 'reauth-code' }, t('login.code')), code) : null,
         problem,
       ],
       footer: (handle) => [
@@ -35,12 +38,13 @@ function confirmPassword() {
       ],
       onClose: () => { if (!settled) resolve(false); },
     });
-    password.addEventListener('keydown', (event) => { if (event.key === 'Enter') submit(); });
+    [password, code].forEach((input) => input.addEventListener('keydown', (event) => { if (event.key === 'Enter') submit(); }));
 
     async function submit() {
       if (!password.value) { password.focus(); return; }
+      if (withCode && !code.value.trim()) { code.focus(); return; }
       try {
-        saveSession(await api.login(username, password.value));
+        saveSession(await api.login(username, password.value, withCode ? code.value.trim() : null));
         settled = true;
         resolve(true);
         modal.close();

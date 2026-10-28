@@ -549,7 +549,8 @@
 
   const pins = () => (state.pins ??= { admin: '2468', waiter: '1357', chef: '9024' });
   const devices = () => (state.devices ??= []);
-  const userView = (username, method) => ({ username, displayName: USERS[username].displayName, role: USERS[username].role, hasPin: Boolean(pins()[username]), method });
+  const userView = (username, method) => ({ username, displayName: USERS[username].displayName, role: USERS[username].role, hasPin: Boolean(pins()[username]), method,
+    totpEnabled: Boolean(state.totp?.[username]?.enabled), mfaSetupRequired: false });
   const deviceView = (d) => ({ id: d.id, name: d.name, createdBy: d.createdBy, createdAt: iso(d.createdAt), lastSeenAt: d.lastSeenAt ? iso(d.lastSeenAt) : null, active: !d.revokedAt });
 
   function deviceFor(headers) {
@@ -696,6 +697,56 @@
       if (l.note) out.push(`   ! ${l.note}`);
     }
     return out.join('\n');
+  }
+
+  // ------------------------------------------------------------------------------------------- two-step sign-in
+  // Mirrors TwoFactorService with the browser's Web Crypto: RFC 6238 codes, replay protection, recovery codes.
+  const totpState = () => (state.totp ??= {});
+  const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const base32 = (bytes) => {
+    let bits = 0; let value = 0; let out = '';
+    for (const byte of bytes) { value = (value << 8) | byte; bits += 8; while (bits >= 5) { out += B32[(value >>> (bits - 5)) & 31]; bits -= 5; } }
+    return bits > 0 ? out + B32[(value << (5 - bits)) & 31] : out;
+  };
+  const unbase32 = (text) => {
+    let bits = 0; let value = 0; const out = [];
+    for (const c of text) { value = (value << 5) | B32.indexOf(c); bits += 5; if (bits >= 8) { out.push((value >>> (bits - 8)) & 255); bits -= 8; } }
+    return new Uint8Array(out);
+  };
+
+  async function totpCode(secret, step) {
+    const key = await crypto.subtle.importKey('raw', unbase32(secret), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+    const counter = new DataView(new ArrayBuffer(8));
+    counter.setUint32(4, step);
+    counter.setUint32(0, Math.floor(step / 2 ** 32));
+    const hash = new Uint8Array(await crypto.subtle.sign('HMAC', key, counter.buffer));
+    const offset = hash[19] & 15;
+    const binary = ((hash[offset] & 127) << 24) | (hash[offset + 1] << 16) | (hash[offset + 2] << 8) | hash[offset + 3];
+    return String(binary % 1000000).padStart(6, '0');
+  }
+
+  /** @return the matching step, or null */
+  async function verifyTotp(entry, code) {
+    if (!/^\d{6}$/.test(String(code || ''))) return null;
+    const now = Math.floor(Date.now() / 30000);
+    for (let step = now - 1; step <= now + 1; step++) {
+      if (step > (entry.lastStep || 0) && await totpCode(entry.secret, step) === code) return step;
+    }
+    return null;
+  }
+
+  async function checkSecondFactor(entry, code) {
+    const step = await verifyTotp(entry, String(code || '').trim());
+    if (step != null) { entry.lastStep = step; save(); return true; }
+    const normal = String(code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const index = (entry.recovery || []).indexOf(normal);
+    if (normal.length === 10 && index >= 0) { entry.recovery.splice(index, 1); save(); return true; }
+    return false;
+  }
+
+  function newRecoveryCodes() {
+    const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+    return Array.from({ length: 10 }, () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => alphabet[b % alphabet.length]).join(''));
   }
 
   function requireFields(errors) {
@@ -1163,10 +1214,52 @@
   }
 
   const routes = [
-    ['POST', /^auth\/login$/, 'public', (_, body) => {
+    ['GET', /^auth\/totp$/, 'manager', ({ user }) => {
+      const entry = totpState()[user.username];
+      return { enabled: Boolean(entry?.enabled), available: true, setupRequired: false, recoveryCodesLeft: entry?.enabled ? entry.recovery.length : 0 };
+    }],
+    ['POST', /^auth\/totp\/setup$/, 'manager', ({ user }, body) => {
+      if (USERS[user.username].password !== body.password) throw new Problem(403, 'PASSWORD_INCORRECT', 'The password is not correct.');
+      if (totpState()[user.username]?.enabled) throw new Problem(422, 'TOTP_ALREADY_ENABLED', 'Already on');
+      const secret = base32(crypto.getRandomValues(new Uint8Array(20)));
+      totpState()[user.username] = { secret, enabled: false, lastStep: 0, recovery: [] };
+      save();
+      return { secret, otpauthUri: `otpauth://totp/Sofra:${user.username}?secret=${secret}&issuer=Sofra&algorithm=SHA1&digits=6&period=30` };
+    }],
+    ['POST', /^auth\/totp\/enable$/, 'manager', async ({ user }, body) => {
+      const entry = totpState()[user.username];
+      if (!entry || entry.enabled) throw new Problem(422, 'TOTP_NOT_PENDING', 'Start the setup first');
+      const step = await verifyTotp(entry, String(body.code || '').trim());
+      if (step == null) throw new Problem(403, 'TOTP_INVALID', 'That code is not right.');
+      const codes = newRecoveryCodes();
+      Object.assign(entry, { enabled: true, lastStep: step, recovery: codes });
+      save();
+      return { codes: codes.map((c) => `${c.slice(0, 5)}-${c.slice(5)}`) };
+    }],
+    ['POST', /^auth\/totp\/disable$/, 'manager', async ({ user }, body) => {
+      const entry = totpState()[user.username];
+      if (USERS[user.username].password !== body.password) throw new Problem(403, 'PASSWORD_INCORRECT', 'The password is not correct.');
+      if (!entry?.enabled || !(await checkSecondFactor(entry, body.code))) throw new Problem(403, 'TOTP_INVALID', 'That code is not right.');
+      delete totpState()[user.username];
+      save();
+      return [204, null];
+    }],
+    ['POST', /^auth\/totp\/recovery-codes$/, 'manager', async ({ user }, body) => {
+      const entry = totpState()[user.username];
+      if (!entry?.enabled || !(await checkSecondFactor(entry, body.code))) throw new Problem(403, 'TOTP_INVALID', 'That code is not right.');
+      entry.recovery = newRecoveryCodes();
+      save();
+      return { codes: entry.recovery.map((c) => `${c.slice(0, 5)}-${c.slice(5)}`) };
+    }],
+    ['POST', /^auth\/login$/, 'public', async (_, body) => {
       const user = USERS[String(body.username || '').toLowerCase()];
       if (!user || user.password !== body.password) throw new Problem(401, 'BAD_CREDENTIALS', 'Invalid username or password.');
       const username = String(body.username).toLowerCase();
+      const second = totpState()[username];
+      if (second?.enabled) {
+        if (blank(body.code)) throw new Problem(403, 'TOTP_REQUIRED', 'Enter the code from your authenticator app.');
+        if (!(await checkSecondFactor(second, body.code))) throw new Problem(403, 'TOTP_INVALID', 'That code is not right.');
+      }
       return { accessToken: `demo.${username}`, tokenType: 'Bearer', expiresAt: iso(Date.now() + 8 * 60 * MINUTE), user: userView(username, 'pwd') };
     }],
     ['POST', /^auth\/pin-login$/, 'public', ({ headers }, body) => {
@@ -1600,7 +1693,7 @@
         } else if (init.body) {
           try { body = JSON.parse(init.body); } catch { throw new Problem(400, 'MALFORMED_REQUEST', 'The request body is missing or is not valid JSON of the expected shape.'); }
         }
-        const result = handler({ params: match.slice(1), query: resolved.searchParams, user, headers }, body);
+        const result = await handler({ params: match.slice(1), query: resolved.searchParams, user, headers }, body);
         if (result && typeof result.redirect === 'string') return new Response(null, { status: 303, headers: { Location: result.redirect } });
         return Array.isArray(result) && typeof result[0] === 'number' ? json(result[0], result[1]) : json(200, result);
       }

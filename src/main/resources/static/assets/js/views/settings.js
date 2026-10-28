@@ -21,10 +21,12 @@ export default {
     const devicesCard = h('div', { class: 'card settings-card' });
     const qrCard = h('div', { class: 'card settings-card' });
     const printersCard = h('div', { class: 'card settings-card' });
+    const totpCard = h('div', { class: 'card settings-card' });
+    let totp = null;
     let devices = null;
     let tables = null;
     let printers = null;
-    mount(container, h('div', { class: 'settings-grid' }, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
+    mount(container, h('div', { class: 'settings-grid' }, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
       manager ? printersCard : null));
 
     const head = (iconName, title, sub) => h('div', { class: 'card-head' },
@@ -205,6 +207,128 @@ export default {
       });
     }
 
+    // ------------------------------------------------------------------ two-step sign-in (managers)
+    function renderTotp() {
+      if (!manager) return;
+      const sub = !totp ? '' : totp.enabled ? t('totp.on') : t('totp.off');
+      mount(totpCard,
+        head('lock', t('totp.title'), sub),
+        h('div', { class: 'card-body settings-form' },
+          totp?.setupRequired ? h('div', { class: 'guest-banner info' }, icon('info', 'sm'), h('div', null, t('totp.setupRequired'))) : null,
+          h('p', { class: 'muted' }, t('totp.text')),
+          totp == null ? h('div', { class: 'skeleton', style: { height: '40px' } })
+            : !totp.available ? h('p', { class: 'faint' }, t('totp.unavailable'))
+              : totp.enabled
+                ? [
+                  h('p', { class: 'faint' }, t('totp.codesLeft', { n: totp.recoveryCodesLeft })),
+                  h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } },
+                    h('button', { class: 'btn', onclick: newRecoveryCodes }, icon('refresh', 'sm'), t('totp.newCodes')),
+                    h('button', { class: 'btn ghost danger-text', onclick: turnOff }, t('totp.turnOff'))),
+                ]
+                : h('div', null, h('button', { class: 'btn primary', 'data-testid': 'totp-setup', onclick: setUp }, icon('lock', 'sm'), t('totp.setUp')))));
+    }
+
+    /** Password, then the QR code and a first code, then the recovery codes. */
+    function setUp() {
+      const password = h('input', { class: 'input', id: 'totp-password', type: 'password', autocomplete: 'current-password' });
+      const code = h('input', { class: 'input pin-input', id: 'totp-code', autocomplete: 'one-time-code', inputmode: 'numeric', maxlength: 6 });
+      const body = h('div', { class: 'settings-form' });
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const next = h('button', { class: 'btn primary', 'data-testid': 'totp-next' }, t('totp.continue'));
+      const fail = (error) => { problem.replaceChildren(icon('alert', 'sm'), errorMessage(error)); problem.hidden = false; next.disabled = false; };
+      let stage = 'password';
+      const modal = openModal({
+        title: t('totp.title'), size: 'sm', body: [body, problem],
+        footer: (handle) => [h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')), next],
+        onClose: () => loadTotp(),
+      });
+      mount(body, h('p', { class: 'muted' }, t('totp.step1')), h('div', { class: 'field' }, h('label', { for: 'totp-password' }, t('login.password')), password));
+      password.focus();
+      next.addEventListener('click', async () => {
+        problem.hidden = true;
+        next.disabled = true;
+        try {
+          if (stage === 'password') {
+            const setup = await api.totpSetup(password.value);
+            stage = 'code';
+            mount(body,
+              h('p', { class: 'muted' }, t('totp.step2')),
+              h('div', { class: 'totp-qr' }, qrCode(setup.otpauthUri, { label: t('totp.qrLabel') })),
+              h('div', { class: 'faint', style: { fontSize: '12px' } }, t('totp.manual')),
+              h('code', { class: 'totp-secret', 'data-testid': 'totp-secret' }, setup.secret.replace(/(.{4})/g, '$1 ').trim()),
+              h('div', { class: 'field' }, h('label', { for: 'totp-code' }, t('totp.firstCode')), code));
+            code.focus();
+          } else if (stage === 'code') {
+            const result = await api.totpEnable(code.value.trim());
+            stage = 'done';
+            mount(body, recoveryList(result.codes));
+            next.replaceChildren(t('totp.saved'));
+            toast({ title: t('totp.enabled') });
+          } else {
+            modal.close();
+            return;
+          }
+          next.disabled = false;
+        } catch (error) {
+          fail(error);
+        }
+      });
+    }
+
+    function recoveryList(codes) {
+      return [
+        h('p', { class: 'muted' }, t('totp.recoveryText')),
+        h('ol', { class: 'recovery-codes', 'data-testid': 'recovery-codes' }, codes.map((c) => h('li', null, h('code', null, c)))),
+        h('button', { class: 'btn sm', onclick: async () => {
+          try { await navigator.clipboard.writeText(codes.join('\n')); toast({ title: t('totp.copied') }); } catch { /* no clipboard */ }
+        } }, icon('note', 'sm'), t('totp.copy')),
+      ];
+    }
+
+    function askCode(title, withPassword, run) {
+      const password = h('input', { class: 'input', id: 'totp-confirm-password', type: 'password', autocomplete: 'current-password' });
+      const code = h('input', { class: 'input pin-input', id: 'totp-confirm-code', autocomplete: 'one-time-code', maxlength: 11 });
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const body = h('div', { class: 'settings-form' },
+        withPassword ? h('div', { class: 'field' }, h('label', { for: 'totp-confirm-password' }, t('login.password')), password) : null,
+        h('div', { class: 'field' }, h('label', { for: 'totp-confirm-code' }, t('login.code')), code), problem);
+      const modal = openModal({
+        title, size: 'sm', body,
+        footer: (handle) => [h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')),
+          h('button', { class: 'btn primary', onclick: async () => {
+            try {
+              const result = await run(password.value, code.value.trim());
+              if (result?.codes) mount(body, recoveryList(result.codes));
+              else modal.close();
+              loadTotp();
+            } catch (error) {
+              problem.replaceChildren(icon('alert', 'sm'), errorMessage(error));
+              problem.hidden = false;
+            }
+          } }, t('totp.continue'))],
+      });
+    }
+
+    const newRecoveryCodes = () => askCode(t('totp.newCodes'), false, (_, code) => api.totpRecoveryCodes(code));
+    const turnOff = () => askCode(t('totp.turnOff'), true, async (password, code) => {
+      await api.totpDisable(password, code);
+      user.totpEnabled = false;
+      toast({ title: t('totp.disabled'), kind: 'info' });
+      return null;
+    });
+
+    async function loadTotp() {
+      if (!manager) return;
+      try {
+        totp = await api.totpStatus();
+        user.totpEnabled = totp.enabled;
+        user.mfaSetupRequired = totp.setupRequired;
+      } catch (error) {
+        toast({ title: errorMessage(error), kind: 'error' });
+      }
+      renderTotp();
+    }
+
     // ------------------------------------------------------------------ printers (managers)
     function renderPrinters() {
       if (!manager) return;
@@ -339,6 +463,8 @@ export default {
     loadTables();
     renderPrinters();
     loadPrinters();
+    renderTotp();
+    loadTotp();
     const offPrint = bus.on('print', () => loadPrinters());
     return { destroy: () => offPrint() };
   },

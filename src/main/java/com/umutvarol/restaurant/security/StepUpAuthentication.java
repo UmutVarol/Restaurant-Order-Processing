@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.security;
 
+import com.umutvarol.restaurant.common.error.AccessRefusedException;
 import com.umutvarol.restaurant.common.error.ReauthenticationRequiredException;
 import java.time.Clock;
 import java.time.Duration;
@@ -27,7 +28,8 @@ public class StepUpAuthentication {
     }
 
     /**
-     * A PIN sign-in never counts: four digits watched over a shoulder must not be enough to move money.
+     * A PIN sign-in never counts: four digits watched over a shoulder must not be enough to move money. With two-step
+     * sign-in on, the sign-in must have included a code too.
      *
      * @throws ReauthenticationRequiredException if the caller did not sign in with a password within the window
      */
@@ -36,8 +38,12 @@ public class StepUpAuthentication {
         Instant signedIn = token == null ? null : token.getIssuedAt();
         List<String> methods = token == null ? null : token.getClaimAsStringList(JwtTokenService.AMR_CLAIM);
         if (signedIn == null || signedIn.isBefore(clock.instant().minus(window))
-                || methods == null || !methods.contains(JwtTokenService.PASSWORD)) {
+                || methods == null || !methods.contains(JwtTokenService.PASSWORD)
+                || Boolean.TRUE.equals(token.getClaimAsBoolean(JwtTokenService.MFA_CLAIM)) && !methods.contains(JwtTokenService.OTP)) {
             throw new ReauthenticationRequiredException(Math.max(1, window.toMinutes()));
+        }
+        if (Boolean.TRUE.equals(token.getClaimAsBoolean(JwtTokenService.MFA_SETUP_CLAIM))) {
+            throw new AccessRefusedException("MFA_SETUP_REQUIRED", "Turn on two-step sign-in in Settings first.");
         }
     }
 }

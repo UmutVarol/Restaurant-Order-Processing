@@ -114,6 +114,10 @@ restaurant:
     max-request-body: 64KB
     # Refunds and closing the day need a sign-in at most this old (step-up authentication).
     step-up-window: 5m
+    # Two-step sign-in (TOTP) for managers; the key encrypts the stored secrets (openssl rand -base64 32).
+    totp:
+      encryption-key: ${TOTP_ENCRYPTION_KEY:}
+      required-for-managers: ${TOTP_REQUIRED_FOR_MANAGERS:false}
   realtime:
     max-subscribers: 500
     max-subscribers-per-user: 10

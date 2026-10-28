@@ -39,11 +39,13 @@ public class StaffPinService {
     private final JwtTokenService tokens;
     private final SecurityAuditLog audit;
     private final Clock clock;
+    private final PasswordConfirmation passwords;
     /** Checked against when the user does not exist, so the answer takes as long either way. */
     private final String decoyHash;
 
     StaffPinService(AppUserRepository users, PosDeviceRepository devices, PasswordEncoder encoder,
-                    LoginAttemptService attempts, JwtTokenService tokens, SecurityAuditLog audit, Clock clock) {
+                    LoginAttemptService attempts, JwtTokenService tokens, SecurityAuditLog audit, Clock clock,
+                    PasswordConfirmation passwords) {
         this.users = users;
         this.devices = devices;
         this.encoder = encoder;
@@ -51,6 +53,7 @@ public class StaffPinService {
         this.tokens = tokens;
         this.audit = audit;
         this.clock = clock;
+        this.passwords = passwords;
         this.decoyHash = encoder.encode(SecretTokens.newToken());
     }
 
@@ -59,18 +62,7 @@ public class StaffPinService {
     /** Sets the caller's own PIN. The password is required, so a PIN session cannot change a PIN. */
     @Transactional(noRollbackFor = {AccessRefusedException.class, TooManyRequestsException.class})
     public void setPin(String username, String password, String pin, String client) {
-        lockCheck(username);
-        AppUser user = users.findByUsernameIgnoreCase(username).orElseThrow(() -> new ResourceNotFoundException("user", username));
-        if (!encoder.matches(password, user.getPasswordHash())) {
-            audit.loginFailed(username, client);
-            attempts.failed(username).ifPresent(lockout -> {
-                audit.accountLocked(username, client, lockout);
-                throw locked(lockout);
-            });
-            // 403, not 401: a wrong password here must not end the session the request was made with.
-            throw new AccessRefusedException("PASSWORD_INCORRECT", "The password is not correct.");
-        }
-        attempts.succeeded(username);
+        AppUser user = passwords.confirm(username, password, client);
         requireStrong(pin);
         user.setPinHash(encoder.encode(pin));
         audit.pinSet(user.getUsername());

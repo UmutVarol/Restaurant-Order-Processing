@@ -44,14 +44,26 @@ function passwordForm({ onSignedIn, onPin }) {
   const password = h('input', { class: 'input', name: 'password', type: 'password', autocomplete: 'current-password', required: true });
   const error = h('div', { class: 'form-error', hidden: true, role: 'alert' });
   const submit = h('button', { class: 'btn primary lg block', type: 'submit' }, t('login.submit'), icon('arrowRight', 'sm'));
+  // Two-step sign-in: shown once the server says the password was right and a code is needed.
+  const code = h('input', { class: 'input pin-input', id: 'login-code', name: 'code', autocomplete: 'one-time-code', inputmode: 'numeric', maxlength: 11 });
+  const codeField = h('div', { class: 'field', hidden: true }, h('label', { for: 'login-code' }, t('login.code')), code,
+    h('small', { class: 'faint' }, t('login.codeHint')));
 
   async function signIn(user, pass) {
     error.hidden = true;
     submit.disabled = true;
     submit.replaceChildren(h('span', { class: 'spinner' }));
     try {
-      onSignedIn(await api.login(user, pass));
+      onSignedIn(await api.login(user, pass, codeField.hidden ? null : code.value.trim()));
     } catch (failure) {
+      if (failure.code === 'TOTP_REQUIRED') {
+        codeField.hidden = false;
+        submit.disabled = false;
+        submit.replaceChildren(t('login.submit'), icon('arrowRight', 'sm'));
+        code.focus();
+        return;
+      }
+      if (failure.code === 'TOTP_INVALID') code.select();
       error.replaceChildren(icon('alert', 'sm'), errorMessage(failure));
       error.hidden = false;
       submit.disabled = false;
@@ -67,6 +79,7 @@ function passwordForm({ onSignedIn, onPin }) {
   },
   h('div', { class: 'field' }, h('label', { for: 'username' }, t('login.username')), Object.assign(username, { id: 'username' })),
   h('div', { class: 'field' }, h('label', { for: 'password' }, t('login.password')), Object.assign(password, { id: 'password' })),
+  codeField,
   error,
   submit);
 

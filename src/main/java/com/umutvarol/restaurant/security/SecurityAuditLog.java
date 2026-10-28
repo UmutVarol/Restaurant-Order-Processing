@@ -66,6 +66,24 @@ class SecurityAuditLog {
         audit.warn("pin.cleared user={} reason=repeated_lockouts", clean(username));
     }
 
+    void totpEnabled(String username) {
+        audit.info("totp.enabled user={}", clean(username));
+    }
+
+    void totpDisabled(String username) {
+        audit.warn("totp.disabled user={}", clean(username));
+    }
+
+    void recoveryCodeUsed(String username) {
+        meters.counter("sofra.security.recovery_code_used").increment();
+        audit.warn("totp.recovery_code_used user={}", clean(username));
+    }
+
+    void totpFailed(String username, String client) {
+        count("totp_failure");
+        audit.warn("login.totp_failure user={} client={}", clean(username), clean(client));
+    }
+
     void deviceRegistered(Long id, String name, String by) {
         audit.info("device.registered id={} name={} by={}", id, clean(name), clean(by));
     }

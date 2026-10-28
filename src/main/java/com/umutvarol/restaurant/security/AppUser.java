@@ -40,6 +40,15 @@ public class AppUser {
     @Column(name = "pin_lockouts", nullable = false)
     private int pinLockouts;
 
+    @Column(name = "totp_secret", length = 255)
+    private String totpSecret;
+
+    @Column(name = "totp_enabled", nullable = false)
+    private boolean totpEnabled;
+
+    @Column(name = "totp_last_step", nullable = false)
+    private long totpLastStep;
+
     protected AppUser() {
         // for JPA
     }
@@ -101,5 +110,39 @@ public class AppUser {
 
     void pinAccepted() {
         pinLockouts = 0;
+    }
+
+    public boolean isTotpEnabled() {
+        return totpEnabled;
+    }
+
+    String getTotpSecret() {
+        return totpSecret;
+    }
+
+    long getTotpLastStep() {
+        return totpLastStep;
+    }
+
+    /** Starts enrolment: the secret is stored, but not required until a first code confirms it. */
+    void startTotp(String sealedSecret) {
+        this.totpSecret = sealedSecret;
+        this.totpEnabled = false;
+        this.totpLastStep = 0;
+    }
+
+    void enableTotp(long step) {
+        this.totpEnabled = true;
+        this.totpLastStep = step;
+    }
+
+    void totpUsed(long step) {
+        this.totpLastStep = step;
+    }
+
+    void disableTotp() {
+        this.totpSecret = null;
+        this.totpEnabled = false;
+        this.totpLastStep = 0;
     }
 }

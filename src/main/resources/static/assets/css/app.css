@@ -1250,3 +1250,11 @@ svg.qr { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(-
 .printer-actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .ticket-preview { max-width: 100%; overflow-x: auto; margin: 0 auto; padding: 16px; background: #fff; color: #1f1a17; border-radius: 6px;
   box-shadow: var(--shadow-sm); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+
+/* ---------- two-step sign-in ---------- */
+.totp-qr { display: flex; justify-content: center; }
+.totp-qr .qr { width: 200px; height: 200px; border-radius: 12px; }
+.totp-secret { display: block; text-align: center; font: 600 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em;
+  padding: 10px; border-radius: 10px; background: var(--surface-2); word-break: break-all; }
+.recovery-codes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; padding-left: 22px; margin: 0; }
+.recovery-codes code { font: 600 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
