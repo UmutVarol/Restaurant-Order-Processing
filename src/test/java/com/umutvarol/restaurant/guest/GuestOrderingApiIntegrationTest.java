@@ -67,6 +67,11 @@ class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
         mvc.perform(as(ADMIN, post("/api/v1/guest-requests/{id}/accept", id)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("GUEST_REQUEST_HANDLED"));
+
+        // leave the table free: the test context (and its tables) is shared with the payment tests
+        mvc.perform(json(as(WAITER, post("/api/v1/orders/{id}/cancel", orderId)), """
+                        {"reason": "Test finished"}"""))
+                .andExpect(status().isOk());
     }
 
     @Test
