@@ -19,10 +19,14 @@ export default {
     let bills = null;
     let report = null;
     let date = today();
+    let fiscal = null;
+    let zReport = null;
     const billsCard = h('div', { class: 'card' });
     const reportCard = h('div', { class: 'card' });
+    const fiscalCard = h('div', { class: 'card fiscal-card' });
     const kpis = h('div', { class: 'kpis cashier-kpis' });
-    mount(container, manager ? kpis : null, h('div', { class: manager ? 'cashier-grid' : '' }, billsCard, manager ? reportCard : null));
+    mount(container, manager ? kpis : null, h('div', { class: manager ? 'cashier-grid' : '' },
+      h('div', { class: 'cashier-left' }, billsCard, fiscalCard), manager ? reportCard : null));
 
     function renderBills() {
       const head = h('div', { class: 'card-head' }, h('div', null, h('div', { class: 'card-title' }, t('cashier.openBills')),
@@ -123,6 +127,40 @@ export default {
         } }, icon('archive', 'sm'), t('cashier.closeDay')));
     }
 
+    // ------------------------------------------------------------------ legal documents
+    function renderFiscal() {
+      const head = h('div', { class: 'card-head' }, h('div', null, h('div', { class: 'card-title' }, t('fiscal.today')),
+        h('div', { class: 'card-sub' }, t('fiscal.todaySub'))));
+      if (!fiscal) {
+        mount(fiscalCard, head, h('div', { class: 'card-body' }, h('div', { class: 'skeleton', style: { height: '60px' } })));
+        return;
+      }
+      const waiting = fiscal.filter((d) => d.status === 'PENDING' || d.status === 'FAILED');
+      mount(fiscalCard, head,
+        zReport ? h('div', { class: ['z-check', zReport.difference != null && Number(zReport.difference) !== 0 ? 'off' : ''], 'data-testid': 'z-check' },
+          h('span', null, t('fiscal.zLine', { receipts: zReport.receipts, receiptTotal: money(zReport.receiptTotal), invoices: zReport.invoices, invoiceTotal: money(zReport.invoiceTotal) })),
+          h('b', null, zReport.deviceReceiptTotal == null ? t('fiscal.zUnknown')
+            : Number(zReport.difference) === 0 ? t('fiscal.zMatches') : t('fiscal.zDiffers', { amount: money(zReport.difference) }))) : null,
+        waiting.length ? h('div', { class: 'form-error', 'data-testid': 'fiscal-waiting-count' }, icon('alert', 'sm'), t('fiscal.waitingCount', { n: waiting.length })) : null,
+        fiscal.length ? h('ul', { class: 'fiscal-list', 'data-testid': 'fiscal-list' }, fiscal.slice(0, 12).map((d) => h('li', { class: `f-${d.status}` },
+          h('span', { class: `pill f-${d.status}` }, t(`fiscal.status.${d.status}`)),
+          h('div', null, h('b', null, `${t(`fiscal.kind.${d.kind}`)} ${d.documentNumber ?? ''}`),
+            h('small', { class: 'faint block' }, `${t('bill.number', { id: d.billId })}${d.total != null ? ` · ${money(d.total)}` : ''}${d.simulated ? ` · ${t('fiscal.simulated')}` : ''}`),
+            d.lastError && d.status !== 'ISSUED' ? h('small', { class: 'danger-text block' }, d.lastError) : null),
+          d.status === 'FAILED' || d.status === 'PENDING' ? h('button', { class: 'btn sm', onclick: async () => {
+            try { await api.retryFiscal(d.id); } catch (error) { toast({ title: errorMessage(error), kind: 'error' }); }
+            loadFiscal();
+          } }, icon('refresh', 'sm'), t('fiscal.retry')) : null)))
+          : h('p', { class: 'muted card-body' }, t('fiscal.noneToday')));
+    }
+
+    async function loadFiscal() {
+      const [documents, z] = await Promise.allSettled([api.fiscalDocuments(), manager ? api.zReport() : Promise.resolve(null)]);
+      fiscal = documents.status === 'fulfilled' ? documents.value : [];
+      zReport = z.status === 'fulfilled' ? z.value : null;
+      renderFiscal();
+    }
+
     function kpi(iconName, label, value, sub) {
       return h('div', { class: 'card kpi' },
         h('div', { class: 'label' }, h('span', { class: 'ic' }, icon(iconName, 'sm')), label),
@@ -152,17 +190,23 @@ export default {
     }
 
     const reload = debounce(() => { loadBills(); if (date === today()) loadReport(); }, 250);
+    const reloadFiscal = debounce(loadFiscal, 300);
     const offPayment = bus.on('payment', reload);
     const offOrder = bus.on('order', reload);
+    const offFiscal = bus.on('fiscal', reloadFiscal);
     renderBills();
     renderReport();
+    renderFiscal();
     loadBills();
     loadReport();
+    loadFiscal();
     return {
       destroy() {
         offPayment();
         offOrder();
+        offFiscal();
         reload.cancel();
+        reloadFiscal.cancel();
       },
     };
   },

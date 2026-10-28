@@ -6,6 +6,8 @@ spring:
 restaurant:
   demo:
     enabled: false
+  fiscal:
+    simulate-unconfigured: true
   channels:
     # Yemeksepeti is connected with a throwaway secret; the other platforms are simulations
     simulate-unconfigured: true

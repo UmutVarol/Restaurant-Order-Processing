@@ -150,6 +150,16 @@ restaurant:
       webhook-secret: ${TRENDYOL_WEBHOOK_SECRET:}
       api-base-url: ${TRENDYOL_API_BASE_URL:}
       api-token: ${TRENDYOL_API_TOKEN:}
+  # Legal documents. The ÖKC bridge runs on the till's network (GMP-3 vendor software); the e-Arşiv integrator is
+  # a GİB-authorised özel entegratör. Not set up: simulated in demo mode, not issued at all otherwise.
+  fiscal:
+    retry-interval: 60s
+    okc:
+      base-url: ${FISCAL_OKC_BRIDGE_URL:}
+      api-key: ${FISCAL_OKC_API_KEY:}
+    e-arsiv:
+      base-url: ${FISCAL_EARSIV_BASE_URL:}
+      api-key: ${FISCAL_EARSIV_API_KEY:}
   demo:
     enabled: ${DEMO_MODE:true}
     history-days: 14

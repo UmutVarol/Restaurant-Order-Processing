@@ -38,7 +38,7 @@ export function openBill(ref, user) {
     title: t('bill.title'),
     size: 'lg',
     body,
-    onClose: () => { offPayment(); offOrder(); },
+    onClose: () => { offPayment(); offOrder(); offFiscal(); },
   });
 
   async function load() {
@@ -47,12 +47,26 @@ export function openBill(ref, user) {
       ref = { billId: bill.id };
       failed = false;
       if (state.amount == null || cents(state.amount) > cents(bill.available)) state.amount = bill.available;
+      loadFiscal();
     } catch (error) {
       failed = true;
       if (error instanceof ApiError && error.status === 403) toast({ title: errorMessage(error), kind: 'error' });
     }
     render();
   }
+
+  // the bill's legal document (ÖKC receipt or e-Arşiv invoice); undefined until asked, null when there is none
+  let fiscal;
+  async function loadFiscal() {
+    if (!bill) return;
+    try {
+      fiscal = await api.fiscalForBill(bill.id);
+    } catch (error) {
+      fiscal = null;
+    }
+    render();
+  }
+  const offFiscal = bus.on('fiscal', (event) => { if (bill && event.billId === bill.id) loadFiscal(); });
 
   const offPayment = bus.on('payment', (event) => { if (bill && event.billId === bill.id) load(); });
   const offOrder = bus.on('order', (event) => { if (bill?.orders.some((order) => order.id === event.orderId)) load(); });
@@ -79,7 +93,7 @@ export function openBill(ref, user) {
           h('span', null, open ? t('bill.due') : t('bill.paid')),
           h('b', { 'data-testid': 'bill-due' }, money(open ? bill.balance : bill.paid)))),
       h('div', { class: 'bill-grid' },
-        h('div', { class: 'bill-left' }, ordersSection(), summary(), paymentsSection()),
+        h('div', { class: 'bill-left' }, ordersSection(), summary(), paymentsSection(), fiscalSection()),
         open ? payPanel() : closedPanel()));
   }
 
@@ -316,6 +330,65 @@ export function openBill(ref, user) {
     } catch {
       toast({ title: text, kind: 'info' });
     }
+  }
+
+  // ------------------------------------------------------------------------- legal document
+
+  function fiscalSection() {
+    if (fiscal === undefined || bill.status === 'VOID') return null;
+    const canAsk = !fiscal || fiscal.status === 'WAITING';
+    let content;
+    if (!fiscal) {
+      content = h('p', { class: 'muted' }, bill.status === 'OPEN' ? t('fiscal.onPayment') : t('fiscal.none'));
+    } else if (fiscal.status === 'ISSUED') {
+      content = h('div', { class: 'fiscal-doc', 'data-testid': 'fiscal-issued' },
+        h('b', null, `${t(`fiscal.kind.${fiscal.kind}`)} ${fiscal.documentNumber}`),
+        fiscal.buyerName ? h('small', null, `${fiscal.buyerName} · ${fiscal.buyerTaxId}`) : null,
+        h('small', { class: 'faint' }, dateTime(fiscal.issuedAt)),
+        fiscal.simulated ? h('span', { class: 'pill plain' }, t('fiscal.simulated')) : null,
+        fiscal.pdfUrl ? h('a', { class: 'btn sm ghost', href: fiscal.pdfUrl, target: '_blank', rel: 'noopener noreferrer' }, icon('eye', 'sm'), 'PDF') : null);
+    } else if (fiscal.status === 'WAITING') {
+      content = h('p', { class: 'muted', 'data-testid': 'fiscal-waiting' }, t('fiscal.waiting', { name: fiscal.buyerName, taxId: fiscal.buyerTaxId }));
+    } else {
+      content = h('div', { class: 'form-error', 'data-testid': 'fiscal-failed' }, icon('alert', 'sm'),
+        t('fiscal.notIssued', { error: fiscal.lastError ?? '' }),
+        h('button', { class: 'btn sm', onclick: async () => {
+          try { fiscal = await api.retryFiscal(fiscal.id); } catch (error) { toast({ title: errorMessage(error), kind: 'error' }); }
+          render();
+        } }, icon('refresh', 'sm'), t('fiscal.retry')));
+    }
+    return h('section', null, h('div', { class: 'section-title' }, h('h3', null, t('fiscal.title'))), content,
+      canAsk ? h('button', { class: 'btn sm', 'data-testid': 'request-invoice', onclick: invoiceDialog }, icon('receipt', 'sm'),
+        fiscal ? t('fiscal.changeInvoice') : t('fiscal.askInvoice')) : null);
+  }
+
+  function invoiceDialog() {
+    const name = h('input', { class: 'input', id: 'invoice-name', maxlength: 120, autocomplete: 'off', value: fiscal?.buyerName ?? '' });
+    const taxId = h('input', { class: 'input', id: 'invoice-tax', inputmode: 'numeric', maxlength: 11, autocomplete: 'off' });
+    const address = h('textarea', { class: 'textarea', id: 'invoice-address', rows: 2, maxlength: 255 });
+    const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+    const field = (id, label, control) => h('div', { class: 'field' }, h('label', { for: id }, label), control);
+    openModal({
+      title: t('fiscal.askInvoice'),
+      size: 'sm',
+      body: [h('p', { class: 'muted' }, t('fiscal.invoiceText')), field('invoice-name', t('fiscal.buyer'), name),
+        field('invoice-tax', t('fiscal.taxId'), taxId), field('invoice-address', t('fiscal.address'), address), problem],
+      footer: (handle) => [
+        h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')),
+        h('button', { class: 'btn primary', 'data-testid': 'save-invoice', onclick: async () => {
+          problem.hidden = true;
+          try {
+            fiscal = await api.requestInvoice(bill.id, { name: name.value.trim(), taxId: taxId.value.replace(/\s/g, ''), address: address.value.trim() || null });
+            toast({ title: fiscal.status === 'ISSUED' ? t('fiscal.invoiceIssued') : t('fiscal.invoiceNoted') });
+            handle.close();
+            render();
+          } catch (error) {
+            problem.replaceChildren(icon('alert', 'sm'), errorMessage(error));
+            problem.hidden = false;
+          }
+        } }, icon('check', 'sm'), t('common.save')),
+      ],
+    });
   }
 
   // ------------------------------------------------------------------------- after closing

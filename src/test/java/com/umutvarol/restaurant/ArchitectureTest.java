@@ -27,7 +27,7 @@ class ArchitectureTest {
             .should().dependOnClassesThat().resideInAnyPackage(
                     "..restaurant.menu..", "..restaurant.order..", "..restaurant.table..", "..restaurant.coupon..",
                     "..restaurant.floor..", "..restaurant.analytics..", "..restaurant.realtime..",
-                    "..restaurant.security..", "..restaurant.bootstrap..", "..restaurant.payment..", "..restaurant.guest..", "..restaurant.printing..", "..restaurant.inventory..", "..restaurant.channel..");
+                    "..restaurant.security..", "..restaurant.bootstrap..", "..restaurant.payment..", "..restaurant.guest..", "..restaurant.printing..", "..restaurant.inventory..", "..restaurant.channel..", "..restaurant.fiscal..");
 
     @ArchTest
     static final ArchRule controllersTalkToServicesNotRepositories = noClasses()

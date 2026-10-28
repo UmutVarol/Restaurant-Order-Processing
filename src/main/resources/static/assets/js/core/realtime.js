@@ -86,7 +86,7 @@ function parse(block) {
 }
 
 function dispatch(event) {
-  if (!['order', 'payment', 'guest', 'print', 'stock'].includes(event.type) || event.data.length === 0) return;
+  if (!['order', 'payment', 'guest', 'print', 'stock', 'fiscal'].includes(event.type) || event.data.length === 0) return;
   try {
     bus.emit(event.type, JSON.parse(event.data.join('\n')));
   } catch { /* ignore malformed event */ }
