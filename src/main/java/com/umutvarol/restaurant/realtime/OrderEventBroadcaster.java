@@ -3,6 +3,7 @@ package com.umutvarol.restaurant.realtime;
 import com.umutvarol.restaurant.common.error.TooManyRequestsException;
 import com.umutvarol.restaurant.guest.GuestRequestChangedEvent;
 import com.umutvarol.restaurant.order.OrderChangedEvent;
+import com.umutvarol.restaurant.printing.PrintJobChangedEvent;
 import com.umutvarol.restaurant.payment.PaymentChangedEvent;
 import java.io.IOException;
 import java.time.Duration;
@@ -81,6 +82,12 @@ public class OrderEventBroadcaster {
     public void onGuestRequest(GuestRequestChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
         broadcast(() -> SseEmitter.event().id(id).name("guest").data(event, MediaType.APPLICATION_JSON));
+    }
+
+    @TransactionalEventListener
+    public void onPrintJob(PrintJobChangedEvent event) {
+        String id = Long.toString(sequence.incrementAndGet());
+        broadcast(() -> SseEmitter.event().id(id).name("print").data(event, MediaType.APPLICATION_JSON));
     }
 
     @TransactionalEventListener

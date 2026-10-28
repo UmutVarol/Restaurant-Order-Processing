@@ -163,6 +163,16 @@ function drawerContent(order, user, handle, run) {
         },
       }, icon('x', 'sm'), t('detail.cancel')) : null,
       h('button', { class: 'btn', onclick: () => openReceipt(order) }, icon('printer', 'sm'), t('detail.print')),
+      staff && order.status !== 'CANCELLED' ? h('button', {
+        class: 'btn', 'data-testid': 'reprint', title: t('printing.reprintHint'), onclick: async () => {
+          try {
+            const jobs = await api.reprint(order.id);
+            toast({ title: t('printing.reprinted', { n: jobs.length }) });
+          } catch (error) {
+            toast({ title: errorMessage(error), kind: 'error' });
+          }
+        },
+      }, icon('kitchen', 'sm'), t('printing.reprint')) : null,
       staff ? h('button', { class: 'btn', 'data-testid': 'open-bill', onclick: () => openBill({ orderId: order.id }, user) },
         icon('receipt', 'sm'), t('bill.open')) : null,
       order.nextStatus ? h('button', { class: 'btn primary', onclick: () => run(() => advanceOrder(order, user)) },

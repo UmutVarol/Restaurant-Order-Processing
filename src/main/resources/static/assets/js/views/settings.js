@@ -4,6 +4,7 @@ import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { dateTime } from '../core/format.js';
 import { api, currentDevice, errorMessage, forgetDevice, saveDevice, updateDevice } from '../core/api.js';
+import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
 import { qrCode } from './qr.js';
 import { withRecentSignIn } from './reauth.js';
@@ -19,9 +20,12 @@ export default {
     const deviceCard = h('div', { class: 'card settings-card' });
     const devicesCard = h('div', { class: 'card settings-card' });
     const qrCard = h('div', { class: 'card settings-card' });
+    const printersCard = h('div', { class: 'card settings-card' });
     let devices = null;
     let tables = null;
-    mount(container, h('div', { class: 'settings-grid' }, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null));
+    let printers = null;
+    mount(container, h('div', { class: 'settings-grid' }, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
+      manager ? printersCard : null));
 
     const head = (iconName, title, sub) => h('div', { class: 'card-head' },
       h('span', { class: 'settings-ic' }, icon(iconName, 'sm')),
@@ -201,6 +205,110 @@ export default {
       });
     }
 
+    // ------------------------------------------------------------------ printers (managers)
+    function renderPrinters() {
+      if (!manager) return;
+      mount(printersCard,
+        head('printer', t('printing.title'), t('printing.sub')),
+        h('div', { class: 'card-body settings-form' },
+          h('p', { class: 'muted' }, t('printing.text')),
+          printers == null ? h('div', { class: 'skeleton', style: { height: '80px' } })
+            : printers.length ? h('div', { class: 'printer-list' }, printers.map((printer) => h('div', { class: ['printer-row', printer.enabled ? '' : 'off'] },
+              h('div', { class: 'printer-info' },
+                h('b', null, printer.name, printer.enabled ? null : h('span', { class: 'pill plain', style: { marginLeft: '8px' } }, t('printing.off'))),
+                h('small', null, `${printer.host}:${printer.port} · ${printer.paperWidth} mm · ${printer.categories.map((c) => t(`cat.${c}`)).join(', ')}`),
+                printer.lastError ? h('small', { class: 'danger-text' }, icon('alert', 'sm'), ` ${printer.lastError}`)
+                  : printer.lastPrintedAt ? h('small', { class: 'faint' }, t('printing.lastPrinted', { at: dateTime(printer.lastPrintedAt) })) : null),
+              h('div', { class: 'printer-actions' },
+                h('button', { class: 'btn sm ghost', onclick: () => preview(printer) }, icon('eye', 'sm'), t('printing.preview')),
+                h('button', { class: 'btn sm ghost', 'data-testid': `test-${printer.name}`, onclick: () => testPage(printer) }, icon('printer', 'sm'), t('printing.test')),
+                h('button', { class: 'btn sm ghost', onclick: () => editPrinter(printer) }, icon('edit', 'sm'), t('common.edit'))))))
+              : h('div', { class: 'empty', style: { padding: '18px' } }, h('div', { class: 'art' }, '🖨️'), h('h4', null, t('printing.none'))),
+          h('div', null, h('button', { class: 'btn', 'data-testid': 'add-printer', onclick: () => editPrinter(null) }, icon('plus', 'sm'), t('printing.add')))));
+    }
+
+    function editPrinter(printer) {
+      const draft = printer ?? { name: '', host: '192.168.1.', port: 9100, paperWidth: 80, categories: ['STARTER', 'MAIN'], enabled: true };
+      const input = (id, value, extra = {}) => h('input', { class: 'input', id, value, ...extra });
+      const name = input('printer-name', draft.name, { maxlength: 40 });
+      const host = input('printer-host', draft.host, { maxlength: 100, inputmode: 'decimal', autocomplete: 'off' });
+      const port = input('printer-port', draft.port, { type: 'number', min: 1, max: 65535 });
+      const width = h('select', { class: 'select', id: 'printer-width' }, [80, 58].map((w) => h('option', { value: w, selected: draft.paperWidth === w }, `${w} mm`)));
+      const boxes = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'].map((c) => h('label', null,
+        h('input', { type: 'checkbox', value: c, checked: draft.categories.includes(c) }), t(`cat.${c}`)));
+      const enabled = h('input', { type: 'checkbox', checked: draft.enabled });
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const field = (id, label, control) => h('div', { class: 'field' }, h('label', { for: id }, label), control);
+      const modal = openModal({
+        title: printer ? t('printing.edit', { name: printer.name }) : t('printing.add'),
+        size: 'sm',
+        body: [
+          field('printer-name', t('printing.name'), name),
+          h('div', { class: 'grid-2' }, field('printer-host', t('printing.host'), host), field('printer-port', t('printing.port'), port)),
+          h('small', { class: 'faint' }, t('printing.hostHint')),
+          field('printer-width', t('printing.paper'), width),
+          h('div', { class: 'field' }, h('span', { class: 'label' }, t('printing.categories')), h('div', { class: 'tag-picker' }, boxes)),
+          h('label', { class: 'checkbox' }, enabled, t('printing.enabled')),
+          problem,
+        ],
+        footer: (handle) => [
+          printer ? h('button', { class: 'btn ghost danger-text', onclick: async () => {
+            if (!(await confirmDialog({ title: t('printing.removeTitle', { name: printer.name }), text: t('printing.removeText'), confirmLabel: t('printing.remove'), danger: true }))) return;
+            try { await api.deletePrinter(printer.id); handle.close(); loadPrinters(); } catch (error) { toast({ title: errorMessage(error), kind: 'error' }); }
+          } }, t('printing.remove')) : null,
+          h('span', { style: { flex: 1 } }),
+          h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')),
+          h('button', { class: 'btn primary', 'data-testid': 'save-printer', onclick: async () => {
+            problem.hidden = true;
+            try {
+              await api.savePrinter(printer?.id, {
+                name: name.value.trim(), host: host.value.trim(), port: Number(port.value), paperWidth: width.value,
+                categories: boxes.map((label) => label.querySelector('input')).filter((box) => box.checked).map((box) => box.value),
+                enabled: enabled.checked,
+              });
+              toast({ title: t('settings.saved') });
+              modal.close();
+              loadPrinters();
+            } catch (error) {
+              problem.replaceChildren(icon('alert', 'sm'), errorMessage(error));
+              problem.hidden = false;
+            }
+          } }, icon('check', 'sm'), t('common.save')),
+        ],
+      });
+    }
+
+    async function testPage(printer) {
+      try {
+        await api.testPrinter(printer.id);
+        toast({ title: t('printing.testSent', { name: printer.name }) });
+      } catch (error) {
+        toast({ title: errorMessage(error), kind: 'error' });
+      }
+    }
+
+    async function preview(printer) {
+      try {
+        const ticket = await api.previewTicket(printer.id);
+        openModal({ title: t('printing.previewTitle', { name: printer.name }), size: 'sm',
+          body: h('pre', { class: 'ticket-preview', style: { width: `${ticket.columns + 2}ch` } }, ticket.text),
+          footer: (handle) => [h('button', { class: 'btn primary', onclick: handle.close }, t('common.close'))] });
+      } catch (error) {
+        toast({ title: errorMessage(error), kind: 'error' });
+      }
+    }
+
+    async function loadPrinters() {
+      if (!manager) return;
+      try {
+        printers = await api.printers();
+      } catch (error) {
+        printers = [];
+        toast({ title: errorMessage(error), kind: 'error' });
+      }
+      renderPrinters();
+    }
+
     async function loadTables() {
       if (!manager) return;
       try {
@@ -229,6 +337,9 @@ export default {
     loadDevices();
     renderQr();
     loadTables();
-    return null;
+    renderPrinters();
+    loadPrinters();
+    const offPrint = bus.on('print', () => loadPrinters());
+    return { destroy: () => offPrint() };
   },
 };

@@ -660,6 +660,44 @@
     return request;
   }
 
+  // ------------------------------------------------------------------------------------------- printers
+  // Mirrors PrintingService, except that a browser cannot open a socket: in the demo a ticket "prints" at once.
+  const printers = () => (state.printers ??= []);
+
+  function privateIPv4(host) {
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+    if (!m) return false;
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+
+  function validatePrinter(body, exceptId) {
+    requireFields({ name: blank(body.name) ? 'must not be blank' : null, categories: !(body.categories || []).length ? 'must not be empty' : null });
+    if (!privateIPv4(String(body.host || '').trim())) throw new Problem(422, 'PRINTER_HOST_NOT_ALLOWED', 'Not on the local network', { parameters: { host: String(body.host) } });
+    if (!(body.port >= 9100 && body.port <= 9109)) throw new Problem(422, 'PRINTER_PORT_NOT_ALLOWED', 'Port not allowed', { parameters: { min: 9100, max: 9109 } });
+    const name = String(body.name).trim();
+    if (printers().some((p) => p.id !== exceptId && p.name.toLowerCase() === name.toLowerCase())) throw new Problem(422, 'PRINTER_NAME_TAKEN', 'Taken', { parameters: { name } });
+  }
+
+  const printerView = (p) => ({ ...p });
+
+  function ticketText(printer, order) {
+    const cols = printer.paperWidth === 58 ? 32 : 48;
+    const center = (text) => ' '.repeat(Math.max(0, Math.floor((cols - text.length) / 2))) + text;
+    const out = [center(printer.name.toUpperCase())];
+    if (!order) {
+      out.push(center('TEST SAYFASI'), `${printer.host}:${printer.port}`, '-'.repeat(cols), 'Yazici hazir. Turkce: ÇĞİÖŞÜ çğıöşü');
+      return out.join('\n');
+    }
+    out.push(center(order.table ? `MASA ${order.table.code}` : `PAKET #${order.id}`), `#${order.id}  ${order.createdBy || ''}  ${order.customerName}`, '-'.repeat(cols));
+    for (const l of order.lines.filter((x) => printer.categories.includes(x.category) && x.quantity > (x.voided || 0))) {
+      out.push(`${l.quantity - (l.voided || 0)} X ${l.name.toUpperCase()}`);
+      if (optionText(l)) out.push(`   + ${optionText(l)}`);
+      if (l.note) out.push(`   ! ${l.note}`);
+    }
+    return out.join('\n');
+  }
+
   function requireFields(errors) {
     const list = Object.entries(errors).filter(([, message]) => message).map(([field, message]) => ({ field, message }));
     if (list.length) throw new Problem(400, 'VALIDATION_FAILED', 'One or more fields are invalid.', { errors: list });
@@ -1454,6 +1492,52 @@
       qr().issued[table.id] = Date.now();
       save();
       return { tableId: table.id, tableCode: table.code, token, issuedAt: iso(qr().issued[table.id]) };
+    }],
+    ['GET', /^printers$/, 'manager', () => [...printers()].sort((a, b) => a.name.localeCompare(b.name)).map(printerView)],
+    ['POST', /^printers$/, 'manager', (_, body) => {
+      validatePrinter(body, null);
+      state.nextPrinterId ??= 1;
+      const printer = { id: state.nextPrinterId++, name: String(body.name).trim(), host: String(body.host).trim(), port: Number(body.port),
+        paperWidth: Number(body.paperWidth), categories: [...body.categories].sort(), enabled: Boolean(body.enabled), lastPrintedAt: null, lastError: null };
+      printers().push(printer);
+      save();
+      return [201, printerView(printer)];
+    }],
+    ['PUT', /^printers\/(\d+)$/, 'manager', ({ params }, body) => {
+      const printer = printers().find((p) => p.id === Number(params[0]));
+      if (!printer) throw new Problem(404, 'NOT_FOUND', 'Printer not found');
+      validatePrinter(body, printer.id);
+      Object.assign(printer, { name: String(body.name).trim(), host: String(body.host).trim(), port: Number(body.port), paperWidth: Number(body.paperWidth),
+        categories: [...body.categories].sort(), enabled: Boolean(body.enabled) });
+      save();
+      return printerView(printer);
+    }],
+    ['DELETE', /^printers\/(\d+)$/, 'manager', ({ params }) => {
+      state.printers = printers().filter((p) => p.id !== Number(params[0]));
+      save();
+      return [204, null];
+    }],
+    ['POST', /^printers\/(\d+)\/test$/, 'manager', ({ params }) => {
+      const printer = printers().find((p) => p.id === Number(params[0]));
+      if (!printer) throw new Problem(404, 'NOT_FOUND', 'Printer not found');
+      printer.lastPrintedAt = iso(Date.now());
+      save();
+      return [202, { id: Date.now(), printerId: printer.id, printer: printer.name, orderId: null, kind: 'TEST', status: 'PRINTED', attempts: 1, lastError: null }];
+    }],
+    ['GET', /^printers\/(\d+)\/preview$/, 'manager', ({ params, query }) => {
+      const printer = printers().find((p) => p.id === Number(params[0]));
+      if (!printer) throw new Problem(404, 'NOT_FOUND', 'Printer not found');
+      const order = query.get('orderId') ? findOrder(query.get('orderId')) : null;
+      return { printer: printer.name, columns: printer.paperWidth === 58 ? 32 : 48, text: ticketText(printer, order) };
+    }],
+    ['GET', /^print-jobs$/, 'manager', () => []],
+    ['POST', /^orders\/(\d+)\/reprint$/, 'till', ({ params }) => {
+      const order = findOrder(params[0]);
+      const targets = printers().filter((p) => p.enabled && order.lines.some((l) => p.categories.includes(l.category)));
+      if (!targets.length) throw new Problem(422, 'NO_PRINTER_FOR_ORDER', 'No printer is set up for this order');
+      targets.forEach((p) => { p.lastPrintedAt = iso(Date.now()); });
+      save();
+      return [202, targets.map((p) => ({ printerId: p.id, printer: p.name, orderId: order.id, kind: 'REPRINT', status: 'PRINTED' }))];
     }],
     ['GET', /^floor\/tables$/, 'staff', () => TABLES.map((table) => {
       const open = state.orders.filter((o) => o.type === 'DINE_IN' && o.table && o.table.id === table.id && ACTIVE.includes(o.status))

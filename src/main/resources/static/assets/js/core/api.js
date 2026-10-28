@@ -224,6 +224,12 @@ export const api = {
   rejectGuestRequest: (id, reason) => request('POST', `/guest-requests/${id}/reject`, { reason }),
   doneGuestRequest: (id) => request('POST', `/guest-requests/${id}/done`),
   issueTableQr: (tableId) => request('POST', `/tables/${tableId}/qr`),
+  printers: () => request('GET', '/printers'),
+  savePrinter: (id, printer) => (id ? request('PUT', `/printers/${id}`, printer) : request('POST', '/printers', printer)),
+  deletePrinter: (id) => request('DELETE', `/printers/${id}`),
+  testPrinter: (id) => request('POST', `/printers/${id}/test`),
+  previewTicket: (id, orderId) => request('GET', `/printers/${id}/preview${query({ orderId })}`),
+  reprint: (orderId) => request('POST', `/orders/${orderId}/reprint`),
   simulatedCheckout: (token) => request('GET', `/public/sim-checkout/${encodeURIComponent(token)}`, undefined, { auth: false }),
   simulatedDecision: (token, approve) => request('POST', `/public/sim-checkout/${encodeURIComponent(token)}`, { approve }, { auth: false }),
 };

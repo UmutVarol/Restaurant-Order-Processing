@@ -196,6 +196,14 @@ bus.on('guest', (event) => {
   }
 });
 
+// a kitchen ticket that could not be printed must not go unnoticed
+bus.on('print', (event) => {
+  if (!user || !['ADMIN', 'WAITER'].includes(user.role) || event.status !== 'FAILED') return;
+  if (prefs.sound) chime();
+  toast({ title: event.orderId ? t('printing.failedOrder', { printer: event.printer, id: event.orderId }) : t('printing.failedTest', { printer: event.printer }),
+    text: event.error || '', kind: 'error', timeout: 12000 });
+});
+
 async function refreshKitchenBadge() {
   if (!user || !currentSession()) return;
   try {
