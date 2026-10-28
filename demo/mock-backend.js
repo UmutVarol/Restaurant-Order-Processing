@@ -1630,7 +1630,15 @@
         amountUntilFreeDelivery: body.type === 'DELIVERY' ? toLira(Math.max(0, FREE_DELIVERY_THRESHOLD - (p.subtotal - p.discount))) : 0,
       };
     }],
-    ['POST', /^orders$/, 'till', ({ user }, body) => {
+    ['POST', /^orders$/, 'till', ({ user, headers }, body) => {
+      // Same as OrderController: a retry with the key returns the order already placed.
+      const key = headers['Idempotency-Key'] || headers['idempotency-key'] || null;
+      if (key && !/^[A-Za-z0-9_-]{8,80}$/.test(key)) throw new Problem(422, 'IDEMPOTENCY_KEY_INVALID', "Idempotency-Key must be 8 to 80 letters, digits, '-' or '_'");
+      const earlier = key ? state.orders.find((o) => o.idempotencyKey === key) : null;
+      if (earlier) {
+        if (earlier.createdBy !== user.username) throw new Problem(422, 'IDEMPOTENCY_KEY_REUSED', "This Idempotency-Key was already used for another user's order");
+        return orderView(earlier);
+      }
       const phone = clean(body.customerPhone);
       requireFields({
         type: blank(body.type) ? 'must not be null' : null,
@@ -1659,6 +1667,7 @@
       // Same as Order.place + holdLaterCourses: everything goes to the kitchen, unless later courses are held.
       const first = Math.min(...lines.map((l) => l.course));
       lines.forEach((l) => { l.firedAt = body.holdCourses && l.course !== first ? null : order.createdAt; });
+      if (key) order.idempotencyKey = key;
       state.orders.push(order);
       attach(state, order, order.createdAt);
       changed(order, 'CREATED', null);

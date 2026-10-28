@@ -3,6 +3,7 @@ package com.umutvarol.restaurant.payment;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.common.money.Money;
+import com.umutvarol.restaurant.common.web.IdempotencyKeys;
 import com.umutvarol.restaurant.order.Order;
 import com.umutvarol.restaurant.order.OrderService;
 import com.umutvarol.restaurant.order.OrderStatus;
@@ -20,7 +21,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -33,9 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class PaymentService {
-
-    /** Client-chosen keys that make a retried "take payment" request safe (e.g. after a timeout). */
-    private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("[A-Za-z0-9_-]{8,80}");
 
     private final BillService billService;
     private final BillRepository bills;
@@ -79,17 +76,13 @@ public class PaymentService {
      */
     public TakePaymentResponse take(Long billId, TakePaymentRequest request, @Nullable String idempotencyKey,
                                     String actor) {
-        if (idempotencyKey != null && !IDEMPOTENCY_KEY.matcher(idempotencyKey).matches()) {
-            throw new BusinessRuleException("IDEMPOTENCY_KEY_INVALID",
-                    "Idempotency-Key must be 8 to 80 letters, digits, '-' or '_'");
-        }
+        IdempotencyKeys.requireValid(idempotencyKey);
         Bill bill = billService.lock(billId);
         // Looked up after taking the lock, so a retry that raced the original sees its committed payment.
         Optional<Payment> earlier = idempotencyKey == null ? Optional.empty() : payments.findByIdempotencyKey(idempotencyKey);
         if (earlier.isPresent()) {
             if (!earlier.get().getBill().getId().equals(billId)) {
-                throw new BusinessRuleException("IDEMPOTENCY_KEY_REUSED",
-                        "This Idempotency-Key was already used for another bill");
+                throw IdempotencyKeys.reused("another bill");
             }
             return new TakePaymentResponse(PaymentResponse.from(earlier.get()), BillResponse.from(bill));
         }

@@ -1316,3 +1316,18 @@ svg.qr { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(-
   .stock-table .data-table td, .stock-table .data-table th { padding-left: 10px; padding-right: 10px; }
 }
 .stock-table td.num { white-space: nowrap; }
+
+/* Offline till */
+.live.offline { color: var(--red); }
+.live.offline .dot { background: var(--red); }
+.outbox-btn { border-color: var(--amber); background: var(--amber-soft); color: var(--amber); }
+.outbox-btn.needs-review { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+.estimate-note { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--amber); }
+.paid-now { margin-top: 10px; font-size: 13px; }
+.outbox-list { display: grid; gap: 10px; }
+.outbox-row { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; }
+.outbox-row.s-review, .outbox-row.s-failed { border-color: var(--amber); background: var(--amber-soft); }
+.outbox-info { display: grid; gap: 3px; min-width: 0; }
+.outbox-info small { font-size: 12px; }
+.outbox-info .form-error { margin-top: 4px; }
+.outbox-actions { display: flex; gap: 6px; flex-wrap: wrap; }

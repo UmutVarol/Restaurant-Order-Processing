@@ -128,6 +128,19 @@ function query(params = {}) {
   return text ? `?${text}` : '';
 }
 
+// Whether the server answered the last request. Offline-capable screens (core/offline.js) follow it through the bus.
+let reachable = true;
+
+function markReachable(value) {
+  if (value === reachable) return;
+  reachable = value;
+  bus.emit('network', value);
+}
+
+export function serverReachable() {
+  return reachable;
+}
+
 async function request(method, path, body, { auth = true, headers: extra = {} } = {}) {
   const sentWith = auth ? session : null;
   const headers = { Accept: 'application/json', ...(auth ? authHeader() : {}), ...extra };
@@ -144,10 +157,12 @@ async function request(method, path, body, { auth = true, headers: extra = {} } 
       signal: controller.signal,
     });
   } catch {
+    markReachable(false);
     throw new ApiError(0, null);
   } finally {
     clearTimeout(timer);
   }
+  markReachable(true);
 
   const text = response.status === 204 ? '' : await response.text();
   let data = null;
@@ -188,7 +203,9 @@ export const api = {
   archiveMenuItem: (id) => request('DELETE', `/menu/${id}`),
 
   quote: (cart) => request('POST', '/orders/quote', cart),
-  placeOrder: (order) => request('POST', '/orders', order),
+  // A till that queued the order offline sends it with the key it made up then, so a retry never places it twice.
+  placeOrder: (order, idempotencyKey) => request('POST', '/orders', order,
+    idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}),
   orders: (params) => request('GET', `/orders${query(params)}`),
   activeOrders: () => request('GET', '/orders/active'),
   order: (id) => request('GET', `/orders/${id}`),

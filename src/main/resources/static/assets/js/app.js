@@ -5,8 +5,9 @@ import { onLangChange, t } from './core/i18n.js';
 import { api, clearSession, currentDevice, currentSession, saveSession } from './core/api.js';
 import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
+import { clearOutbox, entries as outboxEntries, flush, isOnline, registerServiceWorker } from './core/offline.js';
 import { time } from './core/format.js';
-import { langButton, themeButton, toast } from './core/ui.js';
+import { confirmDialog, langButton, themeButton, toast } from './core/ui.js';
 
 const ALL = ['ADMIN', 'WAITER', 'KITCHEN'];
 const ROUTES = [
@@ -86,6 +87,7 @@ async function render() {
 
   const shell = renderShell(route);
   mount(root, shell.element);
+  updateLiveIndicator();
   try {
     const { default: view } = await route.load();
     if (token !== renderToken) return;
@@ -131,10 +133,14 @@ function renderShell(current) {
         h('a', { class: 'icon-btn sm', href: '#/settings', title: t('nav.settings'), 'aria-label': t('nav.settings') }, icon('settings', 'sm')),
         currentDevice()
           ? h('button', { class: 'icon-btn sm', title: t('lock.switch'), 'aria-label': t('lock.switch'), 'data-testid': 'switch-user', onclick: signOut }, icon('switchUser', 'sm'))
-          : h('button', { class: 'icon-btn sm', title: t('action.logout'), 'aria-label': t('action.logout'), onclick: signOut }, icon('logout', 'sm')))));
+          : h('button', { class: 'icon-btn sm', title: t('action.logout'), 'aria-label': t('action.logout'), 'data-testid': 'logout', onclick: logOut }, icon('logout', 'sm')))));
 
-  const live = h('div', { class: `live ${realtimeStatus()}`, id: 'live-indicator' }, h('span', { class: 'dot' }),
-    h('span', null, realtimeStatus() === 'on' ? t('live.on') : t('live.off')));
+  const live = h('div', { class: 'live', id: 'live-indicator', 'data-testid': 'connection' }, h('span', { class: 'dot' }), h('span'));
+  // orders taken while the server could not be reached, waiting to be sent
+  const outbox = ['ADMIN', 'WAITER'].includes(user.role) ? h('button', {
+    class: 'btn sm outbox-btn', id: 'outbox-btn', 'data-testid': 'outbox', hidden: outboxState.count === 0,
+    onclick: async () => { const { openOutbox } = await import('./views/outbox.js'); openOutbox(); },
+  }, icon('clock', 'sm'), h('span')) : null;
   const clock = h('span', { class: 'clock', id: 'clock' }, time(new Date().toISOString()));
 
   // carts and calls sent from tables reach whoever takes orders
@@ -148,6 +154,7 @@ function renderShell(current) {
     h('div', { class: 'spacer' }),
     actions,
     h('div', { class: 'topbar-tools' },
+      outbox,
       inbox,
       live,
       clock,
@@ -168,11 +175,42 @@ function renderShell(current) {
   };
 }
 
-function updateLiveIndicator(status) {
+function updateLiveIndicator() {
   const el = document.getElementById('live-indicator');
   if (!el) return;
-  el.className = `live ${status}`;
-  el.lastChild.textContent = status === 'on' ? t('live.on') : t('live.off');
+  const state = !isOnline() ? 'offline' : realtimeStatus();
+  el.className = `live ${state}`;
+  el.lastChild.textContent = t(`live.${state}`);
+  const button = document.getElementById('outbox-btn');
+  if (button) {
+    button.hidden = outboxState.count === 0;
+    button.classList.toggle('needs-review', outboxState.review > 0);
+    button.lastChild.textContent = t('outbox.waiting', { n: outboxState.count });
+  }
+}
+
+// ------------------------------------------------------------------------------- offline
+
+let outboxState = { count: 0, review: 0 };
+bus.on('outbox', (state) => { outboxState = state; updateLiveIndicator(); });
+bus.on('outbox:sent', ({ count }) => toast({ title: t('outbox.sent', { n: count }), kind: 'success' }));
+bus.on('connectivity', (online) => {
+  updateLiveIndicator();
+  if (!user) return;
+  toast(online ? { title: t('offline.back'), kind: 'success' } : { title: t('offline.lost'), text: t('offline.lostText'), kind: 'info', timeout: 8000 });
+});
+
+/** Signing out from the till: orders not sent yet belong to this user and would be lost, so ask first. */
+async function logOut() {
+  const waiting = await outboxEntries();
+  if (waiting.length) {
+    const sure = await confirmDialog({
+      title: t('outbox.logoutTitle', { n: waiting.length }), text: t('outbox.logoutText'), confirmLabel: t('outbox.logoutConfirm'), danger: true,
+    });
+    if (!sure) return;
+    await clearOutbox();
+  }
+  signOut();
 }
 
 async function refreshGuestBadge() {
@@ -251,6 +289,7 @@ async function onSignedIn(tokenResponse) {
   startRealtime();
   refreshKitchenBadge();
   refreshGuestBadge();
+  flush();
   if (user.mfaSetupRequired) {
     // the restaurant requires two-step sign-in for managers: set it up before anything money-sensitive
     toast({ title: t('totp.setupRequired'), kind: 'info', timeout: 9000 });
@@ -310,12 +349,20 @@ async function boot() {
       startRealtime();
       refreshKitchenBadge();
       refreshGuestBadge();
-    } catch {
-      clearSession();
-      user = null;
+      flush();
+    } catch (error) {
+      if (error?.status === 0 && session.user) {
+        // the server is out of reach, not the session: keep working offline as the signed-in user
+        user = session.user;
+        startRealtime();
+      } else {
+        clearSession();
+        user = null;
+      }
     }
   }
   render();
 }
 
+registerServiceWorker();
 boot();

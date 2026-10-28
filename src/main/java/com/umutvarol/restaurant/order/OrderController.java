@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.order;
 
+import com.umutvarol.restaurant.common.web.IdempotencyKeys;
 import com.umutvarol.restaurant.common.web.PageResponse;
 import com.umutvarol.restaurant.order.dto.CancelOrderRequest;
 import com.umutvarol.restaurant.order.dto.DiscountRequest;
@@ -20,6 +21,7 @@ import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -83,10 +86,27 @@ class OrderController {
         return orderService.quote(request);
     }
 
-    @Operation(summary = "Place an order", description = "Requires WAITER or ADMIN.")
+    @Operation(summary = "Place an order", description = """
+            Requires WAITER or ADMIN. Send an Idempotency-Key header to make retries safe: the same key returns the \
+            order already placed (200, Idempotent-Replayed: true) instead of placing it twice.""")
     @PostMapping
-    ResponseEntity<OrderResponse> place(@Valid @RequestBody PlaceOrderRequest request, Authentication authentication) {
-        OrderResponse order = orderService.placeOrder(request, authentication.getName());
+    ResponseEntity<OrderResponse> place(@Valid @RequestBody PlaceOrderRequest request,
+                                        @RequestHeader(name = IdempotencyKeys.HEADER, required = false) String idempotencyKey,
+                                        Authentication authentication) {
+        OrderService.Placement placement;
+        try {
+            placement = orderService.placeOrder(request, authentication.getName(), idempotencyKey);
+        } catch (DataIntegrityViolationException raced) {
+            // Two retries with one key arrived together; the first one committed, so answer with its order.
+            placement = idempotencyKey == null ? null : orderService.replay(idempotencyKey, authentication.getName()).orElse(null);
+            if (placement == null) {
+                throw raced;
+            }
+        }
+        OrderResponse order = placement.order();
+        if (placement.replayed()) {
+            return ResponseEntity.ok().header("Idempotent-Replayed", "true").body(order);
+        }
         URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(order.id()).toUri();
         return ResponseEntity.created(location).body(order);
     }

@@ -3,6 +3,7 @@ package com.umutvarol.restaurant.order;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.common.money.Money;
+import com.umutvarol.restaurant.common.web.IdempotencyKeys;
 import com.umutvarol.restaurant.common.web.PageResponse;
 import com.umutvarol.restaurant.coupon.Coupon;
 import com.umutvarol.restaurant.coupon.CouponService;
@@ -15,8 +16,8 @@ import com.umutvarol.restaurant.order.dto.OrderResponse;
 import com.umutvarol.restaurant.order.dto.OrderSearchCriteria;
 import com.umutvarol.restaurant.order.dto.PlaceOrderRequest;
 import com.umutvarol.restaurant.order.dto.QuoteRequest;
-import com.umutvarol.restaurant.order.dto.QuoteResponse;
 import com.umutvarol.restaurant.order.dto.QuoteResponse.CouponResult;
+import com.umutvarol.restaurant.order.dto.QuoteResponse;
 import com.umutvarol.restaurant.order.pricing.PriceBreakdown;
 import com.umutvarol.restaurant.order.pricing.PricingCalculator;
 import com.umutvarol.restaurant.table.DiningTable;
@@ -27,6 +28,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -91,6 +93,27 @@ public class OrderService {
     }
 
     public OrderResponse placeOrder(PlaceOrderRequest request, String actor) {
+        return placeOrder(request, actor, null).order();
+    }
+
+    /** What placing an order did: placed it now, or found the one a retry with the same key placed before. */
+    public record Placement(OrderResponse order, boolean replayed) {
+    }
+
+    /**
+     * Places an order. With an idempotency key, sending the same request again (a till retrying after a timeout, or
+     * sending what it queued offline) returns the order already placed instead of placing a second one.
+     *
+     * @throws BusinessRuleException {@code IDEMPOTENCY_KEY_REUSED} if another user placed an order with the key
+     */
+    public Placement placeOrder(PlaceOrderRequest request, String actor, @Nullable String idempotencyKey) {
+        IdempotencyKeys.requireValid(idempotencyKey);
+        if (idempotencyKey != null) {
+            Optional<Placement> earlier = replay(idempotencyKey, actor);
+            if (earlier.isPresent()) {
+                return earlier.get();
+            }
+        }
         List<OrderLine> lines = buildLines(request.items());
         BigDecimal subtotal = subtotalOf(lines);
         Coupon coupon = isBlank(request.couponCode())
@@ -107,9 +130,23 @@ public class OrderService {
         if (Boolean.TRUE.equals(request.holdCourses())) {
             placed.holdLaterCourses();
         }
+        if (idempotencyKey != null) {
+            placed.rememberIdempotencyKey(idempotencyKey);
+        }
         Order order = orders.save(placed);
         events.publishEvent(OrderChangedEvent.created(order));
-        return OrderResponse.from(order);
+        return new Placement(OrderResponse.from(order), false);
+    }
+
+    /** The order placed earlier with this key, for the user who placed it. */
+    @Transactional(readOnly = true)
+    public Optional<Placement> replay(String idempotencyKey, String actor) {
+        return orders.findByIdempotencyKey(idempotencyKey).map(order -> {
+            if (!actor.equals(order.getCreatedBy())) {
+                throw IdempotencyKeys.reused("another user's order");
+            }
+            return new Placement(OrderResponse.from(order), true);
+        });
     }
 
     @Transactional(readOnly = true)

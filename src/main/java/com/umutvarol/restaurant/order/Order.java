@@ -92,6 +92,10 @@ public class Order {
     @Column(name = "cancellation_reason", length = 255)
     private String cancellationReason;
 
+    /** The key the till sent the order with; a retry with the same key gets this order back. */
+    @Column(name = "idempotency_key", length = 80, unique = true)
+    private String idempotencyKey;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id ASC")
     private List<OrderLine> lines = new ArrayList<>();
@@ -427,6 +431,10 @@ public class Order {
 
     public String getCreatedBy() {
         return createdBy;
+    }
+
+    void rememberIdempotencyKey(String key) {
+        this.idempotencyKey = key;
     }
 
     public String getCancellationReason() {

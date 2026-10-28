@@ -70,7 +70,9 @@ class SecurityConfig {
     /**
      * Only the app's own origin may supply scripts, styles, fonts and connections (fonts are self-hosted, so no
      * third party is allowed at all). Trusted Types are enforced: the client never assigns HTML strings, so any
-     * attempt to inject markup through a DOM sink is blocked by the browser itself. Violations are reported to
+     * attempt to inject markup through a DOM sink is blocked by the browser itself. The single Trusted Types policy,
+     * {@code sofra-sw}, only lets the app register its own service worker ({@code sw.js}) and creates no HTML or
+     * scripts. Violations are reported to
      * {@code /api/v1/csp-reports}, which turns a tampered page into an alert (PCI DSS 11.6.1-style detection).
      */
     static final String CONTENT_SECURITY_POLICY = String.join("; ",
@@ -85,7 +87,7 @@ class SecurityConfig {
             "form-action 'self'",
             "object-src 'none'",
             "require-trusted-types-for 'script'",
-            "trusted-types 'none'",
+            "trusted-types sofra-sw",
             "report-uri /api/v1/csp-reports",
             "report-to csp");
 
@@ -124,7 +126,7 @@ class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**", "/favicon.svg",
-                                "/manifest.webmanifest", "/robots.txt", "/.well-known/security.txt").permitAll()
+                                "/manifest.webmanifest", "/sw.js", "/robots.txt", "/.well-known/security.txt").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/csp-reports").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()

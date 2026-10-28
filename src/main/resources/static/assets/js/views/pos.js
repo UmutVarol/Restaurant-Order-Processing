@@ -6,6 +6,7 @@ import { itemCount, money } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { toast } from '../core/ui.js';
+import { enqueue, isOnline, lastReference, rememberReference } from '../core/offline.js';
 import { chooseOptions, chosen, defaultOptionIds, optionKey, optionsPrice } from './options.js';
 import { CATEGORIES, openOrderDrawer, PAY_ICONS, totals, TYPE_ICONS } from './shared.js';
 
@@ -22,6 +23,8 @@ const ticket = {
   deliveryAddress: '',
   note: '',
   paymentMethod: 'CARD',
+  // offline only: the guest already paid at the till, so the payment is sent with the order
+  paidNow: false,
   couponCode: '',
   // later courses wait in the kitchen until the waiter fires them
   holdCourses: false,
@@ -34,7 +37,7 @@ const MAX_QUANTITY = 50;
 
 function resetTicket() {
   Object.assign(ticket, {
-    tableId: null, customerName: '', customerPhone: '', deliveryAddress: '', note: '', couponCode: '', holdCourses: false, lines: [],
+    tableId: null, customerName: '', customerPhone: '', deliveryAddress: '', note: '', couponCode: '', holdCourses: false, paidNow: false, lines: [],
   });
 }
 
@@ -431,7 +434,8 @@ export default {
           [70, 60, 40].map((w) => h('div', { class: 'skeleton', style: { height: '14px', width: `${w}%` } }))));
         return;
       }
-      mount(totalsSection, totals(quote.pricing, { loading: quoting }));
+      mount(totalsSection, totals(quote.pricing, { loading: quoting }),
+        quote.estimated ? h('div', { class: 'estimate-note', 'data-testid': 'estimate' }, icon('info', 'sm'), t('offline.estimate')) : null);
       if (ticket.type === 'DELIVERY') {
         const remaining = Number(quote.amountUntilFreeDelivery);
         const threshold = Number(quote.freeDeliveryThreshold);
@@ -445,11 +449,19 @@ export default {
     }
 
     function renderPay() {
+      const offline = !isOnline();
+      // an online payment needs the payment provider, so it cannot be offered offline
+      if (offline && ticket.paymentMethod === 'ONLINE') ticket.paymentMethod = 'CARD';
       const methods = ticket.type === 'DELIVERY' ? ['ONLINE', 'CARD', 'CASH'] : ['CARD', 'CASH'];
       mount(paySection, h('div', { class: 'segmented' }, methods.map((method) => h('button', {
         class: ticket.paymentMethod === method ? 'active' : '',
+        disabled: offline && method === 'ONLINE',
+        title: offline && method === 'ONLINE' ? t('offline.noOnline') : null,
         onclick: () => { ticket.paymentMethod = method; renderPay(); },
-      }, icon(PAY_ICONS[method], 'sm'), t(`pay.${method}`)))));
+      }, icon(PAY_ICONS[method], 'sm'), t(`pay.${method}`)))),
+      offline ? h('label', { class: 'checkbox paid-now', title: t('offline.paidNowHint') },
+        h('input', { type: 'checkbox', checked: ticket.paidNow, 'data-testid': 'paid-now', onchange: (event) => { ticket.paidNow = event.target.checked; } }),
+        t('offline.paidNow', { method: t(`pay.${ticket.paymentMethod}`) })) : null);
     }
 
     function renderPlaceButton() {
@@ -460,7 +472,7 @@ export default {
       mount(mobileBar, h('span', { class: 'badge' }, count), h('span', null, t('pos.current')),
         h('b', null, quote ? money(quote.pricing.total) : ''), icon('arrowDown', 'sm'));
       mount(placeButton, placing ? h('span', { class: 'spinner' })
-        : [icon('flash', 'sm'), `${t('pos.place')}${total}`, h('span', { class: 'kbd' }, SHORTCUT)]);
+        : [icon(isOnline() ? 'flash' : 'clock', 'sm'), `${t(isOnline() ? 'pos.place' : 'offline.place')}${total}`, h('span', { class: 'kbd' }, SHORTCUT)]);
     }
 
     function refreshAll() {
@@ -481,6 +493,23 @@ export default {
       course: ticket.holdCourses ? courseOf(line) : null,
     }));
 
+    const unitPriceOf = (line) => {
+      const item = menuItem(line.menuItemId);
+      return item ? Number(item.price) + optionsPrice(item, line.optionIds) : 0;
+    };
+
+    /** Offline the server cannot price the cart: an estimate from the menu prices and the last tax rate seen. */
+    function estimate() {
+      const subtotal = ticket.lines.reduce((sum, line) => sum + unitPriceOf(line) * line.quantity, 0);
+      const tax = Math.round(subtotal * (lastReference()?.taxRate ?? 0) * 100) / 100;
+      return { estimated: true, lines: [], coupon: null, pricing: { subtotal, discount: 0, tax, deliveryFee: 0, total: subtotal + tax } };
+    }
+
+    // The cart the last server quote was for: it stays valid offline as long as the cart does not change.
+    const cartKey = () => JSON.stringify([ticket.type, ticket.couponCode, requestItems()]);
+    let quotedCart = null;
+    const serverQuoteCurrent = () => quote && !quote.estimated && quotedCart === cartKey();
+
     let quoteSeq = 0;
     const requestQuote = debounce(async () => {
       if (!ticket.lines.length) {
@@ -491,6 +520,12 @@ export default {
         return;
       }
       const seq = ++quoteSeq;
+      if (!isOnline()) {
+        if (!serverQuoteCurrent()) quote = estimate();
+        renderTotals();
+        renderPlaceButton();
+        return;
+      }
       quoting = true;
       renderTotals();
       try {
@@ -501,9 +536,13 @@ export default {
         });
         if (seq !== quoteSeq) return;
         quote = result;
+        quotedCart = cartKey();
+        const taxable = Number(result.pricing.subtotal) - Number(result.pricing.discount);
+        if (taxable > 0) rememberReference({ taxRate: Number(result.pricing.tax) / taxable });
       } catch (error) {
         if (seq !== quoteSeq) return;
-        toast({ title: errorMessage(error), kind: 'error' });
+        if (error instanceof ApiError && error.status === 0) { if (!serverQuoteCurrent()) quote = estimate(); }
+        else toast({ title: errorMessage(error), kind: 'error' });
       } finally {
         if (seq === quoteSeq) {
           quoting = false;
@@ -520,8 +559,7 @@ export default {
       placing = true;
       fieldErrors = {};
       renderPlaceButton();
-      try {
-        const order = await api.placeOrder({
+      const body = {
           type: ticket.type,
           customerName: ticket.customerName.trim(),
           customerPhone: ticket.customerPhone.trim() || null,
@@ -532,7 +570,10 @@ export default {
           couponCode: ticket.couponCode || null,
           items: requestItems(),
           holdCourses: ticket.holdCourses,
-        });
+      };
+      try {
+        if (!isOnline()) throw new ApiError(0, null);
+        const order = await api.placeOrder(body);
         toast({
           title: t('pos.placed', { id: order.id }),
           text: t('pos.placedSub', { items: itemCount(order.itemCount), total: money(order.pricing.total) }),
@@ -543,12 +584,38 @@ export default {
         quote = null;
         loadTables();
       } catch (error) {
-        if (error instanceof ApiError && error.code === 'VALIDATION_FAILED') fieldErrors = error.fieldErrors();
-        toast({ title: errorMessage(error), kind: 'error' });
+        if (error instanceof ApiError && error.status === 0) {
+          await queueOffline(body);
+        } else {
+          if (error instanceof ApiError && error.code === 'VALIDATION_FAILED') fieldErrors = error.fieldErrors();
+          toast({ title: errorMessage(error), kind: 'error' });
+        }
       } finally {
         placing = false;
         refreshAll();
       }
+    }
+
+    /** The server cannot be reached: keep the order (and the payment taken for it) on this till until it can. */
+    async function queueOffline(body) {
+      const real = serverQuoteCurrent();
+      const seen = {
+        unitPrices: real ? quote.lines.map((line) => Number(line.unitPrice)) : ticket.lines.map(unitPriceOf),
+        total: real ? Number(quote.pricing.total) : null,
+        estimate: quote ? Number(quote.pricing.total) : null,
+        tableCode: tables.find((table) => table.id === body.tableId)?.code ?? null,
+      };
+      const payment = ticket.paidNow && ticket.paymentMethod !== 'ONLINE' ? { method: ticket.paymentMethod } : null;
+      try {
+        await enqueue(body, seen, payment);
+      } catch {
+        toast({ title: t('offline.queueFailed'), kind: 'error' });
+        return;
+      }
+      toast({ title: t('offline.queued', { name: body.customerName }), text: t('offline.queuedText'), kind: 'info' });
+      resetTicket();
+      couponDraft = '';
+      quote = null;
     }
 
     async function loadTables() {
@@ -563,10 +630,15 @@ export default {
       renderGrid();
       refreshAll();
       const [menuResult, tableResult, couponResult] = await Promise.allSettled([api.menu(), api.tables(), api.coupons()]);
-      menu = menuResult.status === 'fulfilled' ? menuResult.value : [];
-      tables = tableResult.status === 'fulfilled' ? tableResult.value : [];
+      const saved = lastReference();
+      // offline, the till works from the menu and floor plan it saw last
+      menu = menuResult.status === 'fulfilled' ? menuResult.value : saved?.menu ?? [];
+      tables = tableResult.status === 'fulfilled' ? tableResult.value : saved?.tables ?? [];
       coupons = couponResult.status === 'fulfilled' ? couponResult.value : [];
-      if (menuResult.status === 'rejected') toast({ title: errorMessage(menuResult.reason), kind: 'error' });
+      if (menuResult.status === 'fulfilled') rememberReference({ menu, tables: tableResult.status === 'fulfilled' ? tables : null });
+      if (menuResult.status === 'rejected' && !(menuResult.reason?.status === 0 && saved?.menu?.length)) {
+        toast({ title: errorMessage(menuResult.reason), kind: 'error' });
+      }
       // drop lines whose dish disappeared from the menu since the ticket was started
       ticket.lines = ticket.lines.filter((line) => menuItem(line.menuItemId)?.available);
       // options may have changed in the meantime too; keep only choices the dish still offers
@@ -607,6 +679,7 @@ export default {
       } catch { /* the grid stays as it was */ }
     }, 300);
     const offStock = bus.on('stock', reloadMenu);
+    const offConnectivity = bus.on('connectivity', () => { renderPay(); renderPlaceButton(); requestQuote(); });
 
     load();
     return {
@@ -615,6 +688,7 @@ export default {
         panelObserver?.disconnect();
         offOrder();
         offStock();
+        offConnectivity();
         reloadTables.cancel();
         reloadMenu.cancel();
         requestQuote.cancel();

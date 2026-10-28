@@ -4,6 +4,7 @@ import { icon } from '../core/icons.js';
 import { locale, t } from '../core/i18n.js';
 import { dateTime, money, time } from '../core/format.js';
 import { api, ApiError, errorMessage, newIdempotencyKey } from '../core/api.js';
+import { isOnline } from '../core/offline.js';
 import { bus } from '../core/store.js';
 import { openModal, toast } from '../core/ui.js';
 import { qrCode } from './qr.js';
@@ -199,6 +200,9 @@ export function openBill(ref, user) {
       h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': t('bill.method') }, METHODS.map((method) => h('button', {
         role: 'radio', 'aria-checked': state.method === method.id, class: state.method === method.id ? 'active' : '',
         'data-method': method.id,
+        // a QR payment goes through the payment provider, which cannot be reached offline
+        disabled: method.id === 'QR' && !isOnline(),
+        title: method.id === 'QR' && !isOnline() ? t('offline.noOnline') : null,
         onclick: () => { state.method = method.id; state.link = null; render(); },
       }, icon(method.icon, 'sm'), t(`bill.method.${method.id}`)))),
       h('div', { class: 'field' }, h('label', { for: 'pay-amount' }, t('bill.amount')), amountInput,
