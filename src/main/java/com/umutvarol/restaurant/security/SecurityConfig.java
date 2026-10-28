@@ -142,7 +142,12 @@ class SecurityConfig {
                         .requestMatchers("/api/v1/menu", "/api/v1/menu/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/analytics/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders", "/api/v1/orders/quote",
-                                "/api/v1/orders/*/cancel").hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
+                                "/api/v1/orders/*/cancel", "/api/v1/orders/*/lines/*/adjust")
+                                .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/orders/*/discount")
+                                .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
+                        .requestMatchers(HttpMethod.POST, "/api/v1/tables/*/move", "/api/v1/tables/*/merge")
+                                .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2

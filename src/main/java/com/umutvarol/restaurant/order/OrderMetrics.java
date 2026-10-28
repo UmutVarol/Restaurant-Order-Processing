@@ -39,6 +39,10 @@ class OrderMetrics {
                     .tag("status", event.status().name())
                     .register(registry)
                     .increment();
+            case UPDATED -> Counter.builder("sofra.orders.adjusted")
+                    .description("Orders changed after they were placed")
+                    .register(registry)
+                    .increment();
         }
     }
 }

@@ -66,6 +66,12 @@ public class OrderLine {
     @Column(name = "line_total", nullable = false, precision = 12, scale = 2)
     private BigDecimal lineTotal;
 
+    @Column(name = "voided_quantity", nullable = false)
+    private int voidedQuantity;
+
+    @Column(name = "comped_quantity", nullable = false)
+    private int compedQuantity;
+
     @OneToMany(mappedBy = "line", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id ASC")
     private List<OrderLineOption> options = new ArrayList<>();
@@ -138,6 +144,38 @@ public class OrderLine {
 
     public String getNote() {
         return note;
+    }
+
+    /** Units still on the order: ordered minus voided. The kitchen makes these. */
+    public int activeQuantity() {
+        return quantity - voidedQuantity;
+    }
+
+    /** Units the guest pays for: ordered minus voided and comped. */
+    public int billableQuantity() {
+        return quantity - voidedQuantity - compedQuantity;
+    }
+
+    public int getVoidedQuantity() {
+        return voidedQuantity;
+    }
+
+    public int getCompedQuantity() {
+        return compedQuantity;
+    }
+
+    void voidUnits(int units) {
+        voidedQuantity += units;
+        reprice();
+    }
+
+    void compUnits(int units) {
+        compedQuantity += units;
+        reprice();
+    }
+
+    private void reprice() {
+        lineTotal = Money.normalize(unitPrice.multiply(BigDecimal.valueOf(billableQuantity())));
     }
 
     public BigDecimal getLineTotal() {

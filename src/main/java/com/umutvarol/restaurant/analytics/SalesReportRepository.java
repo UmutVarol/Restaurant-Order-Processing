@@ -12,18 +12,18 @@ interface SalesReportRepository extends Repository<OrderLine, Long> {
 
     @Query("""
             select new com.umutvarol.restaurant.analytics.ItemSales(
-                       l.itemName, l.itemIcon, sum(l.quantity), sum(l.lineTotal))
+                       l.itemName, l.itemIcon, sum(l.quantity - l.voidedQuantity), sum(l.lineTotal))
             from OrderLine l join l.order o
             where o.createdAt >= :from and o.createdAt < :to
               and o.status <> com.umutvarol.restaurant.order.OrderStatus.CANCELLED
             group by l.itemName, l.itemIcon
-            order by sum(l.quantity) desc, sum(l.lineTotal) desc
+            order by sum(l.quantity - l.voidedQuantity) desc, sum(l.lineTotal) desc
             """)
     List<ItemSales> topItems(Instant from, Instant to, Limit limit);
 
     @Query("""
             select new com.umutvarol.restaurant.analytics.CategorySales(
-                       l.category, sum(l.quantity), sum(l.lineTotal))
+                       l.category, sum(l.quantity - l.voidedQuantity), sum(l.lineTotal))
             from OrderLine l join l.order o
             where o.createdAt >= :from and o.createdAt < :to
               and o.status <> com.umutvarol.restaurant.order.OrderStatus.CANCELLED

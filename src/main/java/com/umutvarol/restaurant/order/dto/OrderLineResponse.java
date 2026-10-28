@@ -14,7 +14,10 @@ public record OrderLineResponse(
         int quantity,
         String note,
         BigDecimal lineTotal,
-        List<Option> options) {
+        List<Option> options,
+        Long id,
+        int voidedQuantity,
+        int compedQuantity) {
 
     public record Option(Long choiceId, String group, String choice, BigDecimal priceDelta) {
     }
@@ -30,6 +33,9 @@ public record OrderLineResponse(
                 line.getNote(),
                 line.getLineTotal(),
                 line.getOptions().stream().map(o -> new Option(o.getChoiceId(), o.getGroupName(), o.getChoiceName(),
-                        o.getPriceDelta())).toList());
+                        o.getPriceDelta())).toList(),
+                line.getId(),
+                line.getVoidedQuantity(),
+                line.getCompedQuantity());
     }
 }

@@ -21,8 +21,16 @@ public class PricingCalculator {
     }
 
     public PriceBreakdown calculate(BigDecimal subtotal, OrderType type, @Nullable Coupon coupon) {
+        return calculate(subtotal, type, coupon, null);
+    }
+
+    /** As {@link #calculate(BigDecimal, OrderType, Coupon)}, with a manager's discount on top of the coupon. */
+    public PriceBreakdown calculate(BigDecimal subtotal, OrderType type, @Nullable Coupon coupon,
+                                    @Nullable ManualDiscount manual) {
         BigDecimal normalizedSubtotal = Money.normalize(subtotal);
-        BigDecimal discount = coupon == null ? Money.ZERO : coupon.discountFor(normalizedSubtotal);
+        BigDecimal couponDiscount = coupon == null ? Money.ZERO : coupon.discountFor(normalizedSubtotal).min(normalizedSubtotal);
+        BigDecimal manualDiscount = manual == null ? Money.ZERO : manual.discountFor(normalizedSubtotal.subtract(couponDiscount));
+        BigDecimal discount = Money.normalize(couponDiscount.add(manualDiscount));
         BigDecimal discountedSubtotal = normalizedSubtotal.subtract(discount);
         BigDecimal tax = Money.percentOf(discountedSubtotal, properties.taxRate());
         BigDecimal deliveryFee = deliveryFee(discountedSubtotal, type);

@@ -84,10 +84,11 @@ export default {
         h('div', { class: 'sla', dataset: { since: order.status === 'READY' || order.status === 'OUT_FOR_DELIVERY' ? order.statusSince : order.createdAt, status: order.status } }, h('i')),
         h('div', { class: 'ticket-meta' }, h('span', null, order.customerName), h('span', null, `${order.itemCount} ×`)),
         order.note ? h('div', { class: 'sticky-note' }, icon('note', 'sm'), order.note) : null,
-        h('div', { class: 'ticket-items' }, order.lines.map((line) => h('div', { class: 'ticket-item' },
-          h('span', { class: 'q' }, `${line.quantity}×`),
+        h('div', { class: 'ticket-items' }, order.lines.map((line) => h('div', { class: ['ticket-item', line.quantity === line.voidedQuantity ? 'voided' : ''] },
+          h('span', { class: 'q' }, `${line.quantity - (line.voidedQuantity || 0)}×`),
           h('span', { class: 'n' }, `${line.icon || ''} ${line.name}`),
           line.options?.length ? h('span', { class: 'opts' }, optionsText(line.options)) : null,
+          line.voidedQuantity ? h('span', { class: 'void-note' }, t('adjust.kitchenVoided', { n: line.voidedQuantity })) : null,
           line.note ? h('span', { class: 'note' }, `↳ ${line.note}`) : null))),
         label ? h('div', { class: 'actions' }, button) : null);
     }

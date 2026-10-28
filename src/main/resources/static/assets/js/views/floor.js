@@ -5,7 +5,7 @@ import { t, tn } from '../core/i18n.js';
 import { elapsed, money, percent } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
-import { toast } from '../core/ui.js';
+import { openModal, toast } from '../core/ui.js';
 import { canTakeOrders, openOrderDrawer, statusPill } from './shared.js';
 
 const ZONES = ['INDOOR', 'WINDOW', 'TERRACE'];
@@ -68,7 +68,43 @@ export default {
           h('div', { class: 'seats' }, tn('floor.seats', table.seats)),
           canTakeOrders(user) ? h('span', { class: 'btn sm', style: { marginTop: '4px' } }, icon('plus', 'sm'), t('floor.seat')) : null,
         ]));
-      return card;
+      if (!table.occupied || !canTakeOrders(user)) return card;
+      // the card itself opens the order, so moving and merging sit next to it rather than inside it
+      return h('div', { class: 'table-slot' }, card, h('div', { class: 'table-actions' },
+        h('button', { class: 'btn sm ghost', 'data-testid': `move-${table.code}`, onclick: () => transfer(table, 'move') }, icon('arrowRight', 'sm'), t('floor.move')),
+        h('button', { class: 'btn sm ghost', 'data-testid': `merge-${table.code}`, onclick: () => transfer(table, 'merge') }, icon('users', 'sm'), t('floor.merge'))));
+    }
+
+    /** Moving needs a free table; merging needs another seated one. */
+    function transfer(from, kind) {
+      const options = tables.filter((table) => table.id !== from.id && (kind === 'move' ? !table.occupied : table.occupied));
+      let picked = null;
+      const confirm = h('button', { class: 'btn primary', disabled: true, 'data-testid': 'transfer-confirm' }, icon('check', 'sm'), t(`floor.${kind}Confirm`));
+      const list = h('div', { class: 'table-picker transfer-picker' });
+      const render = () => mount(list, options.length ? options.map((table) => h('button', {
+        type: 'button', class: picked === table ? 'active' : '', 'aria-pressed': String(picked === table),
+        onclick: () => { picked = table; confirm.disabled = false; render(); },
+      }, table.code, h('small', null, kind === 'move' ? tn('floor.seats', table.seats) : money(table.openTotal))))
+        : h('p', { class: 'muted' }, t(`floor.${kind}None`)));
+      render();
+      const modal = openModal({
+        title: t(`floor.${kind}Title`, { table: from.code }),
+        size: 'sm',
+        body: [h('p', { class: 'muted' }, t(`floor.${kind}Text`)), list],
+        footer: (handle) => [h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')), confirm],
+      });
+      confirm.addEventListener('click', async () => {
+        confirm.disabled = true;
+        try {
+          await (kind === 'move' ? api.moveTable(from.id, picked.id) : api.mergeTable(from.id, picked.id));
+          toast({ title: t(`floor.${kind}Done`, { from: from.code, to: picked.code }) });
+          modal.close();
+          load();
+        } catch (error) {
+          confirm.disabled = false;
+          toast({ title: errorMessage(error), kind: 'error' });
+        }
+      });
     }
 
     function seatsAround(count) {

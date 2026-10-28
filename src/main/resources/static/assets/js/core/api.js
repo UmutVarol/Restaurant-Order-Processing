@@ -189,6 +189,10 @@ export const api = {
   order: (id) => request('GET', `/orders/${id}`),
   advance: (id) => request('POST', `/orders/${id}/advance`),
   cancel: (id, reason) => request('POST', `/orders/${id}/cancel`, { reason }),
+  adjustLine: (orderId, lineId, adjustment) => request('POST', `/orders/${orderId}/lines/${lineId}/adjust`, adjustment),
+  discount: (orderId, discount) => request('PUT', `/orders/${orderId}/discount`, discount),
+  moveTable: (fromTableId, tableId) => request('POST', `/tables/${fromTableId}/move`, { tableId }),
+  mergeTable: (fromTableId, tableId) => request('POST', `/tables/${fromTableId}/merge`, { tableId }),
 
   tables: () => request('GET', '/floor/tables'),
   coupons: () => request('GET', '/coupons'),

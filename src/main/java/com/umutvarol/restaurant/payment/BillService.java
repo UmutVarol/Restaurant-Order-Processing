@@ -1,6 +1,7 @@
 package com.umutvarol.restaurant.payment;
 
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
+import com.umutvarol.restaurant.common.error.InvalidStateException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.common.money.Money;
 import com.umutvarol.restaurant.order.Order;
@@ -59,6 +60,21 @@ public class BillService implements SettlementPolicy {
         }
     }
 
+    @Override
+    public void requireCovered(Order order) {
+        Bill bill = lock(billFor(order));
+        if (bill.getStatus() != BillStatus.OPEN) {
+            throw new InvalidStateException("BILL_NOT_OPEN", "Bill #%d is %s".formatted(bill.getId(), bill.getStatus()),
+                    Map.of("billId", String.valueOf(bill.getId()), "status", bill.getStatus()));
+        }
+        if (bill.balance().subtract(bill.pending()).signum() < 0) {
+            throw new BusinessRuleException("ADJUSTMENT_BELOW_PAID",
+                    "Bill #%d has already been paid beyond the new total; refund first".formatted(bill.getId()),
+                    Map.of("billId", bill.getId(), "paid", bill.paid().add(bill.pending())));
+        }
+        events.publishEvent(PaymentChangedEvent.bill(bill, clock.instant()));
+    }
+
     /** The bill an order is on, opening one if it has none yet. */
     public Bill billFor(Order order) {
         return bills.findByOrderId(order.getId()).orElseGet(() -> attach(order, clock.instant()));
@@ -73,6 +89,8 @@ public class BillService implements SettlementPolicy {
         Order order = orders.findById(event.orderId()).orElseThrow();
         if (event.kind() == OrderChangedEvent.Kind.CREATED) {
             billFor(order);
+        } else if (event.kind() == OrderChangedEvent.Kind.UPDATED) {
+            return; // adjustments check the bill themselves (requireCovered), moves change it directly
         } else if (event.status() == OrderStatus.CANCELLED) {
             Bill bill = lock(billFor(order));
             Instant now = clock.instant();

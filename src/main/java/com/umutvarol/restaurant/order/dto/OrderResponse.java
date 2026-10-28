@@ -6,6 +6,7 @@ import com.umutvarol.restaurant.order.OrderStatusChange;
 import com.umutvarol.restaurant.order.OrderType;
 import com.umutvarol.restaurant.order.PaymentMethod;
 import com.umutvarol.restaurant.order.pricing.PriceBreakdown;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -30,7 +31,12 @@ public record OrderResponse(
         Instant statusSince,
         String createdBy,
         String cancellationReason,
-        List<StatusChange> history) {
+        List<StatusChange> history,
+        ManualDiscountView manualDiscount,
+        List<AdjustmentResponse> adjustments) {
+
+    public record ManualDiscountView(BigDecimal percent, BigDecimal amount) {
+    }
 
     public record TableRef(Long id, String code) {
     }
@@ -64,6 +70,9 @@ public record OrderResponse(
                 order.statusSince(),
                 order.getCreatedBy(),
                 order.getCancellationReason(),
-                order.getHistory().stream().map(StatusChange::from).toList());
+                order.getHistory().stream().map(StatusChange::from).toList(),
+                order.manualDiscount() == null ? null
+                        : new ManualDiscountView(order.manualDiscount().percent(), order.manualDiscount().amount()),
+                order.getAdjustments().stream().map(AdjustmentResponse::from).toList());
     }
 }

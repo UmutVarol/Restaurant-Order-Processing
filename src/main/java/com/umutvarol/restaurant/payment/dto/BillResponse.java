@@ -70,7 +70,7 @@ public record BillResponse(
         return new BillOrder(order.getId(), order.getType(), order.getStatus(), order.getCustomerName(),
                 order.getPricing().subtotal(), order.getPricing().total(),
                 order.getLines().stream()
-                        .map(line -> new Line(line.getItemName(), line.getItemIcon(), line.optionSummary(), line.getQuantity(),
+                        .map(line -> new Line(line.getItemName(), line.getItemIcon(), line.optionSummary(), line.activeQuantity(),
                                 line.getUnitPrice(), line.getLineTotal()))
                         .toList());
     }

@@ -1154,3 +1154,33 @@ svg.qr { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(-
 .pin-input { letter-spacing: .3em; font-variant-numeric: tabular-nums; }
 .muted-row td { opacity: .55; }
 .danger-text { color: var(--red); }
+
+/* ---------- voids, comps, discounts ---------- */
+.line-actions { display: flex; gap: 6px; margin-top: 6px; }
+.line-actions .btn { height: 28px; padding: 0 10px; font-size: 12px; }
+.line-item.voided .n, .line-item.voided .t { text-decoration: line-through; color: var(--faint); }
+.adj-tag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 650; vertical-align: 1px; }
+.adj-tag.void { background: var(--red-soft); color: var(--red); }
+.adj-tag.comp { background: var(--brand-soft); color: var(--brand); }
+.ticket-item.voided .n { text-decoration: line-through; color: var(--faint); }
+.ticket-item .void-note { grid-column: 2; color: var(--red); font-size: 12px; font-weight: 700; margin-top: -2px; }
+.adjustments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.adjustments li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: start; font-size: 13px; }
+.adjustments small { display: block; color: var(--muted); font-size: 12px; }
+.adj-kind { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 8px; border-radius: 8px; background: var(--surface-3); color: var(--text-2); }
+.adj-kind.k-VOID { background: var(--red-soft); color: var(--red); }
+.adj-kind.k-COMP, .adj-kind.k-DISCOUNT { background: var(--brand-soft); color: var(--brand); }
+.approval { display: flex; flex-direction: column; gap: 10px; }
+.approval:empty { display: none; }
+.approval-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 12px; border-top: 1px dashed var(--border); }
+.approval-head .faint { font-size: 12px; }
+.stepper.big button { width: 38px; height: 38px; }
+.stepper.big span { min-width: 36px; font-size: 16px; }
+.stepper.big .faint { min-width: 0; font-weight: 500; font-size: 12.5px; padding: 0 10px; }
+.table-slot { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.table-slot .table-card { flex: 1; }
+.table-actions { display: flex; gap: 6px; }
+.table-actions .btn { flex: 1; height: 30px; font-size: 12px; justify-content: center; }
+.transfer-picker { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+.transfer-picker button { height: auto; padding: 10px 6px; display: flex; flex-direction: column; gap: 2px; }
+.transfer-picker small { font-size: 11px; font-weight: 500; opacity: .75; }

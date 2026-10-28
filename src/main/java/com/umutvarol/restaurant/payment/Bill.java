@@ -3,6 +3,7 @@ package com.umutvarol.restaurant.payment;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
 import com.umutvarol.restaurant.common.money.Money;
+import com.umutvarol.restaurant.order.AdjustmentKind;
 import com.umutvarol.restaurant.order.Order;
 import com.umutvarol.restaurant.order.OrderStatus;
 import com.umutvarol.restaurant.order.PaymentMethod;
@@ -101,6 +102,41 @@ public class Bill {
         if (status != BillStatus.OPEN) {
             status = BillStatus.OPEN;
             closedAt = null;
+        }
+    }
+
+    /** The seating moves to another table, with every order on it. */
+    void moveTo(DiningTable target, Instant at, String actor) {
+        requireOpen();
+        this.table = target;
+        orders.forEach(order -> order.moveTo(target, AdjustmentKind.MOVE, at, actor));
+    }
+
+    /**
+     * Takes over every order of another table's bill. The other bill must not have taken any money, so no payment
+     * or QR link ever ends up pointing at orders it was not for; it becomes void.
+     */
+    void absorb(Bill source, Instant at, String actor) {
+        requireOpen();
+        source.requireOpen();
+        if (source.paid().signum() != 0 || source.pending().signum() != 0 || source.refunded().signum() != 0) {
+            throw new BusinessRuleException("MERGE_SOURCE_HAS_PAYMENTS",
+                    "Bill #%d already has payments; settle it on its own".formatted(source.id),
+                    Map.of("billId", String.valueOf(source.id)));
+        }
+        for (Order order : List.copyOf(source.orders)) {
+            order.moveTo(table, AdjustmentKind.MERGE, at, actor);
+            orders.add(order);
+        }
+        source.orders.clear();
+        source.status = BillStatus.VOID;
+        source.closedAt = at;
+    }
+
+    private void requireOpen() {
+        if (status != BillStatus.OPEN) {
+            throw new InvalidStateException("BILL_NOT_OPEN", "Bill #%d is %s".formatted(id, status),
+                    Map.of("billId", String.valueOf(id), "status", status));
         }
     }
 

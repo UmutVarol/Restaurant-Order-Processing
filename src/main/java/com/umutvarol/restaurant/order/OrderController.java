@@ -2,13 +2,17 @@ package com.umutvarol.restaurant.order;
 
 import com.umutvarol.restaurant.common.web.PageResponse;
 import com.umutvarol.restaurant.order.dto.CancelOrderRequest;
+import com.umutvarol.restaurant.order.dto.DiscountRequest;
+import com.umutvarol.restaurant.order.dto.LineAdjustmentRequest;
 import com.umutvarol.restaurant.order.dto.OrderResponse;
 import com.umutvarol.restaurant.order.dto.OrderSearchCriteria;
 import com.umutvarol.restaurant.order.dto.PlaceOrderRequest;
 import com.umutvarol.restaurant.order.dto.QuoteRequest;
 import com.umutvarol.restaurant.order.dto.QuoteResponse;
+import com.umutvarol.restaurant.security.Role;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.time.LocalDate;
@@ -23,6 +27,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -35,9 +40,11 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 class OrderController {
 
     private final OrderService orderService;
+    private final OrderAdjustmentService adjustments;
 
-    OrderController(OrderService orderService) {
+    OrderController(OrderService orderService, OrderAdjustmentService adjustments) {
         this.orderService = orderService;
+        this.adjustments = adjustments;
     }
 
     @Operation(summary = "Search orders",
@@ -92,5 +99,29 @@ class OrderController {
     OrderResponse cancel(@PathVariable Long id, @Valid @RequestBody CancelOrderRequest request,
                          Authentication authentication) {
         return orderService.cancel(id, request.reason(), authentication.getName());
+    }
+
+    @Operation(summary = "Void or comp units of a line", description = """
+            VOID takes units off; COMP serves them on the house. A waiter needs a manager's PIN in `approval`, except
+            for a void while the order is still PENDING. Refused if the bill is already paid beyond the new total.""")
+    @PostMapping("/{id}/lines/{lineId}/adjust")
+    OrderResponse adjustLine(@PathVariable Long id, @PathVariable Long lineId,
+                             @Valid @RequestBody LineAdjustmentRequest request, Authentication authentication,
+                             HttpServletRequest http) {
+        return adjustments.adjustLine(id, lineId, request, actor(authentication, http));
+    }
+
+    @Operation(summary = "Set or remove a manual discount", description = """
+            A percentage or an amount, on top of any coupon; send neither to remove it. Needs a manager.""")
+    @PutMapping("/{id}/discount")
+    OrderResponse discount(@PathVariable Long id, @Valid @RequestBody DiscountRequest request,
+                           Authentication authentication, HttpServletRequest http) {
+        return adjustments.discount(id, request, actor(authentication, http));
+    }
+
+    private static OrderAdjustmentService.Actor actor(Authentication authentication, HttpServletRequest http) {
+        boolean manager = authentication.getAuthorities().stream()
+                .anyMatch(authority -> ("ROLE_" + Role.ADMIN.name()).equals(authority.getAuthority()));
+        return new OrderAdjustmentService.Actor(authentication.getName(), manager, http.getRemoteAddr());
     }
 }

@@ -101,7 +101,7 @@
     }
   }
 
-  function price(subtotalC, type, coupon) {
+  function price(subtotalC, type, coupon, manual = null) {
     let discountC = 0;
     if (coupon) {
       discountC = coupon.discountType === 'PERCENTAGE'
@@ -109,6 +109,11 @@
         : toCents(coupon.discountValue);
       discountC = Math.max(0, Math.min(discountC, subtotalC));
       if (coupon.maxDiscount != null) discountC = Math.min(discountC, toCents(coupon.maxDiscount));
+    }
+    if (manual) {
+      // like ManualDiscount: after the coupon, never more than what is left
+      const left = subtotalC - discountC;
+      discountC += Math.max(0, Math.min(left, manual.percent != null ? halfUp((left * manual.percent) / 100) : manual.amountC));
     }
     const discounted = subtotalC - discountC;
     const taxC = halfUp((discounted * TAX_RATE_PERCENT) / 100);
@@ -286,8 +291,10 @@
       note: order.note,
       paymentMethod: order.paymentMethod,
       couponCode: order.couponCode,
-      lines: order.lines.map(lineView),
-      itemCount: order.lines.reduce((sum, line) => sum + line.quantity, 0),
+      lines: order.lines.map((line, index) => lineView(line, index, order)),
+      itemCount: order.lines.reduce((sum, line) => sum + line.quantity - (line.voided || 0), 0),
+      manualDiscount: order.manual ? { percent: order.manual.percent ?? null, amount: order.manual.amountC != null ? toLira(order.manual.amountC) : null } : null,
+      adjustments: (order.adjustments || []).map((a) => ({ ...a, amount: a.amountC != null ? toLira(a.amountC) : null, amountC: undefined, at: iso(a.at) })),
       pricing: pricingView(order.pricing),
       createdAt: iso(order.createdAt),
       updatedAt: iso(order.updatedAt),
@@ -298,7 +305,9 @@
     };
   }
 
-  const lineView = (line) => ({
+  // Line ids are derived from the order, so demo history needs no stored ids: order 1042, line 2 → 104202.
+  const lineView = (line, index, order) => ({
+    id: order?.id ? order.id * 100 + index + 1 : null, voidedQuantity: line.voided || 0, compedQuantity: line.comped || 0,
     menuItemId: line.menuItemId, name: line.name, icon: line.icon, category: line.category, unitPrice: toLira(line.unitPriceC),
     quantity: line.quantity, note: line.note, lineTotal: toLira(line.lineTotalC),
     options: (line.options || []).map((o) => ({ choiceId: o.choiceId, group: o.group, choice: o.choice, priceDelta: toLira(o.priceDeltaC) })),
@@ -554,6 +563,54 @@
       || (pin.length % 2 === 0 && pin === pin.slice(0, 2).repeat(pin.length / 2));
   }
 
+  // ------------------------------------------------------------------------------------------- table operations
+  // Mirrors OrderAdjustmentService and SeatingService: voids, comps and discounts need a manager's PIN from a waiter
+  // (a void only once the kitchen started), are repriced, and are refused when the bill is already paid beyond them.
+  function approvedBy(user, approval, needed) {
+    if (user.role === 'ADMIN') return user.username;
+    if (!needed) return null;
+    if (!approval) throw new Problem(403, 'APPROVAL_REQUIRED', 'A manager needs to approve this.');
+    const manager = String(approval.manager || '').toLowerCase();
+    if (USERS[manager]?.role !== 'ADMIN' || pins()[manager] !== String(approval.pin)) throw new Problem(403, 'APPROVAL_DENIED', 'The manager PIN is not correct.');
+    return manager;
+  }
+
+  function adjustOrder(order, user, change) {
+    if (!ACTIVE.includes(order.status)) throw new Problem(409, 'ORDER_NOT_EDITABLE', `Order #${order.id} can no longer be changed`, { parameters: { orderId: String(order.id), status: order.status } });
+    const snapshot = structuredClone(order);
+    const adjustment = change();
+    const coupon = order.couponCode ? COUPONS.find((c) => c.code === order.couponCode) : null;
+    order.pricing = price(order.lines.reduce((sum, l) => sum + l.lineTotalC, 0), order.type, coupon, order.manual);
+    const bill = billFor(order);
+    const m = money(bill);
+    if (m.balance - m.pending < 0) {
+      Object.assign(order, snapshot);
+      throw new Problem(422, 'ADJUSTMENT_BELOW_PAID', 'The bill has already been paid beyond the new total; refund first');
+    }
+    order.updatedAt = Date.now();
+    (order.adjustments ??= []).push({ ...adjustment, by: user.username, at: order.updatedAt });
+    changed(order, 'UPDATED');
+    return orderView(order);
+  }
+
+  function seatingAt(tableId) {
+    return state.bills.filter((b) => b.status === 'OPEN' && b.table && b.table.id === tableId && hasActive(b)).pop() || null;
+  }
+
+  function tableById(id) {
+    const table = TABLES.find((x) => x.id === Number(id));
+    if (!table) throw new Problem(404, 'NOT_FOUND', `Table ${id} was not found`);
+    return table;
+  }
+
+  function moveOrders(bill, to, kind, by) {
+    for (const order of ordersOf(bill)) {
+      (order.adjustments ??= []).push({ kind, itemName: null, quantity: null, amountC: null, detail: `${order.table?.code ?? '-'} → ${to.code}`, by, approvedBy: null, at: Date.now() });
+      order.table = { id: to.id, code: to.code };
+      order.updatedAt = Date.now();
+    }
+  }
+
   function requireFields(errors) {
     const list = Object.entries(errors).filter(([, message]) => message).map(([field, message]) => ({ field, message }));
     if (list.length) throw new Problem(400, 'VALIDATION_FAILED', 'One or more fields are invalid.', { errors: list });
@@ -779,7 +836,7 @@
     return {
       id: bill.id, status: bill.status, table: bill.table,
       orders: orders.map((o) => ({ id: o.id, type: o.type, status: o.status, customerName: o.customerName, subtotal: toLira(o.pricing.subtotal),
-        total: toLira(o.pricing.total), lines: o.lines.map((l) => ({ name: l.name, icon: l.icon, options: optionText(l), quantity: l.quantity, unitPrice: toLira(l.unitPriceC), lineTotal: toLira(l.lineTotalC) })) })),
+        total: toLira(o.pricing.total), lines: o.lines.map((l) => ({ name: l.name, icon: l.icon, options: optionText(l), quantity: l.quantity - (l.voided || 0), unitPrice: toLira(l.unitPriceC), lineTotal: toLira(l.lineTotalC) })) })),
       total: toLira(m.total), paid: toLira(m.paid), pending: toLira(m.pending), balance: toLira(m.balance), available: toLira(m.available),
       tips: toLira(m.tips), refunded: toLira(m.refunded), settled: m.balance <= 0,
       preferredMethod: orders.length ? orders[orders.length - 1].paymentMethod : null,
@@ -945,7 +1002,7 @@
         for (const l of order.lines) {
           const key = `${l.name}|${optionText(l)}`;
           const line = lines.get(key) || { name: l.name, icon: l.icon, options: optionText(l), quantity: 0, lineTotal: 0 };
-          line.quantity += l.quantity; line.lineTotal += l.lineTotalC; lines.set(key, line);
+          line.quantity += l.quantity - (l.voided || 0); line.lineTotal += l.lineTotalC; lines.set(key, line);
         }
       }
       const reason = bill.status !== 'OPEN' || m.available <= 0 ? 'PAID' : Date.now() > link.expiresAt ? 'EXPIRED' : null;
@@ -1213,13 +1270,79 @@
       return orderView(order);
     }],
 
+    ['POST', /^orders\/(\d+)\/lines\/(\d+)\/adjust$/, 'till', ({ params, user }, body) => {
+      const order = findOrder(params[0]);
+      const index = Number(params[1]) - order.id * 100 - 1;
+      const line = order.lines[index];
+      if (!line) throw new Problem(404, 'NOT_FOUND', `Order line ${params[1]} was not found`);
+      requireFields({ reason: blank(body.reason) ? 'must not be blank' : null, kind: ['VOID', 'COMP'].includes(body.kind) ? null : 'must be VOID or COMP' });
+      const units = Number(body.quantity);
+      const left = line.quantity - (line.voided || 0) - (line.comped || 0);
+      const approver = approvedBy(user, body.approval, body.kind === 'COMP' || order.status !== 'PENDING');
+      return adjustOrder(order, user, () => {
+        if (!(units >= 1 && units <= left)) throw new Problem(422, 'ADJUST_QUANTITY_INVALID', 'Too many', { parameters: { max: left, name: line.name } });
+        if (body.kind === 'VOID' && order.lines.reduce((n, l) => n + l.quantity - (l.voided || 0), 0) - units <= 0) {
+          throw new Problem(422, 'VOID_LAST_ITEM', 'Cancel the order instead of voiding everything on it');
+        }
+        if (body.kind === 'VOID') line.voided = (line.voided || 0) + units; else line.comped = (line.comped || 0) + units;
+        line.lineTotalC = line.unitPriceC * (line.quantity - (line.voided || 0) - (line.comped || 0));
+        return { kind: body.kind, itemName: line.name, quantity: units, amountC: line.unitPriceC * units, detail: String(body.reason).trim(), approvedBy: approver };
+      });
+    }],
+    ['PUT', /^orders\/(\d+)\/discount$/, 'till', ({ params, user }, body) => {
+      const order = findOrder(params[0]);
+      requireFields({ reason: blank(body.reason) ? 'must not be blank' : null });
+      if (body.percent != null && body.amount != null) throw new Problem(422, 'DISCOUNT_INVALID', 'Give a percentage or an amount, not both');
+      const approver = approvedBy(user, body.approval, true);
+      return adjustOrder(order, user, () => {
+        order.manual = body.percent != null ? { percent: Number(body.percent) } : body.amount != null ? { amountC: toCents(body.amount) } : null;
+        const what = body.percent != null ? `%${Number(body.percent)}` : body.amount != null ? String(body.amount) : 'removed';
+        return { kind: 'DISCOUNT', itemName: null, quantity: null, amountC: order.manual?.amountC ?? null, detail: `${what}: ${String(body.reason).trim()}`, approvedBy: approver };
+      });
+    }],
+    ['POST', /^tables\/(\d+)\/move$/, 'till', ({ params, user }, body) => {
+      const from = tableById(params[0]);
+      const to = tableById(body.tableId);
+      if (from.id === to.id) throw new Problem(422, 'SAME_TABLE', 'Pick a different table');
+      const bill = seatingAt(from.id);
+      if (!bill) throw new Problem(409, 'TABLE_NOT_SEATED', `Nobody is seated at ${from.code}`, { parameters: { table: from.code } });
+      if (seatingAt(to.id) || state.orders.some((o) => o.table?.id === to.id && ACTIVE.includes(o.status))) {
+        throw new Problem(422, 'TABLE_OCCUPIED', `Table ${to.code} is taken`, { parameters: { table: to.code } });
+      }
+      moveOrders(bill, to, 'MOVE', user.username);
+      bill.table = { id: to.id, code: to.code };
+      ordersOf(bill).forEach((o) => changed(o, 'UPDATED'));
+      paymentsChanged(bill, null, 'BILL');
+      return billView(bill);
+    }],
+    ['POST', /^tables\/(\d+)\/merge$/, 'till', ({ params, user }, body) => {
+      const from = tableById(params[0]);
+      const into = tableById(body.tableId);
+      if (from.id === into.id) throw new Problem(422, 'SAME_TABLE', 'Pick a different table');
+      const source = seatingAt(from.id);
+      const target = seatingAt(into.id);
+      if (!source || !target) {
+        const empty = source ? into : from;
+        throw new Problem(409, 'TABLE_NOT_SEATED', `Nobody is seated at ${empty.code}`, { parameters: { table: empty.code } });
+      }
+      const m = money(source);
+      if (m.paid || m.pending || m.refunded) throw new Problem(422, 'MERGE_SOURCE_HAS_PAYMENTS', 'That table has already paid something');
+      moveOrders(source, into, 'MERGE', user.username);
+      target.orderIds.push(...source.orderIds);
+      source.orderIds = [];
+      source.status = 'VOID';
+      source.closedAt = Date.now();
+      ordersOf(target).forEach((o) => changed(o, 'UPDATED'));
+      paymentsChanged(target, null, 'BILL');
+      return billView(target);
+    }],
     ['GET', /^floor\/tables$/, 'staff', () => TABLES.map((table) => {
       const open = state.orders.filter((o) => o.type === 'DINE_IN' && o.table && o.table.id === table.id && ACTIVE.includes(o.status))
         .sort((a, b) => a.createdAt - b.createdAt);
       return {
         ...table, occupied: open.length > 0, occupiedSince: open.length ? iso(open[0].createdAt) : null,
         openTotal: toLira(open.reduce((sum, o) => sum + o.pricing.total, 0)),
-        openOrders: open.map((o) => ({ id: o.id, status: o.status, customerName: o.customerName, itemCount: o.lines.reduce((n, l) => n + l.quantity, 0), total: toLira(o.pricing.total), createdAt: iso(o.createdAt) })),
+        openOrders: open.map((o) => ({ id: o.id, status: o.status, customerName: o.customerName, itemCount: o.lines.reduce((n, l) => n + l.quantity - (l.voided || 0), 0), total: toLira(o.pricing.total), createdAt: iso(o.createdAt) })),
       };
     })],
     ['GET', /^coupons$/, 'staff', () => COUPONS.filter((c) => !c.validUntil || Date.now() < Date.parse(c.validUntil)).map((c) => ({ ...c }))],

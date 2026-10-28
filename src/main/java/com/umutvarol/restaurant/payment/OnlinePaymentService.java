@@ -147,7 +147,7 @@ public class OnlinePaymentService {
         Map<String, Line> lines = new LinkedHashMap<>();
         orders.stream().flatMap(order -> order.getLines().stream()).forEach(line -> lines.merge(
                 line.getItemName() + '|' + line.optionSummary(),
-                new Line(line.getItemName(), line.getItemIcon(), line.optionSummary(), line.getQuantity(), line.getLineTotal()),
+                new Line(line.getItemName(), line.getItemIcon(), line.optionSummary(), line.activeQuantity(), line.getLineTotal()),
                 (a, b) -> new Line(a.name(), a.icon(), a.options(), a.quantity() + b.quantity(),
                         a.lineTotal().add(b.lineTotal()))));
 
