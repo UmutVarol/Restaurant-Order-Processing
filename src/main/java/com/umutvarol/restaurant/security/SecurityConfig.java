@@ -55,12 +55,12 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
  *
  * <table>
  *     <tr><th>Who</th><th>Can</th></tr>
- *     <tr><td>anyone</td><td>sign in, read the menu, open the web app, health and API docs; pay a bill
+ *     <tr><td>anyone</td><td>sign in (with a PIN only on a registered till), read the menu, open the web app, health and API docs; pay a bill
  *     through a payment link</td></tr>
  *     <tr><td>any staff</td><td>view orders, the floor plan, coupons and live events; advance orders</td></tr>
  *     <tr><td>WAITER, ADMIN</td><td>price carts, place and cancel orders; view bills, take payments, create
  *     payment links</td></tr>
- *     <tr><td>ADMIN</td><td>edit the menu, view analytics and actuator metrics; refunds and the day report</td></tr>
+ *     <tr><td>ADMIN</td><td>edit the menu, register tills, view analytics and actuator metrics; refunds and the day report</td></tr>
  * </table>
  */
 @Configuration(proxyBeanMethods = false)
@@ -129,7 +129,9 @@ class SecurityConfig {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/actuator/**").hasRole(Role.ADMIN.name())
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/pin-login").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/pin-staff").permitAll()
+                        .requestMatchers("/api/v1/devices", "/api/v1/devices/**").hasRole(Role.ADMIN.name())
                         // Guests paying by QR link: the unguessable link token is their permission.
                         .requestMatchers("/api/v1/public/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/callback/*", "/api/v1/payments/webhook/*").permitAll()

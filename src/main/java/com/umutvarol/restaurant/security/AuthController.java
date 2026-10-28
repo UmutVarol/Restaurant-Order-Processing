@@ -3,6 +3,9 @@ package com.umutvarol.restaurant.security;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.common.error.TooManyRequestsException;
 import com.umutvarol.restaurant.security.dto.LoginRequest;
+import com.umutvarol.restaurant.security.dto.PinLoginRequest;
+import com.umutvarol.restaurant.security.dto.SetPinRequest;
+import com.umutvarol.restaurant.security.dto.StaffTile;
 import com.umutvarol.restaurant.security.dto.TokenResponse;
 import com.umutvarol.restaurant.security.dto.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,18 +14,22 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,21 +39,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 class AuthController {
 
+    static final String DEVICE_HEADER = "X-Device-Token";
+
     private final AuthenticationManager authenticationManager;
     private final AppUserRepository users;
     private final JwtTokenService tokens;
     private final LoginAttemptService attempts;
     private final TokenDenylist denylist;
     private final SecurityAuditLog audit;
+    private final StaffPinService pins;
 
     AuthController(AuthenticationManager authenticationManager, AppUserRepository users, JwtTokenService tokens,
-                   LoginAttemptService attempts, TokenDenylist denylist, SecurityAuditLog audit) {
+                   LoginAttemptService attempts, TokenDenylist denylist, SecurityAuditLog audit, StaffPinService pins) {
         this.authenticationManager = authenticationManager;
         this.users = users;
         this.tokens = tokens;
         this.attempts = attempts;
         this.denylist = denylist;
         this.audit = audit;
+        this.pins = pins;
     }
 
     @Operation(summary = "Sign in", description = """
@@ -81,6 +92,30 @@ class AuthController {
         return tokens.issue(findUser(authentication.getName()));
     }
 
+    @Operation(summary = "Sign in with a PIN", description = """
+            Quick staff switching on a till a manager registered (`X-Device-Token`). A PIN session works for
+            everyday service but never for refunds or closing the day, which ask for the password.""")
+    @SecurityRequirements
+    @PostMapping("/pin-login")
+    TokenResponse pinLogin(@RequestHeader(name = DEVICE_HEADER, required = false) String device,
+                           @Valid @RequestBody PinLoginRequest request, HttpServletRequest http) {
+        return pins.pinLogin(device, request.username(), request.pin(), http.getRemoteAddr());
+    }
+
+    @Operation(summary = "Staff who can switch in on this till")
+    @SecurityRequirements
+    @GetMapping("/pin-staff")
+    List<StaffTile> pinStaff(@RequestHeader(name = DEVICE_HEADER, required = false) String device) {
+        return pins.staff(device);
+    }
+
+    @Operation(summary = "Set my PIN", description = "Needs the password, so a PIN session cannot change a PIN.")
+    @PutMapping("/pin")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void setPin(Authentication authentication, @Valid @RequestBody SetPinRequest request, HttpServletRequest http) {
+        pins.setPin(authentication.getName(), request.password(), request.pin(), http.getRemoteAddr());
+    }
+
     @Operation(summary = "Sign out", description = "Revokes the current access token before it expires.")
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -96,9 +131,11 @@ class AuthController {
 
     @Operation(summary = "The signed-in user")
     @GetMapping("/me")
-    UserResponse me(Authentication authentication) {
+    UserResponse me(JwtAuthenticationToken authentication) {
         AppUser user = findUser(authentication.getName());
-        return new UserResponse(user.getUsername(), user.getDisplayName(), user.getRole());
+        List<String> methods = authentication.getToken().getClaimAsStringList(JwtTokenService.AMR_CLAIM);
+        String method = methods == null || methods.isEmpty() ? JwtTokenService.PASSWORD : methods.getFirst();
+        return new UserResponse(user.getUsername(), user.getDisplayName(), user.getRole(), user.hasPin(), method);
     }
 
     private AppUser findUser(String username) {

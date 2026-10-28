@@ -24,6 +24,10 @@ public class JwtTokenService {
     static final String ROLES_CLAIM = "roles";
     static final String NAME_CLAIM = "name";
     static final String TOKEN_TYPE = "at+jwt";
+    /** RFC 8176 authentication method: {@code pwd} for a password, {@code pin} for a PIN on a registered till. */
+    static final String AMR_CLAIM = "amr";
+    public static final String PASSWORD = "pwd";
+    public static final String PIN = "pin";
 
     private final JwtEncoder encoder;
     private final JwtProperties properties;
@@ -36,6 +40,10 @@ public class JwtTokenService {
     }
 
     public TokenResponse issue(AppUser user) {
+        return issue(user, PASSWORD);
+    }
+
+    public TokenResponse issue(AppUser user, String method) {
         Instant issuedAt = clock.instant();
         Instant expiresAt = issuedAt.plus(properties.timeToLive());
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -47,10 +55,11 @@ public class JwtTokenService {
                 .expiresAt(expiresAt)
                 .claim(NAME_CLAIM, user.getDisplayName())
                 .claim(ROLES_CLAIM, List.of(user.getRole().name()))
+                .claim(AMR_CLAIM, List.of(method))
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type(TOKEN_TYPE).build();
         String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
         return new TokenResponse(token, "Bearer", expiresAt,
-                new UserResponse(user.getUsername(), user.getDisplayName(), user.getRole()));
+                new UserResponse(user.getUsername(), user.getDisplayName(), user.getRole(), user.hasPin(), method));
     }
 }

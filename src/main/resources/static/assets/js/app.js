@@ -2,7 +2,7 @@
 import { h, initials, mount } from './core/dom.js';
 import { icon, logoMark } from './core/icons.js';
 import { onLangChange, t } from './core/i18n.js';
-import { api, clearSession, currentSession, saveSession } from './core/api.js';
+import { api, clearSession, currentDevice, currentSession, saveSession } from './core/api.js';
 import { bus } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { time } from './core/format.js';
@@ -17,6 +17,8 @@ const ROUTES = [
   { id: 'cashier', icon: 'coins', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/cashier.js') },
   { id: 'dashboard', icon: 'dashboard', roles: ['ADMIN'], section: 'manage', load: () => import('./views/dashboard.js') },
   { id: 'menu', icon: 'menu', roles: ['ADMIN'], section: 'manage', load: () => import('./views/menu.js') },
+  // reached from the user card, not the navigation
+  { id: 'settings', icon: 'settings', roles: ALL, section: null, load: () => import('./views/settings.js') },
 ];
 const HOME = { ADMIN: 'dashboard', WAITER: 'pos', KITCHEN: 'kitchen' };
 
@@ -117,7 +119,10 @@ function renderShell(current) {
       h('div', { class: 'user-card' },
         h('div', { class: 'avatar' }, initials(user.displayName)),
         h('div', { class: 'who' }, h('div', { class: 'name' }, user.displayName), h('div', { class: 'role' }, t(`role.${user.role}`))),
-        h('button', { class: 'icon-btn sm', title: t('action.logout'), 'aria-label': t('action.logout'), onclick: signOut }, icon('logout', 'sm')))));
+        h('a', { class: 'icon-btn sm', href: '#/settings', title: t('nav.settings'), 'aria-label': t('nav.settings') }, icon('settings', 'sm')),
+        currentDevice()
+          ? h('button', { class: 'icon-btn sm', title: t('lock.switch'), 'aria-label': t('lock.switch'), 'data-testid': 'switch-user', onclick: signOut }, icon('switchUser', 'sm'))
+          : h('button', { class: 'icon-btn sm', title: t('action.logout'), 'aria-label': t('action.logout'), onclick: signOut }, icon('logout', 'sm')))));
 
   const live = h('div', { class: `live ${realtimeStatus()}`, id: 'live-indicator' }, h('span', { class: 'dot' }),
     h('span', null, realtimeStatus() === 'on' ? t('live.on') : t('live.off')));
@@ -169,7 +174,22 @@ async function refreshKitchenBadge() {
 
 // ------------------------------------------------------------------------------- session
 
+// On a shared till the screen locks itself after a few idle minutes, back to the staff PIN screen. Kitchen screens
+// are watched rather than touched, so they stay signed in.
+const IDLE_LOCK_MS = () => (currentDevice()?.idleMinutes ?? 5) * 60_000;
+let lastActivity = Date.now();
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((type) => document.addEventListener(type, () => { lastActivity = Date.now(); }, { passive: true, capture: true }));
+setInterval(() => {
+  const device = currentDevice();
+  if (!user || !device || user.role === 'KITCHEN' || device.idleMinutes === 0) return;
+  if (Date.now() - lastActivity >= IDLE_LOCK_MS()) {
+    signOut();
+    toast({ title: t('lock.locked'), kind: 'info' });
+  }
+}, 10_000);
+
 async function onSignedIn(tokenResponse) {
+  lastActivity = Date.now();
   saveSession(tokenResponse);
   user = tokenResponse.user;
   startRealtime();

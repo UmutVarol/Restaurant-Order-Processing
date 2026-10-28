@@ -76,6 +76,37 @@ export function clearSession() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
 }
 
+// ---------------------------------------------------------------------------- registered device
+// A till a manager registered keeps its device token here, for this browser only. The token alone signs nobody in:
+// it only lets staff use their PIN on this device, and a manager can revoke it at any time.
+const DEVICE_KEY = 'sofra.device';
+
+export function currentDevice() {
+  try {
+    const device = JSON.parse(localStorage.getItem(DEVICE_KEY) || 'null');
+    return device?.token ? device : null;
+  } catch { return null; }
+}
+
+export function saveDevice(registration) {
+  try {
+    localStorage.setItem(DEVICE_KEY, JSON.stringify({ id: registration.device.id, name: registration.device.name, token: registration.token }));
+  } catch { /* storage blocked: PIN sign-in stays unavailable */ }
+}
+
+/** Till preferences kept next to the registration, such as how soon it locks itself. */
+export function updateDevice(changes) {
+  const device = currentDevice();
+  if (!device) return;
+  try { localStorage.setItem(DEVICE_KEY, JSON.stringify({ ...device, ...changes })); } catch { /* ignore */ }
+}
+
+export function forgetDevice() {
+  try { localStorage.removeItem(DEVICE_KEY); } catch { /* ignore */ }
+}
+
+const deviceHeader = () => ({ 'X-Device-Token': currentDevice()?.token ?? '' });
+
 export function authHeader() {
   return session ? { Authorization: `Bearer ${session.token}` } : {};
 }
@@ -138,6 +169,12 @@ export const api = {
   login: (username, password) => request('POST', '/auth/login', { username, password }, { auth: false }),
   me: () => request('GET', '/auth/me'),
   logout: () => request('POST', '/auth/logout'),
+  pinLogin: (username, pin) => request('POST', '/auth/pin-login', { username, pin }, { auth: false, headers: deviceHeader() }),
+  pinStaff: () => request('GET', '/auth/pin-staff', undefined, { auth: false, headers: deviceHeader() }),
+  setPin: (password, pin) => request('PUT', '/auth/pin', { password, pin }),
+  devices: () => request('GET', '/devices'),
+  registerDevice: (name) => request('POST', '/devices', { name }),
+  revokeDevice: (id) => request('DELETE', `/devices/${id}`),
 
   menu: (params) => request('GET', `/menu${query(params)}`, undefined, { auth: false }),
   createMenuItem: (item) => request('POST', '/menu', item),

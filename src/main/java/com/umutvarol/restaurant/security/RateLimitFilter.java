@@ -35,6 +35,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 class RateLimitFilter extends OncePerRequestFilter {
 
     static final String LOGIN_PATH = "/api/v1/auth/login";
+    static final String PIN_LOGIN_PATH = "/api/v1/auth/pin-login";
     private static final List<String> PUBLIC_PREFIXES = List.of("/api/v1/public/", "/api/v1/payments/callback/",
             "/api/v1/payments/webhook/", "/api/v1/csp-reports");
 
@@ -85,7 +86,8 @@ class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private static boolean isLogin(HttpServletRequest request) {
-        return "POST".equals(request.getMethod()) && LOGIN_PATH.equals(request.getRequestURI());
+        return "POST".equals(request.getMethod())
+                && (LOGIN_PATH.equals(request.getRequestURI()) || PIN_LOGIN_PATH.equals(request.getRequestURI()));
     }
 
     /** Refills gradually over the minute rather than all at once, so a client cannot burst twice the budget. */

@@ -34,6 +34,12 @@ public class AppUser {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    @Column(name = "pin_hash", length = 100)
+    private String pinHash;
+
+    @Column(name = "pin_lockouts", nullable = false)
+    private int pinLockouts;
+
     protected AppUser() {
         // for JPA
     }
@@ -67,5 +73,33 @@ public class AppUser {
 
     public boolean isEnabled() {
         return enabled;
+    }
+
+    public boolean hasPin() {
+        return pinHash != null;
+    }
+
+    String getPinHash() {
+        return pinHash;
+    }
+
+    void setPinHash(String pinHash) {
+        this.pinHash = pinHash;
+        this.pinLockouts = 0;
+    }
+
+    /** Counts a PIN lockout; after {@code limit} in a row the PIN is cleared. @return whether it was cleared */
+    boolean pinLockedOut(int limit) {
+        pinLockouts++;
+        if (pinLockouts >= limit) {
+            pinHash = null;
+            pinLockouts = 0;
+            return true;
+        }
+        return false;
+    }
+
+    void pinAccepted() {
+        pinLockouts = 0;
     }
 }

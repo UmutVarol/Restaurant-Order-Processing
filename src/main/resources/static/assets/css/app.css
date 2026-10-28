@@ -1115,3 +1115,42 @@ svg.qr { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(-
 .option-choice-edit { gap: 6px; padding-left: 12px; }
 .option-choice-edit .input:first-child { flex: 1; min-width: 0; }
 .option-choice-edit .price { width: 92px; }
+
+/* ---------- lock screen (PIN on a registered till) ---------- */
+.lock { display: flex; flex-direction: column; gap: 20px; }
+.lock h2 { font-family: var(--font-display); font-size: 32px; font-weight: 600; letter-spacing: -.02em; }
+.lock-device { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.lock-alt { align-self: center; }
+.staff-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+.staff-tile { border: 1px solid var(--border); background: var(--surface); border-radius: 18px; padding: 16px 10px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; text-align: center; transition: transform .15s, border-color .15s, box-shadow .15s; }
+.staff-tile:hover, .staff-tile:focus-visible { border-color: var(--brand); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.staff-tile .avatar { width: 48px; height: 48px; font-size: 16px; }
+.staff-tile b { font-size: 13.5px; line-height: 1.25; }
+.staff-tile small { color: var(--muted); font-size: 11.5px; }
+.pin-who { display: flex; align-items: center; gap: 12px; }
+.pin-who .avatar { width: 44px; height: 44px; }
+.pin-who b { display: block; font-size: 16px; }
+.pin-who small { color: var(--muted); }
+.pin-dots { display: flex; justify-content: center; gap: 14px; padding: 6px 0; }
+.pin-dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border-strong, var(--muted)); transition: background .12s, transform .12s; }
+.pin-dots i.on { background: var(--brand); border-color: var(--brand); transform: scale(1.08); }
+.pin-dots.shake { animation: shake .35s; }
+@keyframes shake { 20%, 60% { transform: translateX(-7px); } 40%, 80% { transform: translateX(7px); } }
+.pin-hint { text-align: center; font-size: 12.5px; }
+.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 300px; width: 100%; margin: 0 auto; }
+.pin-key { height: 62px; border-radius: 18px; border: 1px solid var(--border); background: var(--surface); font-size: 22px; font-weight: 600;
+  font-variant-numeric: tabular-nums; display: grid; place-items: center; transition: background .1s, transform .1s; }
+.pin-key:active { transform: scale(.96); background: var(--surface-2); }
+.pin-key.go { background: var(--brand); border-color: var(--brand); color: #fff; }
+.pin-key.go:disabled { opacity: .45; }
+@media (prefers-reduced-motion: reduce) { .pin-dots.shake { animation: none; } }
+
+/* ---------- settings ---------- */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 18px; align-items: start; }
+.settings-card .card-head { gap: 12px; }
+.settings-ic { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
+.settings-form { display: flex; flex-direction: column; gap: 12px; }
+.pin-input { letter-spacing: .3em; font-variant-numeric: tabular-nums; }
+.muted-row td { opacity: .55; }
+.danger-text { color: var(--red); }

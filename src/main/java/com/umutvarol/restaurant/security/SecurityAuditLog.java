@@ -47,6 +47,33 @@ class SecurityAuditLog {
         audit.info("logout user={} jti={}", clean(username), clean(tokenId));
     }
 
+    void pinLogin(String username, String device, String client) {
+        count("pin_success");
+        audit.info("login.pin user={} device={} client={}", clean(username), clean(device), clean(client));
+    }
+
+    void pinFailed(String username, String where, String client) {
+        count("pin_failure");
+        audit.warn("login.pin_failure user={} at={} client={}", clean(username), clean(where), clean(client));
+    }
+
+    void pinSet(String username) {
+        audit.info("pin.set user={}", clean(username));
+    }
+
+    void pinCleared(String username) {
+        meters.counter("sofra.security.pin_cleared").increment();
+        audit.warn("pin.cleared user={} reason=repeated_lockouts", clean(username));
+    }
+
+    void deviceRegistered(Long id, String name, String by) {
+        audit.info("device.registered id={} name={} by={}", id, clean(name), clean(by));
+    }
+
+    void deviceRevoked(Long id, String name, String by) {
+        audit.warn("device.revoked id={} name={} by={}", id, clean(name), clean(by));
+    }
+
     private void count(String outcome) {
         meters.counter("sofra.security.login", "outcome", outcome).increment();
     }

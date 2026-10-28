@@ -519,11 +519,39 @@
   function authenticate(headers, access) {
     if (access === 'public') return null;
     const header = headers.Authorization || headers.authorization || '';
-    const username = header.startsWith('Bearer demo.') ? header.slice('Bearer demo.'.length) : null;
+    // demo tokens: "demo.<user>" after a password, "demo.pin.<user>" after a PIN
+    const subject = header.startsWith('Bearer demo.') ? header.slice('Bearer demo.'.length) : null;
+    const method = subject?.startsWith('pin.') ? 'pin' : 'pwd';
+    const username = method === 'pin' ? subject.slice(4) : subject;
     const user = username && USERS[username];
     if (!user) throw new Problem(401, 'UNAUTHORIZED', 'Authentication is required to access this resource.');
     if (!ROLES[access].includes(user.role)) throw new Problem(403, 'FORBIDDEN', 'Your role is not allowed to perform this action.');
-    return { username, ...user };
+    return { username, method, ...user };
+  }
+
+  /** Like StepUpAuthentication: a PIN session never moves money or registers tills. */
+  function requirePassword(user) {
+    if (user.method !== 'pwd') throw new Problem(403, 'REAUTH_REQUIRED', 'Confirm your password to continue.', { parameters: { windowMinutes: 5 } });
+  }
+
+  const pins = () => (state.pins ??= { admin: '2468', waiter: '1357', chef: '9024' });
+  const devices = () => (state.devices ??= []);
+  const userView = (username, method) => ({ username, displayName: USERS[username].displayName, role: USERS[username].role, hasPin: Boolean(pins()[username]), method });
+  const deviceView = (d) => ({ id: d.id, name: d.name, createdBy: d.createdBy, createdAt: iso(d.createdAt), lastSeenAt: d.lastSeenAt ? iso(d.lastSeenAt) : null, active: !d.revokedAt });
+
+  function deviceFor(headers) {
+    const token = headers['X-Device-Token'] || headers['x-device-token'];
+    const device = token && devices().find((d) => d.token === token && !d.revokedAt);
+    if (!device) throw new Problem(403, 'DEVICE_NOT_REGISTERED', 'This device is not registered for PIN sign-in.');
+    device.lastSeenAt = Date.now();
+    return device;
+  }
+
+  function weakPin(pin) {
+    const digits = [...pin].map(Number);
+    const steps = digits.slice(1).map((d, i) => d - digits[i]);
+    return new Set(digits).size === 1 || steps.every((x) => x === 1) || steps.every((x) => x === -1)
+      || (pin.length % 2 === 0 && pin === pin.slice(0, 2).repeat(pin.length / 2));
   }
 
   function requireFields(errors) {
@@ -879,6 +907,7 @@
       return [201, { token: link.token, url: `${base}#/pay/${link.token}`, amount: amountC == null ? null : toLira(amountC), expiresAt: iso(link.expiresAt) }];
     }],
     ['POST', /^payments\/(\d+)\/refunds$/, 'manager', ({ params, user }, body) => {
+      requirePassword(user);
       requireFields({ amount: body.amount == null ? 'must not be null' : null, reason: blank(body.reason) ? 'must not be blank' : null });
       const bill = state.bills.find((b) => b.payments.some((p) => p.id === Number(params[0])));
       if (!bill) throw new Problem(404, 'PAYMENT_NOT_FOUND', `Payment ${params[0]} was not found`, { parameters: { id: String(params[0]) } });
@@ -894,6 +923,7 @@
     }],
     ['GET', /^payments\/day$/, 'manager', ({ query }) => dayReport(query.get('date') || today())],
     ['POST', /^payments\/day\/close$/, 'manager', ({ user }, body) => {
+      requirePassword(user);
       requireFields({ date: blank(body.date) ? 'must not be null' : null, countedCash: body.countedCash == null ? 'must not be null' : null });
       if (body.date > today()) throw new Problem(422, 'DAY_NOT_OVER', 'A day can only be closed once it has started', { parameters: { date: body.date } });
       if (state.closings[body.date]) throw new Problem(409, 'DAY_ALREADY_CLOSED', `${body.date} has already been closed`, { parameters: { date: body.date } });
@@ -993,9 +1023,48 @@
       const user = USERS[String(body.username || '').toLowerCase()];
       if (!user || user.password !== body.password) throw new Problem(401, 'BAD_CREDENTIALS', 'Invalid username or password.');
       const username = String(body.username).toLowerCase();
-      return { accessToken: `demo.${username}`, tokenType: 'Bearer', expiresAt: iso(Date.now() + 8 * 60 * MINUTE), user: { username, displayName: user.displayName, role: user.role } };
+      return { accessToken: `demo.${username}`, tokenType: 'Bearer', expiresAt: iso(Date.now() + 8 * 60 * MINUTE), user: userView(username, 'pwd') };
     }],
-    ['GET', /^auth\/me$/, 'staff', ({ user }) => ({ username: user.username, displayName: user.displayName, role: user.role })],
+    ['POST', /^auth\/pin-login$/, 'public', ({ headers }, body) => {
+      deviceFor(headers);
+      const username = String(body.username || '').toLowerCase();
+      if (!USERS[username] || !pins()[username] || pins()[username] !== String(body.pin)) throw new Problem(401, 'BAD_CREDENTIALS', 'Invalid username or password.');
+      save();
+      return { accessToken: `demo.pin.${username}`, tokenType: 'Bearer', expiresAt: iso(Date.now() + 8 * 60 * MINUTE), user: userView(username, 'pin') };
+    }],
+    ['GET', /^auth\/pin-staff$/, 'public', ({ headers }) => {
+      deviceFor(headers);
+      return Object.keys(USERS).filter((u) => pins()[u]).map((u) => ({ username: u, displayName: USERS[u].displayName, role: USERS[u].role }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    }],
+    ['PUT', /^auth\/pin$/, 'staff', ({ user }, body) => {
+      if (USERS[user.username].password !== body.password) throw new Problem(403, 'PASSWORD_INCORRECT', 'The password is not correct.');
+      if (!/^\d{4,6}$/.test(String(body.pin || ''))) requireFields({ pin: 'must match "\\d{4,6}"' });
+      if (weakPin(String(body.pin))) throw new Problem(422, 'PIN_TOO_SIMPLE', 'Choose a PIN that is not a run or a repeat.');
+      pins()[user.username] = String(body.pin);
+      save();
+      return [204, null];
+    }],
+    ['GET', /^devices$/, 'manager', () => [...devices()].sort((a, b) => b.createdAt - a.createdAt).map(deviceView)],
+    ['POST', /^devices$/, 'manager', ({ user }, body) => {
+      requirePassword(user);
+      requireFields({ name: blank(body.name) ? 'must not be blank' : null });
+      state.nextDeviceId ??= 1;
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join('');
+      const device = { id: state.nextDeviceId++, name: String(body.name).trim().slice(0, 60), token, createdBy: user.username, createdAt: Date.now(), lastSeenAt: null, revokedAt: null };
+      devices().push(device);
+      save();
+      return [201, { device: deviceView(device), token }];
+    }],
+    ['DELETE', /^devices\/(\d+)$/, 'manager', ({ params, user }) => {
+      requirePassword(user);
+      const device = devices().find((d) => d.id === Number(params[0]));
+      if (!device) throw new Problem(404, 'NOT_FOUND', 'Device not found');
+      device.revokedAt ??= Date.now();
+      save();
+      return deviceView(device);
+    }],
+    ['GET', /^auth\/me$/, 'staff', ({ user }) => userView(user.username, user.method)],
     // Demo tokens are not real JWTs, so there is nothing to revoke; the call simply succeeds like the real one.
     ['POST', /^auth\/logout$/, 'staff', () => [204, null]],
 

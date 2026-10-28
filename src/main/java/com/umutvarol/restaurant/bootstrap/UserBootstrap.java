@@ -3,6 +3,8 @@ package com.umutvarol.restaurant.bootstrap;
 import com.umutvarol.restaurant.security.AppUser;
 import com.umutvarol.restaurant.security.AppUserRepository;
 import com.umutvarol.restaurant.security.Role;
+import com.umutvarol.restaurant.security.StaffPinService;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,13 +30,15 @@ class UserBootstrap implements ApplicationRunner {
     private final PasswordEncoder passwordEncoder;
     private final DemoProperties demo;
     private final String adminPassword;
+    private final StaffPinService pins;
 
-    UserBootstrap(AppUserRepository users, PasswordEncoder passwordEncoder, DemoProperties demo,
+    UserBootstrap(AppUserRepository users, PasswordEncoder passwordEncoder, DemoProperties demo, StaffPinService pins,
                   @Value("${restaurant.bootstrap.admin-password:}") String adminPassword) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.demo = demo;
         this.adminPassword = adminPassword;
+        this.pins = pins;
     }
 
     @Override
@@ -47,7 +51,8 @@ class UserBootstrap implements ApplicationRunner {
             create("admin", "admin123", "Elif Yılmaz", Role.ADMIN);
             create("waiter", "waiter123", "Can Demir", Role.WAITER);
             create("chef", "chef123", "Mehmet Usta", Role.KITCHEN);
-            log.info("Demo accounts created: admin/admin123, waiter/waiter123, chef/chef123");
+            pins.demoPins(Map.of("admin", "2468", "waiter", "1357", "chef", "9024"));
+            log.info("Demo accounts created: admin/admin123, waiter/waiter123, chef/chef123 (PINs 2468, 1357, 9024)");
         } else if (StringUtils.hasText(adminPassword)) {
             create("admin", adminPassword, "Administrator", Role.ADMIN);
             log.info("Initial administrator account 'admin' created");

@@ -55,6 +55,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.FORBIDDEN, "Re-authentication required", ex);
     }
 
+    @ExceptionHandler(AccessRefusedException.class)
+    ProblemDetail handleAccessRefused(AccessRefusedException ex) {
+        return problem(HttpStatus.FORBIDDEN, "Access refused", ex);
+    }
+
     @ExceptionHandler(UpstreamServiceException.class)
     ProblemDetail handleUpstream(UpstreamServiceException ex) {
         return problem(HttpStatus.BAD_GATEWAY, "Upstream service failed", ex);
