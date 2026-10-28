@@ -4,6 +4,7 @@ import com.umutvarol.restaurant.common.money.Money;
 import com.umutvarol.restaurant.menu.MenuCategory;
 import com.umutvarol.restaurant.menu.MenuItem;
 import com.umutvarol.restaurant.menu.OptionChoice;
+import com.umutvarol.restaurant.menu.Station;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,6 +20,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -72,6 +74,18 @@ public class OrderLine {
     @Column(name = "comped_quantity", nullable = false)
     private int compedQuantity;
 
+    @Column(name = "station_code", length = 20)
+    private String stationCode;
+
+    @Column(nullable = false)
+    private int course = 1;
+
+    @Column(name = "fired_at")
+    private Instant firedAt;
+
+    @Column(name = "ready_at")
+    private Instant readyAt;
+
     @OneToMany(mappedBy = "line", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id ASC")
     private List<OrderLineOption> options = new ArrayList<>();
@@ -88,6 +102,8 @@ public class OrderLine {
         this.itemName = item.getName();
         this.itemIcon = item.getIcon();
         this.category = item.getCategory();
+        this.stationCode = item.getStationCode();
+        this.course = defaultCourse(item.getCategory());
         BigDecimal extras = choices.stream().map(OptionChoice::getPriceDelta).reduce(BigDecimal.ZERO, BigDecimal::add);
         this.unitPrice = Money.normalize(item.getPrice().add(extras));
         this.quantity = quantity;
@@ -144,6 +160,60 @@ public class OrderLine {
 
     public String getNote() {
         return note;
+    }
+
+    /** Starters and drinks come first, then mains, then desserts. */
+    public static int defaultCourse(MenuCategory category) {
+        return switch (category) {
+            case STARTER, DRINK -> 1;
+            case MAIN -> 2;
+            case DESSERT -> 3;
+        };
+    }
+
+    /** @param course 1 to 3, or null for the dish's usual course */
+    public OrderLine inCourse(@Nullable Integer course) {
+        if (course != null) {
+            if (course < 1 || course > 3) {
+                throw new IllegalArgumentException("course must be 1 to 3");
+            }
+            this.course = course;
+        }
+        return this;
+    }
+
+    void fire(Instant at) {
+        if (firedAt == null) {
+            firedAt = at;
+        }
+    }
+
+    void hold() {
+        this.firedAt = null;
+    }
+
+    void markReady(boolean ready, Instant at) {
+        this.readyAt = ready ? at : null;
+    }
+
+    public boolean isFired() {
+        return firedAt != null;
+    }
+
+    public String getStationCode() {
+        return stationCode != null ? stationCode : Station.defaultCode(category);
+    }
+
+    public int getCourse() {
+        return course;
+    }
+
+    public @Nullable Instant getFiredAt() {
+        return firedAt;
+    }
+
+    public @Nullable Instant getReadyAt() {
+        return readyAt;
     }
 
     /** Units still on the order: ordered minus voided. The kitchen makes these. */

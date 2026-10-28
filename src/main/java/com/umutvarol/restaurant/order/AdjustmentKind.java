@@ -11,5 +11,7 @@ public enum AdjustmentKind {
     /** The order moved to another table with its seating. */
     MOVE,
     /** The order joined another table's bill. */
-    MERGE
+    MERGE,
+    /** A held course was sent to the kitchen. */
+    FIRE
 }

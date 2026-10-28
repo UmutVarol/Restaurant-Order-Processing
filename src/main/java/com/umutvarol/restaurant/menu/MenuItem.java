@@ -84,6 +84,9 @@ public class MenuItem {
     @Version
     private long version;
 
+    @Column(name = "station_code", length = 20)
+    private String stationCode;
+
     protected MenuItem() {
         // for JPA
     }
@@ -267,6 +270,16 @@ public class MenuItem {
 
     public List<OptionGroup> getOptionGroups() {
         return Collections.unmodifiableList(optionGroups);
+    }
+
+    /** The station that makes this dish; by its category when none was chosen. */
+    public String getStationCode() {
+        return stationCode != null ? stationCode : Station.defaultCode(category);
+    }
+
+    /** @param code an existing station's code, or null for the category's default */
+    public void assignStation(String code) {
+        this.stationCode = code;
     }
 
     public long getVersion() {

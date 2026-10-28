@@ -14,6 +14,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
@@ -24,6 +26,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @Tag(name = "Orders", description = "Price carts, place orders and move them through the kitchen")
+@Validated
 @RestController
 @RequestMapping("/api/v1/orders")
 class OrderController {
@@ -92,6 +96,19 @@ class OrderController {
     @PostMapping("/{id}/advance")
     OrderResponse advance(@PathVariable Long id, Authentication authentication) {
         return orderService.advance(id, authentication.getName());
+    }
+
+    @Operation(summary = "Fire a held course", description = "Its dishes go to their stations' screens and printers now.")
+    @PostMapping("/{id}/courses/{course}/fire")
+    OrderResponse fireCourse(@PathVariable Long id, @PathVariable @Min(1) @Max(3) int course, Authentication authentication) {
+        return orderService.fireCourse(id, course, authentication.getName());
+    }
+
+    @Operation(summary = "Mark a dish ready (or not) at its station")
+    @PostMapping("/{id}/lines/{lineId}/ready")
+    OrderResponse lineReady(@PathVariable Long id, @PathVariable Long lineId,
+                            @RequestParam(defaultValue = "true") boolean ready) {
+        return orderService.markLineReady(id, lineId, ready);
     }
 
     @Operation(summary = "Cancel an order", description = "Only PENDING or PREPARING orders can be cancelled. Requires WAITER or ADMIN.")

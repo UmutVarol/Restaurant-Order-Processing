@@ -53,8 +53,8 @@ class PrintingIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void eachPrinterGetsOnlyItsOwnDishes() throws Exception {
-        long kitchen = createPrinter("Kitchen " + System.nanoTime(), server.getLocalPort(), "\"STARTER\", \"MAIN\"");
-        long bar = createPrinter("Bar " + System.nanoTime(), server.getLocalPort(), "\"DRINK\"");
+        long kitchen = createPrinter("Kitchen " + System.nanoTime(), server.getLocalPort(), "\"COLD\", \"HOT\"");
+        long bar = createPrinter("Bar " + System.nanoTime(), server.getLocalPort(), "\"BAR\"");
 
         String order = mvc.perform(json(as(WAITER, post("/api/v1/orders")), """
                         {"type": "TAKEAWAY", "customerName": "Printer Test", "paymentMethod": "CASH",
@@ -89,6 +89,34 @@ class PrintingIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void aHeldCoursePrintsWhenFiredAndAVoidPrintsASlip() throws Exception {
+        long kitchen = createPrinter("Courses " + System.nanoTime(), server.getLocalPort(), "\"COLD\", \"HOT\"");
+        String order = mvc.perform(json(as(WAITER, post("/api/v1/orders")), """
+                        {"type": "TAKEAWAY", "customerName": "Course Print", "paymentMethod": "CASH", "holdCourses": true,
+                         "items": [{"menuItemId": %d, "quantity": 1}, {"menuItemId": %d, "quantity": 2}]}"""
+                        .formatted(menuItemId("Mercimek Çorbası"), menuItemId("İskender"))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long orderId = ((Number) JsonPath.read(order, "$.id")).longValue();
+        long iskender = ((Number) JsonPath.read(order, "$.lines[1].id")).longValue();
+
+        String first = received.poll(10, TimeUnit.SECONDS);
+        assertThat(first).contains("1 x Mercimek").doesNotContain("Iskender").doesNotContain("x \u0098skender")
+                .contains("Kurs 2 bekliyor");
+
+        mvc.perform(as(WAITER, post("/api/v1/orders/{id}/courses/{course}/fire", orderId, 2))).andExpect(status().isOk());
+        String fired = received.poll(10, TimeUnit.SECONDS);
+        assertThat(fired).contains("KURS 2").contains("2 x ").doesNotContain("Mercimek");
+
+        mvc.perform(json(as(ADMIN, post("/api/v1/orders/{id}/lines/{line}/adjust", orderId, iskender)), """
+                        {"kind": "VOID", "quantity": 1, "reason": "Changed mind"}"""))
+                .andExpect(status().isOk());
+        String slip = received.poll(10, TimeUnit.SECONDS);
+        assertThat(slip).contains("IPTAL").contains("-1 x ");
+        remove(kitchen);
+    }
+
+    @Test
     void aPrinterThatIsOffIsRetriedThenReported() throws Exception {
         int deadPort;
         try (ServerSocket closed = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
@@ -115,23 +143,23 @@ class PrintingIntegrationTest extends ApiIntegrationTest {
     void printersOnlyOnThePrivateNetworkAndOnlyByManagers() throws Exception {
         mvc.perform(json(as(ADMIN, post("/api/v1/printers")), """
                         {"name": "Evil", "host": "169.254.169.254", "port": 9100, "paperWidth": "80",
-                         "categories": ["MAIN"], "enabled": true}"""))
+                         "stations": ["HOT"], "enabled": true}"""))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("PRINTER_HOST_NOT_ALLOWED"));
         mvc.perform(json(as(ADMIN, post("/api/v1/printers")), """
                         {"name": "Evil", "host": "8.8.8.8", "port": 9100, "paperWidth": "80",
-                         "categories": ["MAIN"], "enabled": true}"""))
+                         "stations": ["HOT"], "enabled": true}"""))
                 .andExpect(jsonPath("$.code").value("PRINTER_HOST_NOT_ALLOWED"));
         mvc.perform(json(as(WAITER, post("/api/v1/printers")), """
                         {"name": "Mine", "host": "192.168.1.9", "port": 9100, "paperWidth": "80",
-                         "categories": ["MAIN"], "enabled": true}"""))
+                         "stations": ["HOT"], "enabled": true}"""))
                 .andExpect(status().isForbidden());
     }
 
-    private long createPrinter(String name, int port, String categories) throws Exception {
+    private long createPrinter(String name, int port, String stations) throws Exception {
         String body = mvc.perform(json(as(ADMIN, post("/api/v1/printers")), """
                         {"name": "%s", "host": "127.0.0.1", "port": %d, "paperWidth": "80",
-                         "categories": [%s], "enabled": true}""".formatted(name, port, categories)))
+                         "stations": [%s], "enabled": true}""".formatted(name, port, stations)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(body, "$.id")).longValue();

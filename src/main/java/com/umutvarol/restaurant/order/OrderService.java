@@ -103,7 +103,11 @@ public class OrderService {
                 coupon == null ? null : coupon.getCode());
         PriceBreakdown breakdown = pricing.calculate(subtotal, request.type(), coupon);
 
-        Order order = orders.save(Order.place(details, lines, breakdown, clock.instant(), actor));
+        Order placed = Order.place(details, lines, breakdown, clock.instant(), actor);
+        if (Boolean.TRUE.equals(request.holdCourses())) {
+            placed.holdLaterCourses();
+        }
+        Order order = orders.save(placed);
         events.publishEvent(OrderChangedEvent.created(order));
         return OrderResponse.from(order);
     }
@@ -155,6 +159,23 @@ public class OrderService {
         return OrderResponse.from(order);
     }
 
+    /** Sends a held course to the kitchen. */
+    public OrderResponse fireCourse(Long id, int course, String actor) {
+        Order order = find(id);
+        order.fireCourse(course, clock.instant(), actor);
+        events.publishEvent(OrderChangedEvent.updated(order));
+        events.publishEvent(new CourseFiredEvent(order.getId(), course));
+        return OrderResponse.from(order);
+    }
+
+    /** A cook ticks a dish off at their station (or un-ticks it). */
+    public OrderResponse markLineReady(Long id, Long lineId, boolean ready) {
+        Order order = find(id);
+        order.markLineReady(lineId, ready, clock.instant());
+        events.publishEvent(OrderChangedEvent.updated(order));
+        return OrderResponse.from(order);
+    }
+
     private Order find(Long id) {
         return orders.findById(id).orElseThrow(() -> new ResourceNotFoundException("order", id));
     }
@@ -180,7 +201,8 @@ public class OrderService {
                         "%s is sold out".formatted(menuItem.getName()),
                         Map.of("menuItemId", menuItem.getId(), "name", menuItem.getName()));
             }
-            return OrderLine.of(menuItem, item.quantity(), item.note(), menuItem.resolveOptions(item.optionIds()));
+            return OrderLine.of(menuItem, item.quantity(), item.note(), menuItem.resolveOptions(item.optionIds()))
+                    .inCourse(item.course());
         }).toList();
     }
 

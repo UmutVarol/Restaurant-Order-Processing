@@ -23,15 +23,18 @@ const ticket = {
   note: '',
   paymentMethod: 'CARD',
   couponCode: '',
+  // later courses wait in the kitchen until the waiter fires them
+  holdCourses: false,
   lines: [],
 };
+const COURSE_BY_CATEGORY = { STARTER: 1, DRINK: 1, MAIN: 2, DESSERT: 3 };
 const filters = { category: 'ALL', query: '', tags: new Set() };
 // Mirrors the server's per-line limit (OrderLineRequest.quantity), so the till never builds a ticket it cannot send.
 const MAX_QUANTITY = 50;
 
 function resetTicket() {
   Object.assign(ticket, {
-    tableId: null, customerName: '', customerPhone: '', deliveryAddress: '', note: '', couponCode: '', lines: [],
+    tableId: null, customerName: '', customerPhone: '', deliveryAddress: '', note: '', couponCode: '', holdCourses: false, lines: [],
   });
 }
 
@@ -204,7 +207,8 @@ export default {
 
     // A line is "this dish, with these options, with this note"; adding the same again only raises its quantity.
     const sameLine = (a, b) => a !== b && a.menuItemId === b.menuItemId && a.note.trim() === b.note.trim()
-      && optionKey(a.optionIds) === optionKey(b.optionIds);
+      && optionKey(a.optionIds) === optionKey(b.optionIds) && courseOf(a) === courseOf(b);
+    const courseOf = (line) => line.course ?? COURSE_BY_CATEGORY[menuItem(line.menuItemId)?.category] ?? 1;
 
     function addItem(item) {
       const added = { menuItemId: item.id, quantity: 1, note: '', optionIds: defaultOptionIds(item) };
@@ -285,7 +289,11 @@ export default {
       mount(noteSection, h('div', { class: 'field' }, h('label', { for: 'ticket-note' }, t('pos.note')), h('textarea', {
         class: 'textarea', id: 'ticket-note', rows: 2, maxlength: 255, placeholder: t('pos.notePlaceholder'), value: ticket.note,
         oninput: (event) => { ticket.note = event.target.value; },
-      })));
+      })),
+      h('label', { class: 'checkbox hold-courses', title: t('courses.holdHint') },
+        h('input', { type: 'checkbox', checked: ticket.holdCourses, 'data-testid': 'hold-courses',
+          onchange: (event) => { ticket.holdCourses = event.target.checked; renderLines(); } }),
+        t('courses.hold')));
     }
 
     function tablePicker() {
@@ -327,6 +335,19 @@ export default {
               onclick: () => editOptions(line),
             }, icon('edit', 'sm'), picked.length ? picked.map((o) => o.choice).join(' · ') : t('options.choose')) : null,
             h('div', { class: 'meta' }, money(unitPrice),
+              ticket.holdCourses ? h('button', {
+                class: 'course-chip', 'data-testid': 'line-course', title: t('courses.change'),
+                onclick: () => {
+                  line.course = (courseOf(line) % 3) + 1;
+                  // Moving a dish into a course that already has the same dish folds the two lines together.
+                  const twin = ticket.lines.find((other) => other !== line && sameLine(other, line));
+                  if (twin) {
+                    twin.quantity = Math.min(MAX_QUANTITY, twin.quantity + line.quantity);
+                    ticket.lines.splice(ticket.lines.indexOf(line), 1);
+                  }
+                  renderLines();
+                },
+              }, t('courses.short', { n: courseOf(line) })) : null,
               h('button', {
                 class: ['note-btn', line.note ? 'has-note' : ''],
                 onclick: () => { openNote = editing ? null : line; renderLines(); },
@@ -455,8 +476,9 @@ export default {
     }
 
     // ------------------------------------------------------------------ server round-trips
-    const requestItems = () => ticket.lines.map(({ menuItemId, quantity, note, optionIds }) => ({
-      menuItemId, quantity, note: note.trim() || null, optionIds,
+    const requestItems = () => ticket.lines.map((line) => ({
+      menuItemId: line.menuItemId, quantity: line.quantity, note: line.note.trim() || null, optionIds: line.optionIds,
+      course: ticket.holdCourses ? courseOf(line) : null,
     }));
 
     let quoteSeq = 0;
@@ -509,6 +531,7 @@ export default {
           paymentMethod: ticket.paymentMethod,
           couponCode: ticket.couponCode || null,
           items: requestItems(),
+          holdCourses: ticket.holdCourses,
         });
         toast({
           title: t('pos.placed', { id: order.id }),

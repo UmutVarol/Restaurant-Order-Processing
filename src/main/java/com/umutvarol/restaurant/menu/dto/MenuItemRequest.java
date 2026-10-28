@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.List;
@@ -24,7 +25,9 @@ public record MenuItemRequest(
         @Min(0) @Max(240) Integer prepTimeMinutes,
         Boolean popular,
         Set<DietaryTag> tags,
-        @Size(max = 8) List<@Valid @NotNull OptionGroupRequest> optionGroups) {
+        @Size(max = 8) List<@Valid @NotNull OptionGroupRequest> optionGroups,
+        @Pattern(regexp = "[A-Z][A-Z0-9_]{1,19}") String stationCode) {
+
 
     public int prepTimeMinutesOrDefault() {
         return prepTimeMinutes == null ? 0 : prepTimeMinutes;

@@ -9,12 +9,15 @@ import { optionGroupsEditor } from './options.js';
 import { CATEGORIES } from './shared.js';
 
 const TAGS = ['VEGETARIAN', 'VEGAN', 'GLUTEN_FREE', 'SPICY'];
+// Where a new dish is made unless the manager picks another station (same defaults as the server).
+const DEFAULT_STATION = { STARTER: 'COLD', MAIN: 'HOT', DESSERT: 'DESSERT', DRINK: 'BAR' };
 
 export default {
   title: 'menu.title',
   subtitle: 'menu.sub',
   mount(container, { actions }) {
     let items = null;
+    let stations = [];
     let category = 'ALL';
     const chips = h('div', { class: 'chips' });
     const tableCard = h('div', { class: 'card table-wrap menu-admin' });
@@ -102,7 +105,15 @@ export default {
         price: h('input', { class: 'input', type: 'number', min: '0.01', step: '0.01', value: draft.price }),
         icon: h('input', { class: 'input emoji-input', value: draft.icon || '', maxlength: 4 }),
         prepTimeMinutes: h('input', { class: 'input', type: 'number', min: '0', max: '240', value: draft.prepTimeMinutes }),
+        stationCode: h('select', { class: 'select', 'data-testid': 'menu-station' }),
       };
+      // The station follows the category until the manager picks one by hand.
+      let stationPicked = Boolean(item);
+      const fillStations = (selected) => mount(inputs.stationCode,
+        stations.map((s) => h('option', { value: s.code, selected: s.code === selected }, s.name)));
+      fillStations(draft.stationCode ?? DEFAULT_STATION[draft.category]);
+      inputs.stationCode.addEventListener('change', () => { stationPicked = true; });
+      inputs.category.addEventListener('change', () => { if (!stationPicked) fillStations(DEFAULT_STATION[inputs.category.value]); });
       const popular = h('input', { type: 'checkbox', checked: draft.popular });
       const tags = TAGS.map((tag) => h('label', null, h('input', { type: 'checkbox', value: tag, checked: draft.tags.includes(tag) }), t(`tag.${tag}`)));
       const options = optionGroupsEditor(draft.optionGroups ?? []);
@@ -120,7 +131,8 @@ export default {
           field('description', t('menu.description'), inputs.description),
           h('div', { class: 'grid-2' }, field('category', t('menu.category'), inputs.category), field('price', t('menu.price'), inputs.price)),
           h('div', { class: 'grid-2' }, field('prepTimeMinutes', t('menu.prep'), inputs.prepTimeMinutes),
-            h('div', { class: 'field', style: { justifyContent: 'flex-end' } }, h('label', { class: 'checkbox', style: { height: '42px' } }, popular, t('menu.popular')))),
+            stations.length ? field('stationCode', t('stations.label'), inputs.stationCode) : h('span')),
+          h('label', { class: 'checkbox' }, popular, t('menu.popular')),
           h('div', { class: 'field' }, h('label', null, t('menu.tags')), h('div', { class: 'tag-picker' }, tags)),
           h('div', { class: 'field' }, h('label', null, t('options.title')), h('small', { class: 'faint' }, t('options.editorHint')), options.element),
         ],
@@ -138,6 +150,7 @@ export default {
                 popular: popular.checked,
                 tags: tags.map((label) => label.querySelector('input')).filter((box) => box.checked).map((box) => box.value),
                 optionGroups: options.value(),
+                stationCode: stations.length ? inputs.stationCode.value : null,
               };
               save.disabled = true;
               Object.values(errors).forEach((el) => { el.textContent = ''; el.parentElement.classList.remove('invalid'); });
@@ -178,6 +191,7 @@ export default {
 
     render();
     load();
+    api.stations().then((list) => { stations = list; }, () => { stations = []; });
     return null;
   },
 };

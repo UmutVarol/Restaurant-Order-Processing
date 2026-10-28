@@ -21,13 +21,15 @@ export default {
     const devicesCard = h('div', { class: 'card settings-card' });
     const qrCard = h('div', { class: 'card settings-card' });
     const printersCard = h('div', { class: 'card settings-card' });
+    const stationsCard = h('div', { class: 'card settings-card' });
     const totpCard = h('div', { class: 'card settings-card' });
     let totp = null;
     let devices = null;
     let tables = null;
     let printers = null;
+    let stations = null;
     mount(container, h('div', { class: 'settings-grid' }, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
-      manager ? printersCard : null));
+      manager ? stationsCard : null, manager ? printersCard : null));
 
     const head = (iconName, title, sub) => h('div', { class: 'card-head' },
       h('span', { class: 'settings-ic' }, icon(iconName, 'sm')),
@@ -340,7 +342,7 @@ export default {
             : printers.length ? h('div', { class: 'printer-list' }, printers.map((printer) => h('div', { class: ['printer-row', printer.enabled ? '' : 'off'] },
               h('div', { class: 'printer-info' },
                 h('b', null, printer.name, printer.enabled ? null : h('span', { class: 'pill plain', style: { marginLeft: '8px' } }, t('printing.off'))),
-                h('small', null, `${printer.host}:${printer.port} · ${printer.paperWidth} mm · ${printer.categories.map((c) => t(`cat.${c}`)).join(', ')}`),
+                h('small', null, `${printer.host}:${printer.port} · ${printer.paperWidth} mm · ${printer.stations.map(stationName).join(', ')}`),
                 printer.lastError ? h('small', { class: 'danger-text' }, icon('alert', 'sm'), ` ${printer.lastError}`)
                   : printer.lastPrintedAt ? h('small', { class: 'faint' }, t('printing.lastPrinted', { at: dateTime(printer.lastPrintedAt) })) : null),
               h('div', { class: 'printer-actions' },
@@ -352,14 +354,14 @@ export default {
     }
 
     function editPrinter(printer) {
-      const draft = printer ?? { name: '', host: '192.168.1.', port: 9100, paperWidth: 80, categories: ['STARTER', 'MAIN'], enabled: true };
+      const draft = printer ?? { name: '', host: '192.168.1.', port: 9100, paperWidth: 80, stations: ['COLD', 'HOT'], enabled: true };
       const input = (id, value, extra = {}) => h('input', { class: 'input', id, value, ...extra });
       const name = input('printer-name', draft.name, { maxlength: 40 });
       const host = input('printer-host', draft.host, { maxlength: 100, inputmode: 'decimal', autocomplete: 'off' });
       const port = input('printer-port', draft.port, { type: 'number', min: 1, max: 65535 });
       const width = h('select', { class: 'select', id: 'printer-width' }, [80, 58].map((w) => h('option', { value: w, selected: draft.paperWidth === w }, `${w} mm`)));
-      const boxes = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'].map((c) => h('label', null,
-        h('input', { type: 'checkbox', value: c, checked: draft.categories.includes(c) }), t(`cat.${c}`)));
+      const boxes = (stations ?? []).map((station) => h('label', null,
+        h('input', { type: 'checkbox', value: station.code, checked: draft.stations.includes(station.code) }), station.name));
       const enabled = h('input', { type: 'checkbox', checked: draft.enabled });
       const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
       const field = (id, label, control) => h('div', { class: 'field' }, h('label', { for: id }, label), control);
@@ -371,7 +373,7 @@ export default {
           h('div', { class: 'grid-2' }, field('printer-host', t('printing.host'), host), field('printer-port', t('printing.port'), port)),
           h('small', { class: 'faint' }, t('printing.hostHint')),
           field('printer-width', t('printing.paper'), width),
-          h('div', { class: 'field' }, h('span', { class: 'label' }, t('printing.categories')), h('div', { class: 'tag-picker' }, boxes)),
+          h('div', { class: 'field' }, h('span', { class: 'label' }, t('printing.stations')), h('div', { class: 'tag-picker' }, boxes)),
           h('label', { class: 'checkbox' }, enabled, t('printing.enabled')),
           problem,
         ],
@@ -387,7 +389,7 @@ export default {
             try {
               await api.savePrinter(printer?.id, {
                 name: name.value.trim(), host: host.value.trim(), port: Number(port.value), paperWidth: width.value,
-                categories: boxes.map((label) => label.querySelector('input')).filter((box) => box.checked).map((box) => box.value),
+                stations: boxes.map((label) => label.querySelector('input')).filter((box) => box.checked).map((box) => box.value),
                 enabled: enabled.checked,
               });
               toast({ title: t('settings.saved') });
@@ -400,6 +402,78 @@ export default {
           } }, icon('check', 'sm'), t('common.save')),
         ],
       });
+    }
+
+    // ------------------------------------------------------------------ kitchen stations (managers)
+    const stationName = (code) => stations?.find((station) => station.code === code)?.name ?? code;
+
+    function renderStations() {
+      if (!manager) return;
+      mount(stationsCard,
+        head('kitchen', t('stations.title'), t('stations.sub')),
+        h('div', { class: 'card-body settings-form' },
+          stations == null ? h('div', { class: 'skeleton', style: { height: '80px' } })
+            : h('div', { class: 'printer-list', 'data-testid': 'station-list' }, stations.map((station) => h('div', { class: 'printer-row' },
+              h('div', { class: 'printer-info' },
+                h('b', null, station.name),
+                h('small', null, `${station.code} · ${t('stations.target', { n: station.targetMinutes })}`)),
+              h('div', { class: 'printer-actions' },
+                h('button', { class: 'btn sm ghost', 'data-testid': `edit-station-${station.code}`, onclick: () => editStation(station) },
+                  icon('edit', 'sm'), t('common.edit')))))),
+          h('div', null, h('button', { class: 'btn', 'data-testid': 'add-station', onclick: () => editStation(null) }, icon('plus', 'sm'), t('stations.add')))));
+    }
+
+    function editStation(station) {
+      const name = h('input', { class: 'input', id: 'station-name', value: station?.name ?? '', maxlength: 40 });
+      const code = h('input', { class: 'input', id: 'station-code', value: station?.code ?? '', maxlength: 20, autocomplete: 'off',
+        disabled: Boolean(station), pattern: '[A-Z][A-Z0-9_]{1,19}', style: { textTransform: 'uppercase' } });
+      const target = h('input', { class: 'input', id: 'station-target', type: 'number', min: 1, max: 240, value: station?.targetMinutes ?? 10 });
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const fail = (error) => { problem.replaceChildren(icon('alert', 'sm'), errorMessage(error)); problem.hidden = false; };
+      const field = (id, label, control) => h('div', { class: 'field' }, h('label', { for: id }, label), control);
+      const modal = openModal({
+        title: station ? t('stations.edit', { name: station.name }) : t('stations.add'),
+        size: 'sm',
+        body: [
+          field('station-name', t('stations.name'), name),
+          h('div', { class: 'grid-2' }, field('station-code', t('stations.code'), code), field('station-target', t('stations.targetLabel'), target)),
+          h('small', { class: 'faint' }, t('stations.codeHint')),
+          problem,
+        ],
+        footer: (handle) => [
+          station ? h('button', { class: 'btn ghost danger-text', onclick: async () => {
+            if (!(await confirmDialog({ title: t('stations.removeTitle', { name: station.name }), text: t('stations.removeText'), confirmLabel: t('stations.remove'), danger: true }))) return;
+            try { await api.deleteStation(station.id); handle.close(); loadStations(); } catch (error) { fail(error); }
+          } }, t('stations.remove')) : null,
+          h('span', { style: { flex: 1 } }),
+          h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')),
+          h('button', { class: 'btn primary', 'data-testid': 'save-station', onclick: async () => {
+            problem.hidden = true;
+            try {
+              await api.saveStation(station?.id, {
+                code: station ? null : code.value.trim().toUpperCase(), name: name.value.trim(), targetMinutes: Number(target.value),
+              });
+              toast({ title: t('settings.saved') });
+              modal.close();
+              loadStations();
+            } catch (error) {
+              fail(error);
+            }
+          } }, icon('check', 'sm'), t('common.save')),
+        ],
+      });
+    }
+
+    async function loadStations() {
+      if (!manager) return;
+      try {
+        stations = await api.stations();
+      } catch (error) {
+        stations = [];
+        toast({ title: errorMessage(error), kind: 'error' });
+      }
+      renderStations();
+      renderPrinters();
     }
 
     async function testPage(printer) {
@@ -461,6 +535,8 @@ export default {
     loadDevices();
     renderQr();
     loadTables();
+    renderStations();
+    loadStations();
     renderPrinters();
     loadPrinters();
     renderTotp();

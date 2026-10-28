@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,9 +23,11 @@ public class MenuService {
             .thenComparing(MenuItem::getName, String.CASE_INSENSITIVE_ORDER);
 
     private final MenuItemRepository repository;
+    private final StationService stations;
 
-    public MenuService(MenuItemRepository repository) {
+    public MenuService(MenuItemRepository repository, StationService stations) {
         this.repository = repository;
+        this.stations = stations;
     }
 
     @Transactional(readOnly = true)
@@ -51,6 +54,8 @@ public class MenuService {
         MenuItem item = new MenuItem(request.name(), request.description(), request.category(), request.price(),
                 request.icon(), request.prepTimeMinutesOrDefault(), request.popularOrDefault(), request.tags());
         item.replaceOptions(specs(request));
+        // Stored explicitly, so the station counts as in use and cannot be removed from under the dish.
+        assignStation(item, request.stationCode() != null ? request.stationCode() : Station.defaultCode(item.getCategory()));
         return MenuItemResponse.from(repository.saveAndFlush(item));
     }
 
@@ -61,12 +66,20 @@ public class MenuService {
         }
         item.update(request.name(), request.description(), request.category(), request.price(), request.icon(),
                 request.prepTimeMinutesOrDefault(), request.popularOrDefault(), request.tags());
+        if (request.stationCode() != null) {
+            assignStation(item, request.stationCode());
+        }
         // Left out of the request, the options stay as they are; an empty list removes them.
         if (request.optionGroups() != null) {
             item.replaceOptions(specs(request));
             repository.flush();
         }
         return MenuItemResponse.from(item);
+    }
+
+    private void assignStation(MenuItem item, String code) {
+        stations.requireExisting(Set.of(code));
+        item.assignStation(code);
     }
 
     private static List<OptionGroupSpec> specs(MenuItemRequest request) {

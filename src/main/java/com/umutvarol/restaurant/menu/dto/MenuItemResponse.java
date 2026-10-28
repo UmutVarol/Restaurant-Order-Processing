@@ -19,7 +19,8 @@ public record MenuItemResponse(
         boolean popular,
         boolean available,
         Set<DietaryTag> tags,
-        List<OptionGroupResponse> optionGroups) {
+        List<OptionGroupResponse> optionGroups,
+        String stationCode) {
 
     public static MenuItemResponse from(MenuItem item) {
         return new MenuItemResponse(
@@ -33,6 +34,7 @@ public record MenuItemResponse(
                 item.isPopular(),
                 item.isOrderable(),
                 new TreeSet<>(item.getTags()),
-                item.getOptionGroups().stream().map(OptionGroupResponse::from).toList());
+                item.getOptionGroups().stream().map(OptionGroupResponse::from).toList(),
+                item.getStationCode());
     }
 }

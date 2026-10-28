@@ -25,5 +25,13 @@ public record PlaceOrderRequest(
         @Size(max = 255) String note,
         @NotNull PaymentMethod paymentMethod,
         @Size(max = 32) String couponCode,
-        @NotEmpty @Size(max = 50) List<@Valid @NotNull OrderLineRequest> items) {
+        @NotEmpty @Size(max = 50) List<@Valid @NotNull OrderLineRequest> items,
+        Boolean holdCourses) {
+
+    /** Everything goes to the kitchen at once. */
+    public PlaceOrderRequest(OrderType type, String customerName, String customerPhone, Long tableId,
+                             String deliveryAddress, String note, PaymentMethod paymentMethod, String couponCode,
+                             List<OrderLineRequest> items) {
+        this(type, customerName, customerPhone, tableId, deliveryAddress, note, paymentMethod, couponCode, items, null);
+    }
 }

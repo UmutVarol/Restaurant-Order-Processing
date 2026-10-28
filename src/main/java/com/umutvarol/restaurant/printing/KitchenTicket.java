@@ -25,12 +25,14 @@ final class KitchenTicket {
     }
 
     private static final Map<String, Map<String, String>> WORDS = Map.of(
-            "tr", Map.of("TABLE", "MASA", "TAKEAWAY", "PAKET", "DELIVERY", "KURYE", "REPRINT", "TEKRAR BASKI",
-                    "NOTE", "NOT", "TEST", "TEST SAYFASI", "TEST_OK", "Yazici hazir. Turkce: ÇĞİÖŞÜ çğıöşü",
-                    "CATEGORIES", "Kategoriler"),
-            "en", Map.of("TABLE", "TABLE", "TAKEAWAY", "TAKEAWAY", "DELIVERY", "DELIVERY", "REPRINT", "REPRINT",
-                    "NOTE", "NOTE", "TEST", "TEST PAGE", "TEST_OK", "The printer is ready. Turkish: ÇĞİÖŞÜ çğıöşü",
-                    "CATEGORIES", "Categories"));
+            "tr", Map.ofEntries(Map.entry("TABLE", "MASA"), Map.entry("TAKEAWAY", "PAKET"), Map.entry("DELIVERY", "KURYE"),
+                    Map.entry("REPRINT", "TEKRAR BASKI"), Map.entry("NOTE", "NOT"), Map.entry("TEST", "TEST SAYFASI"),
+                    Map.entry("TEST_OK", "Yazici hazir. Turkce: ÇĞİÖŞÜ çğıöşü"), Map.entry("STATIONS", "Istasyonlar"),
+                    Map.entry("COURSE", "KURS %d - SIMDI"), Map.entry("VOID", "IPTAL"), Map.entry("HELD", "Kurs %s bekliyor")),
+            "en", Map.ofEntries(Map.entry("TABLE", "TABLE"), Map.entry("TAKEAWAY", "TAKEAWAY"), Map.entry("DELIVERY", "DELIVERY"),
+                    Map.entry("REPRINT", "REPRINT"), Map.entry("NOTE", "NOTE"), Map.entry("TEST", "TEST PAGE"),
+                    Map.entry("TEST_OK", "The printer is ready. Turkish: ÇĞİÖŞÜ çğıöşü"), Map.entry("STATIONS", "Stations"),
+                    Map.entry("COURSE", "COURSE %d - NOW"), Map.entry("VOID", "VOID"), Map.entry("HELD", "Course %s waiting")));
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     private final List<Row> rows = new ArrayList<>();
@@ -38,22 +40,20 @@ final class KitchenTicket {
     private KitchenTicket() {
     }
 
-    /** The lines of {@code order} this printer makes; voided units are left out. */
-    static KitchenTicket forOrder(Printer printer, Order order, List<OrderLine> lines, boolean reprint, String language,
-                                  ZoneId zone) {
+    /** What kind of ticket: the first one, a reprint, a course fired later. */
+    enum Mode { TICKET, REPRINT, FIRE }
+
+    /**
+     * The lines of {@code order} this printer makes; voided units are left out.
+     *
+     * @param course the fired course, for {@link Mode#FIRE}
+     */
+    static KitchenTicket forOrder(Printer printer, Order order, List<OrderLine> lines, Mode mode, int course,
+                                  String language, ZoneId zone) {
         Map<String, String> w = words(language);
-        KitchenTicket ticket = new KitchenTicket();
-        ticket.add(Style.TITLE, printer.getName().toUpperCase());
-        if (reprint) {
-            ticket.add(Style.TITLE, "*** " + w.get("REPRINT") + " ***");
-        }
-        String where = order.getType() == OrderType.DINE_IN && order.getTable() != null
-                ? w.get("TABLE") + " " + order.getTable().getCode()
-                : w.get(order.getType().name()) + " #" + order.getId();
-        ticket.add(Style.HEADLINE, where);
-        ticket.add(Style.TEXT, "#%d  %s  %s  %s".formatted(order.getId(), TIME.format(order.getCreatedAt().atZone(zone)),
-                order.getCreatedBy() == null ? "" : order.getCreatedBy(), order.getCustomerName()).strip());
-        ticket.add(Style.RULE, "");
+        KitchenTicket ticket = header(printer, order, w, zone,
+                mode == Mode.REPRINT ? "*** " + w.get("REPRINT") + " ***"
+                        : mode == Mode.FIRE ? ">>> " + w.get("COURSE").formatted(course) + " <<<" : null);
         for (OrderLine line : lines) {
             if (line.activeQuantity() <= 0) {
                 continue;
@@ -67,10 +67,39 @@ final class KitchenTicket {
                 ticket.add(Style.DETAIL, "! " + line.getNote());
             }
         }
+        List<Integer> held = order.heldCourses();
+        if (mode != Mode.FIRE && !held.isEmpty()) {
+            ticket.add(Style.RULE, "");
+            ticket.add(Style.TEXT, w.get("HELD").formatted(held.stream().map(String::valueOf).collect(Collectors.joining(", "))));
+        }
         if (order.getNote() != null) {
             ticket.add(Style.RULE, "");
             ticket.add(Style.TEXT, w.get("NOTE") + ": " + order.getNote());
         }
+        return ticket;
+    }
+
+    /** Units of a dish that were already being made are off. */
+    static KitchenTicket voidSlip(Printer printer, Order order, OrderLine line, int units, String language, ZoneId zone) {
+        Map<String, String> w = words(language);
+        KitchenTicket ticket = header(printer, order, w, zone, "*** " + w.get("VOID") + " ***");
+        ticket.add(Style.ITEM, "-" + units + " x " + line.getItemName());
+        return ticket;
+    }
+
+    private static KitchenTicket header(Printer printer, Order order, Map<String, String> w, ZoneId zone, String banner) {
+        KitchenTicket ticket = new KitchenTicket();
+        ticket.add(Style.TITLE, printer.getName().toUpperCase());
+        if (banner != null) {
+            ticket.add(Style.TITLE, banner);
+        }
+        String where = order.getType() == OrderType.DINE_IN && order.getTable() != null
+                ? w.get("TABLE") + " " + order.getTable().getCode()
+                : w.get(order.getType().name()) + " #" + order.getId();
+        ticket.add(Style.HEADLINE, where);
+        ticket.add(Style.TEXT, "#%d  %s  %s  %s".formatted(order.getId(), TIME.format(order.getCreatedAt().atZone(zone)),
+                order.getCreatedBy() == null ? "" : order.getCreatedBy(), order.getCustomerName()).strip());
+        ticket.add(Style.RULE, "");
         return ticket;
     }
 
@@ -82,8 +111,7 @@ final class KitchenTicket {
         ticket.add(Style.TEXT, TIME.format(at.atZone(zone)) + "  " + printer.getHost() + ":" + printer.getPort());
         ticket.add(Style.RULE, "");
         ticket.add(Style.TEXT, w.get("TEST_OK"));
-        ticket.add(Style.TEXT, w.get("CATEGORIES") + ": " + printer.categories().stream().map(Enum::name)
-                .collect(Collectors.joining(", ")));
+        ticket.add(Style.TEXT, w.get("STATIONS") + ": " + String.join(", ", printer.stations()));
         return ticket;
     }
 

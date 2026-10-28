@@ -62,8 +62,13 @@ public class OrderAdjustmentService {
             case VOID -> {
                 // before the kitchen starts, a void is just correcting the ticket
                 boolean needsApproval = order.getStatus() != OrderStatus.PENDING;
-                yield order.voidUnits(lineId, request.quantity(), reason, now, actor.username(),
+                OrderAdjustment voided = order.voidUnits(lineId, request.quantity(), reason, now, actor.username(),
                         approvedBy(actor, request.approval(), needsApproval));
+                boolean fired = order.getLines().stream().anyMatch(line -> line.getId().equals(lineId) && line.isFired());
+                if (fired) {
+                    events.publishEvent(new LineVoidedEvent(order.getId(), lineId, request.quantity()));
+                }
+                yield voided;
             }
             case COMP -> order.compUnits(lineId, request.quantity(), reason, now, actor.username(),
                     approvedBy(actor, request.approval(), true));

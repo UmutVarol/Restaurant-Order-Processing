@@ -10,4 +10,6 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
     boolean existsByNameIgnoreCase(String name);
 
     boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
+
+    boolean existsByStationCodeAndArchivedFalse(String stationCode);
 }

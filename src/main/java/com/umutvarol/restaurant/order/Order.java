@@ -151,6 +151,7 @@ public class Order {
         order.updatedAt = placedAt;
         order.createdBy = placedBy;
         lines.forEach(order::addLine);
+        lines.forEach(line -> line.fire(placedAt));
         order.history.add(new OrderStatusChange(order, OrderStatus.PENDING, placedAt, placedBy));
         return order;
     }
@@ -182,6 +183,58 @@ public class Order {
         }
         this.cancellationReason = blankToNull(reason);
         transitionTo(OrderStatus.CANCELLED, at, actor);
+    }
+
+    // ------------------------------------------------------------------------------------------- courses
+
+    /**
+     * Holds back every course after the first on a just-placed order, until the waiter fires it. (An order is sent
+     * to the kitchen whole when it is placed.)
+     */
+    public void holdLaterCourses() {
+        int first = lines.stream().mapToInt(OrderLine::getCourse).min().orElse(1);
+        lines.stream().filter(line -> line.getCourse() != first).forEach(OrderLine::hold);
+    }
+
+    /**
+     * Fires a held course: its dishes go to their stations now.
+     *
+     * @return the lines that were fired
+     */
+    public List<OrderLine> fireCourse(int course, Instant at, String actor) {
+        requireEditable();
+        List<OrderLine> held = lines.stream()
+                .filter(line -> line.getCourse() == course && !line.isFired() && line.activeQuantity() > 0)
+                .toList();
+        if (held.isEmpty()) {
+            throw new BusinessRuleException("NOTHING_TO_FIRE", "Course %d has nothing waiting".formatted(course),
+                    Map.of("course", course));
+        }
+        held.forEach(line -> line.fire(at));
+        this.updatedAt = at;
+        record(new OrderAdjustment(this, AdjustmentKind.FIRE, null, course, null, "course " + course, actor, null, at));
+        return held;
+    }
+
+    /** Courses still waiting to be fired, lowest first. */
+    public List<Integer> heldCourses() {
+        return lines.stream().filter(line -> !line.isFired() && line.activeQuantity() > 0)
+                .map(OrderLine::getCourse).distinct().sorted().toList();
+    }
+
+    /** A cook marks one dish done (or not); the order itself still moves on as a whole. */
+    public OrderLine markLineReady(Long lineId, boolean ready, Instant at) {
+        if (!status.isActive()) {
+            throw new InvalidStateException("ORDER_NOT_EDITABLE", "Order #%d is %s".formatted(id, status),
+                    Map.of("orderId", String.valueOf(id), "status", status));
+        }
+        OrderLine line = line(lineId);
+        if (!line.isFired()) {
+            throw new BusinessRuleException("LINE_NOT_FIRED", "That dish has not been sent to the kitchen yet");
+        }
+        line.markReady(ready, at);
+        this.updatedAt = at;
+        return line;
     }
 
     // ------------------------------------------------------------------------------------------- adjustments

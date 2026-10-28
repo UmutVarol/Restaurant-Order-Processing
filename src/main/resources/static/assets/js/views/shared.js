@@ -112,6 +112,8 @@ function drawerContent(order, user, handle, run) {
   const staff = canTakeOrders(user);
   const editable = staff && !['COMPLETED', 'CANCELLED'].includes(order.status);
   const adjust = (line, kind) => run(() => adjustLine(order, line, kind, user));
+  // Course badges only matter on an order that is served in courses (one was held back).
+  const coursed = servedInCourses(order);
   return [
     h('div', { class: 'drawer-head' },
       h('div', { style: { flex: 1 } },
@@ -133,7 +135,8 @@ function drawerContent(order, user, handle, run) {
       order.cancellationReason ? h('div', { class: 'form-error' }, icon('alert', 'sm'),
         `${t('detail.reason')}: ${order.cancellationReason}`) : null,
       section(t('detail.timeline'), timeline(order)),
-      section(t('detail.items'), h('div', { class: 'line-items' }, order.lines.map((line) => lineItem(line,
+      editable && order.heldCourses?.length ? courseBar(order, run) : null,
+      section(t('detail.items'), h('div', { class: 'line-items' }, order.lines.map((line) => lineItem(line, coursed,
         editable && line.quantity - line.voidedQuantity - line.compedQuantity > 0 ? h('div', { class: 'line-actions' },
           h('button', { class: 'btn sm ghost', 'data-testid': 'void-line', onclick: () => adjust(line, 'VOID') }, t('adjust.void')),
           h('button', { class: 'btn sm ghost', 'data-testid': 'comp-line', onclick: () => adjust(line, 'COMP') }, t('adjust.comp'))) : null)))),
@@ -188,22 +191,50 @@ function kv(key, value) {
   return [h('dt', null, key), h('dd', null, value)];
 }
 
+export function servedInCourses(order) {
+  return order.heldCourses?.length > 0 || Boolean(order.adjustments?.some((a) => a.kind === 'FIRE'));
+}
+
+/** Held courses wait for the waiter: one button per course sends it to the kitchen. */
+function courseBar(order, run) {
+  return h('div', { class: 'course-bar', 'data-testid': 'held-courses' },
+    h('span', { class: 'muted' }, icon('clock', 'sm'), ` ${t('courses.waiting', { list: order.heldCourses.join(', ') })}`),
+    order.heldCourses.map((course) => h('button', {
+      class: 'btn sm primary', 'data-testid': `fire-course-${course}`, onclick: (event) => {
+        event.currentTarget.disabled = true;
+        run(async () => {
+          try {
+            const updated = await api.fireCourse(order.id, course);
+            toast({ title: t('courses.fired', { n: course }), kind: 'success', timeout: 2500 });
+            return updated;
+          } catch (error) {
+            toast({ title: errorMessage(error), kind: 'error' });
+            return null;
+          }
+        });
+      },
+    }, icon('flame', 'sm'), t('courses.fire', { n: course }))));
+}
+
 function adjustmentItem(a) {
   const what = a.kind === 'VOID' || a.kind === 'COMP' ? t(`adjust.log.${a.kind}`, { n: a.quantity, name: a.itemName })
-    : a.kind === 'DISCOUNT' ? t('adjust.log.DISCOUNT') : t(`adjust.log.${a.kind}`);
+    : a.kind === 'FIRE' ? t('adjust.log.FIRE', { n: a.quantity }) : t(`adjust.log.${a.kind}`);
   return h('li', null,
     h('span', { class: `adj-kind k-${a.kind}` }, t(`adjust.kind.${a.kind}`)),
-    h('div', null, h('b', null, what), a.detail ? h('small', null, a.detail) : null,
+    h('div', null, h('b', null, what), a.detail && a.kind !== 'FIRE' ? h('small', null, a.detail) : null,
       h('small', { class: 'faint' }, `${time(a.at)} · ${a.by}${a.approvedBy && a.approvedBy !== a.by ? ` · ${t('adjust.approvedBy', { name: a.approvedBy })}` : ''}`)),
     a.amount != null && (a.kind === 'VOID' || a.kind === 'COMP') ? h('span', { class: 'num' }, `−${money(a.amount)}`) : null);
 }
 
-function lineItem(line, actions = null) {
+function lineItem(line, coursed, actions = null) {
   const active = line.quantity - (line.voidedQuantity || 0);
   return h('div', { class: ['line-item', active === 0 ? 'voided' : ''] },
     h('div', { class: 'emoji' }, line.icon || '🍽️'),
     h('div', null,
       h('div', { class: 'n' }, `${active} × ${line.name}`,
+        coursed ? h('span', { class: 'course-chip static' }, t('courses.short', { n: line.course })) : null,
+        active > 0 && !line.firedAt ? h('span', { class: 'adj-tag held', 'data-testid': 'line-held' }, t('courses.held')) : null,
+        line.readyAt ? h('span', { class: 'adj-tag ready' }, t('courses.ready')) : null,
         line.voidedQuantity ? h('span', { class: 'adj-tag void' }, t('adjust.voidedTag', { n: line.voidedQuantity })) : null,
         line.compedQuantity ? h('span', { class: 'adj-tag comp' }, t('adjust.compedTag', { n: line.compedQuantity })) : null),
       h('div', { class: 'sub' }, money(line.unitPrice)),

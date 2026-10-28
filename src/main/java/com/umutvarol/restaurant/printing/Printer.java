@@ -1,6 +1,5 @@
 package com.umutvarol.restaurant.printing;
 
-import com.umutvarol.restaurant.menu.MenuCategory;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -9,12 +8,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.EnumSet;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
-/** A ticket printer on the restaurant's network, and which menu categories it prints (kitchen, bar, dessert). */
+/** A ticket printer on the restaurant's network, and which kitchen stations it prints for (kitchen, bar, desserts). */
 @Entity
 @Table(name = "printers")
 public class Printer {
@@ -35,8 +34,8 @@ public class Printer {
     @Column(name = "paper_width", nullable = false)
     private int paperWidth;
 
-    @Column(nullable = false, length = 100)
-    private String categories;
+    @Column(nullable = false, length = 200)
+    private String stations;
 
     @Column(nullable = false)
     private boolean enabled;
@@ -58,12 +57,12 @@ public class Printer {
         this.createdAt = at;
     }
 
-    void update(String name, String host, int port, int paperWidth, Set<MenuCategory> categories, boolean enabled) {
+    void update(String name, String host, int port, int paperWidth, Set<String> stations, boolean enabled) {
         this.name = name;
         this.host = host;
         this.port = port;
         this.paperWidth = paperWidth;
-        this.categories = categories.stream().map(Enum::name).sorted().collect(Collectors.joining(","));
+        this.stations = stations.stream().sorted().collect(Collectors.joining(","));
         this.enabled = enabled;
     }
 
@@ -76,14 +75,14 @@ public class Printer {
         this.lastError = error.length() > 255 ? error.substring(0, 255) : error;
     }
 
-    public boolean prints(MenuCategory category) {
-        return enabled && categories().contains(category);
+    /** Whether this printer gets the dishes of the given station. */
+    public boolean prints(String stationCode) {
+        return enabled && stations().contains(stationCode);
     }
 
-    public Set<MenuCategory> categories() {
-        return categories == null || categories.isBlank() ? EnumSet.noneOf(MenuCategory.class)
-                : Arrays.stream(categories.split(",")).map(MenuCategory::valueOf)
-                        .collect(Collectors.toCollection(() -> EnumSet.noneOf(MenuCategory.class)));
+    public Set<String> stations() {
+        return stations == null || stations.isBlank() ? Set.of()
+                : Arrays.stream(stations.split(",")).collect(Collectors.toCollection(TreeSet::new));
     }
 
     /** Characters per line: 32 on 58 mm paper, 48 on 80 mm. */

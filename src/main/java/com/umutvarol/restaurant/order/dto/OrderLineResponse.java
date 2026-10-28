@@ -3,6 +3,7 @@ package com.umutvarol.restaurant.order.dto;
 import com.umutvarol.restaurant.menu.MenuCategory;
 import com.umutvarol.restaurant.order.OrderLine;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 public record OrderLineResponse(
@@ -17,7 +18,11 @@ public record OrderLineResponse(
         List<Option> options,
         Long id,
         int voidedQuantity,
-        int compedQuantity) {
+        int compedQuantity,
+        String station,
+        int course,
+        Instant firedAt,
+        Instant readyAt) {
 
     public record Option(Long choiceId, String group, String choice, BigDecimal priceDelta) {
     }
@@ -36,6 +41,10 @@ public record OrderLineResponse(
                         o.getPriceDelta())).toList(),
                 line.getId(),
                 line.getVoidedQuantity(),
-                line.getCompedQuantity());
+                line.getCompedQuantity(),
+                line.getStationCode(),
+                line.getCourse(),
+                line.getFiredAt(),
+                line.getReadyAt());
     }
 }

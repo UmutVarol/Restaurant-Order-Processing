@@ -133,6 +133,9 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/pin-staff").permitAll()
                         .requestMatchers("/api/v1/devices", "/api/v1/devices/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/auth/totp", "/api/v1/auth/totp/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.POST, "/api/v1/stations", "/api/v1/stations/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/stations/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/stations/**").hasRole(Role.ADMIN.name())
                         // Guests paying by QR link: the unguessable link token is their permission.
                         .requestMatchers("/api/v1/public/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/callback/*", "/api/v1/payments/webhook/*").permitAll()
@@ -143,7 +146,7 @@ class SecurityConfig {
                         .requestMatchers("/api/v1/menu", "/api/v1/menu/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/analytics/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders", "/api/v1/orders/quote",
-                                "/api/v1/orders/*/cancel", "/api/v1/orders/*/lines/*/adjust")
+                                "/api/v1/orders/*/cancel", "/api/v1/orders/*/lines/*/adjust", "/api/v1/orders/*/courses/*/fire")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/orders/*/discount")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())

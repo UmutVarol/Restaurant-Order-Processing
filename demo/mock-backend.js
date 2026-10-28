@@ -47,6 +47,12 @@
     id, name, description, category, priceC: price * 100, icon, prepTimeMinutes, popular, tags, available: true, archived: false,
   }));
 
+  // Kitchen stations, as seeded by V12__courses_and_stations.sql, and where each category goes by default.
+  const STATIONS = [[1, 'COLD', 'Soğuk mutfak', 8], [2, 'HOT', 'Sıcak mutfak', 18], [3, 'DESSERT', 'Tatlı', 10], [4, 'BAR', 'Bar', 5]]
+    .map(([id, code, name, targetMinutes]) => ({ id, code, name, targetMinutes }));
+  const DEFAULT_STATION = { STARTER: 'COLD', MAIN: 'HOT', DESSERT: 'DESSERT', DRINK: 'BAR' };
+  const DEFAULT_COURSE = { STARTER: 1, DRINK: 1, MAIN: 2, DESSERT: 3 };
+
   // Product options, as seeded by V6__product_options.sql: [dish id, [group, min, max, [[choice, extra lira], …]], …]
   const OPTIONS = [
     [7, ['Acılık', 1, 1, [['Normal', 0], ['Az acılı', 0], ['Bol acılı', 0]]], ['Ekstra', 0, 2, [['Közlenmiş domates', 25], ['Ekstra lavaş', 20]]]],
@@ -222,9 +228,13 @@
       const quantity = Number(item.quantity);
       const options = resolveOptions(dish, item.optionIds || []);
       const unitPriceC = dish.priceC + options.reduce((sum, o) => sum + o.priceDeltaC, 0);
+      if (item.course != null && !(Number.isInteger(item.course) && item.course >= 1 && item.course <= 3)) {
+        throw new Problem(400, 'VALIDATION_FAILED', 'Request body is invalid.', { errors: [{ field: 'items[].course', message: 'must be between 1 and 3' }] });
+      }
       return {
         menuItemId: dish.id, name: dish.name, icon: dish.icon, category: dish.category, unitPriceC,
         quantity, note: clean(item.note), lineTotalC: unitPriceC * quantity, options,
+        station: dish.stationCode ?? DEFAULT_STATION[dish.category], course: item.course ?? DEFAULT_COURSE[dish.category] ?? 1,
       };
     });
   }
@@ -296,6 +306,7 @@
       paymentMethod: order.paymentMethod,
       couponCode: order.couponCode,
       lines: order.lines.map((line, index) => lineView(line, index, order)),
+      heldCourses: heldCourses(order),
       itemCount: order.lines.reduce((sum, line) => sum + line.quantity - (line.voided || 0), 0),
       manualDiscount: order.manual ? { percent: order.manual.percent ?? null, amount: order.manual.amountC != null ? toLira(order.manual.amountC) : null } : null,
       adjustments: (order.adjustments || []).map((a) => ({ ...a, amount: a.amountC != null ? toLira(a.amountC) : null, amountC: undefined, at: iso(a.at) })),
@@ -310,16 +321,22 @@
   }
 
   // Line ids are derived from the order, so demo history needs no stored ids: order 1042, line 2 → 104202.
+  // Lines from before courses existed went to the kitchen with their order; a held line has firedAt null.
   const lineView = (line, index, order) => ({
     id: order?.id ? order.id * 100 + index + 1 : null, voidedQuantity: line.voided || 0, compedQuantity: line.comped || 0,
     menuItemId: line.menuItemId, name: line.name, icon: line.icon, category: line.category, unitPrice: toLira(line.unitPriceC),
     quantity: line.quantity, note: line.note, lineTotal: toLira(line.lineTotalC),
     options: (line.options || []).map((o) => ({ choiceId: o.choiceId, group: o.group, choice: o.choice, priceDelta: toLira(o.priceDeltaC) })),
+    station: line.station ?? DEFAULT_STATION[line.category], course: line.course ?? 1,
+    firedAt: line.firedAt === null ? null : iso(line.firedAt ?? order?.createdAt ?? Date.now()), readyAt: line.readyAt ? iso(line.readyAt) : null,
   });
+  const isHeld = (line) => line.firedAt === null && line.quantity - (line.voided || 0) > 0;
+  const heldCourses = (order) => [...new Set(order.lines.filter(isHeld).map((l) => l.course))].sort((a, b) => a - b);
   const pricingView = (p) => ({ subtotal: toLira(p.subtotal), discount: toLira(p.discount), tax: toLira(p.tax), deliveryFee: toLira(p.deliveryFee), total: toLira(p.total) });
   const menuView = (m) => ({
     id: m.id, name: m.name, description: m.description, category: m.category, price: toLira(m.priceC), icon: m.icon,
     prepTimeMinutes: m.prepTimeMinutes, popular: m.popular, available: m.available && !m.archived, tags: [...m.tags].sort(),
+    stationCode: m.stationCode ?? DEFAULT_STATION[m.category],
     optionGroups: (m.optionGroups || []).map((g) => ({ id: g.id, name: g.name, minSelect: g.minSelect, maxSelect: g.maxSelect,
       choices: g.choices.map((c) => ({ id: c.id, name: c.name, priceDelta: toLira(c.priceDeltaC) })) })),
   });
@@ -663,7 +680,13 @@
 
   // ------------------------------------------------------------------------------------------- printers
   // Mirrors PrintingService, except that a browser cannot open a socket: in the demo a ticket "prints" at once.
-  const printers = () => (state.printers ??= []);
+  const printers = () => {
+    state.printers ??= [];
+    // Printers saved by an older demo listed menu categories; V12 maps them to the default stations.
+    state.printers.forEach((p) => { p.stations ??= [...new Set((p.categories || []).map((c) => DEFAULT_STATION[c]))].sort(); delete p.categories; });
+    return state.printers;
+  };
+  const lineStation = (line) => line.station ?? DEFAULT_STATION[line.category];
 
   function privateIPv4(host) {
     const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
@@ -673,7 +696,8 @@
   }
 
   function validatePrinter(body, exceptId) {
-    requireFields({ name: blank(body.name) ? 'must not be blank' : null, categories: !(body.categories || []).length ? 'must not be empty' : null });
+    requireFields({ name: blank(body.name) ? 'must not be blank' : null, stations: !(body.stations || []).length ? 'must not be empty' : null });
+    requireStations(body.stations);
     if (!privateIPv4(String(body.host || '').trim())) throw new Problem(422, 'PRINTER_HOST_NOT_ALLOWED', 'Not on the local network', { parameters: { host: String(body.host) } });
     if (!(body.port >= 9100 && body.port <= 9109)) throw new Problem(422, 'PRINTER_PORT_NOT_ALLOWED', 'Port not allowed', { parameters: { min: 9100, max: 9109 } });
     const name = String(body.name).trim();
@@ -691,11 +715,13 @@
       return out.join('\n');
     }
     out.push(center(order.table ? `MASA ${order.table.code}` : `PAKET #${order.id}`), `#${order.id}  ${order.createdBy || ''}  ${order.customerName}`, '-'.repeat(cols));
-    for (const l of order.lines.filter((x) => printer.categories.includes(x.category) && x.quantity > (x.voided || 0))) {
+    const held = heldCourses(order);
+    for (const l of order.lines.filter((x) => printer.stations.includes(lineStation(x)) && x.firedAt !== null && x.quantity > (x.voided || 0))) {
       out.push(`${l.quantity - (l.voided || 0)} X ${l.name.toUpperCase()}`);
       if (optionText(l)) out.push(`   + ${optionText(l)}`);
       if (l.note) out.push(`   ! ${l.note}`);
     }
+    if (held.length) out.push('-'.repeat(cols), `Kurs ${held.join(', ')} bekliyor`);
     return out.join('\n');
   }
 
@@ -774,6 +800,7 @@
       prepTimeMinutes: body.prepTimeMinutes != null && (body.prepTimeMinutes < 0 || body.prepTimeMinutes > 240) ? 'must be between 0 and 240' : null,
     });
     if (body.optionGroups != null) validateOptions(body.optionGroups);
+    if (body.stationCode != null) requireStations([body.stationCode]);
     const name = String(body.name).trim();
     if (state.menu.some((m) => !m.archived && m.id !== exceptId && m.name.toLowerCase() === name.toLowerCase())) {
       throw new Problem(422, 'MENU_ITEM_NAME_TAKEN', `A menu item named '${name}' already exists`, { parameters: { name } });
@@ -811,6 +838,30 @@
       name: String(body.name).trim(), description: clean(body.description), category: body.category, priceC: toCents(body.price),
       icon: clean(body.icon), prepTimeMinutes: Number(body.prepTimeMinutes || 0), popular: Boolean(body.popular), tags: [...(body.tags || [])],
     });
+    if (body.stationCode != null) dish.stationCode = body.stationCode;
+    else dish.stationCode ??= DEFAULT_STATION[dish.category];
+  }
+
+  // ------------------------------------------------------------------------------------------- stations
+  // Mirrors StationService.
+  const stations = () => (state.stations ??= STATIONS.map((station) => ({ ...station })));
+
+  function requireStations(codes) {
+    const missing = codes.find((code) => !stations().some((station) => station.code === code));
+    if (missing) throw new Problem(422, 'STATION_NOT_FOUND', `There is no station ${missing}`, { parameters: { code: String(missing) } });
+  }
+
+  function validateStation(body, exceptId) {
+    const target = Number(body.targetMinutes);
+    requireFields({
+      name: blank(body.name) ? 'must not be blank' : String(body.name).trim().length > 40 ? 'size must be between 0 and 40' : null,
+      targetMinutes: !(Number.isInteger(target) && target >= 1 && target <= 240) ? 'must be between 1 and 240' : null,
+      code: exceptId == null && body.code != null && !/^[A-Z][A-Z0-9_]{1,19}$/.test(body.code) ? 'must match "[A-Z][A-Z0-9_]{1,19}"' : null,
+    });
+    const name = String(body.name).trim();
+    if (stations().some((station) => station.id !== exceptId && station.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      throw new Problem(422, 'STATION_NAME_TAKEN', `A station called ${name} exists`, { parameters: { name } });
+    }
   }
 
 
@@ -1388,6 +1439,9 @@
         if (!table) throw new Problem(422, 'TABLE_NOT_FOUND', `Table ${body.tableId} does not exist`, { parameters: { tableId: body.tableId } });
       }
       const order = createOrder({ ...body, table: table ? { ...table } : null }, lines, coupon, Date.now(), user.username);
+      // Same as Order.place + holdLaterCourses: everything goes to the kitchen, unless later courses are held.
+      const first = Math.min(...lines.map((l) => l.course));
+      lines.forEach((l) => { l.firedAt = body.holdCourses && l.course !== first ? null : order.createdAt; });
       state.orders.push(order);
       attach(state, order, order.createdAt);
       changed(order, 'CREATED', null);
@@ -1468,6 +1522,61 @@
         line.lineTotalC = line.unitPriceC * (line.quantity - (line.voided || 0) - (line.comped || 0));
         return { kind: body.kind, itemName: line.name, quantity: units, amountC: line.unitPriceC * units, detail: String(body.reason).trim(), approvedBy: approver };
       });
+    }],
+    ['POST', /^orders\/(\d+)\/courses\/(\d+)\/fire$/, 'till', ({ params, user }) => {
+      const order = findOrder(params[0]);
+      const course = Number(params[1]);
+      if (!(course >= 1 && course <= 3)) {
+        throw new Problem(400, 'VALIDATION_FAILED', 'Request parameters are invalid.', { errors: [{ field: 'course', message: 'must be between 1 and 3' }] });
+      }
+      if (!ACTIVE.includes(order.status)) throw new Problem(409, 'ORDER_NOT_EDITABLE', `Order #${order.id} can no longer be changed`, { parameters: { orderId: String(order.id), status: order.status } });
+      const held = order.lines.filter((l) => isHeld(l) && l.course === course);
+      if (!held.length) throw new Problem(422, 'NOTHING_TO_FIRE', `Course ${course} has nothing waiting`, { parameters: { course } });
+      const at = Date.now();
+      held.forEach((l) => { l.firedAt = at; });
+      order.updatedAt = at;
+      (order.adjustments ??= []).push({ kind: 'FIRE', itemName: null, quantity: course, amountC: null, detail: `course ${course}`, by: user.username, approvedBy: null, at });
+      changed(order, 'UPDATED');
+      return orderView(order);
+    }],
+    ['POST', /^orders\/(\d+)\/lines\/(\d+)\/ready$/, 'staff', ({ params, query }) => {
+      const order = findOrder(params[0]);
+      if (!ACTIVE.includes(order.status)) throw new Problem(409, 'ORDER_NOT_EDITABLE', `Order #${order.id} is ${order.status}`, { parameters: { orderId: String(order.id), status: order.status } });
+      const line = order.lines[Number(params[1]) - order.id * 100 - 1];
+      if (!line) throw new Problem(404, 'NOT_FOUND', `Order line ${params[1]} was not found`);
+      if (line.firedAt === null) throw new Problem(422, 'LINE_NOT_FIRED', 'That dish has not been sent to the kitchen yet');
+      line.readyAt = query.get('ready') === 'false' ? null : Date.now();
+      order.updatedAt = Date.now();
+      changed(order, 'UPDATED');
+      return orderView(order);
+    }],
+    ['GET', /^stations$/, 'staff', () => stations().map((station) => ({ ...station }))],
+    ['POST', /^stations$/, 'manager', (_, body) => {
+      validateStation(body, null);
+      if (body.code == null) throw new Problem(422, 'STATION_CODE_REQUIRED', 'A new station needs a code');
+      if (stations().some((station) => station.code === body.code)) throw new Problem(422, 'STATION_CODE_TAKEN', `Station code ${body.code} is taken`, { parameters: { code: body.code } });
+      const station = { id: Math.max(0, ...stations().map((x) => x.id)) + 1, code: body.code, name: String(body.name).trim(), targetMinutes: Number(body.targetMinutes) };
+      stations().push(station);
+      save();
+      return [201, { ...station }];
+    }],
+    ['PUT', /^stations\/(\d+)$/, 'manager', ({ params }, body) => {
+      const station = stations().find((x) => x.id === Number(params[0]));
+      if (!station) throw new Problem(404, 'NOT_FOUND', `Station ${params[0]} was not found`);
+      validateStation(body, station.id);
+      Object.assign(station, { name: String(body.name).trim(), targetMinutes: Number(body.targetMinutes) });
+      save();
+      return { ...station };
+    }],
+    ['DELETE', /^stations\/(\d+)$/, 'manager', ({ params }) => {
+      const station = stations().find((x) => x.id === Number(params[0]));
+      if (!station) throw new Problem(404, 'NOT_FOUND', `Station ${params[0]} was not found`);
+      if (state.menu.some((m) => !m.archived && (m.stationCode ?? DEFAULT_STATION[m.category]) === station.code)) {
+        throw new Problem(409, 'STATION_IN_USE', `Dishes are still made at ${station.name}`, { parameters: { name: station.name } });
+      }
+      state.stations = stations().filter((x) => x !== station);
+      save();
+      return [204, null];
     }],
     ['PUT', /^orders\/(\d+)\/discount$/, 'till', ({ params, user }, body) => {
       const order = findOrder(params[0]);
@@ -1591,7 +1700,7 @@
       validatePrinter(body, null);
       state.nextPrinterId ??= 1;
       const printer = { id: state.nextPrinterId++, name: String(body.name).trim(), host: String(body.host).trim(), port: Number(body.port),
-        paperWidth: Number(body.paperWidth), categories: [...body.categories].sort(), enabled: Boolean(body.enabled), lastPrintedAt: null, lastError: null };
+        paperWidth: Number(body.paperWidth), stations: [...new Set(body.stations)].sort(), enabled: Boolean(body.enabled), lastPrintedAt: null, lastError: null };
       printers().push(printer);
       save();
       return [201, printerView(printer)];
@@ -1601,7 +1710,7 @@
       if (!printer) throw new Problem(404, 'NOT_FOUND', 'Printer not found');
       validatePrinter(body, printer.id);
       Object.assign(printer, { name: String(body.name).trim(), host: String(body.host).trim(), port: Number(body.port), paperWidth: Number(body.paperWidth),
-        categories: [...body.categories].sort(), enabled: Boolean(body.enabled) });
+        stations: [...new Set(body.stations)].sort(), enabled: Boolean(body.enabled) });
       save();
       return printerView(printer);
     }],
@@ -1626,7 +1735,7 @@
     ['GET', /^print-jobs$/, 'manager', () => []],
     ['POST', /^orders\/(\d+)\/reprint$/, 'till', ({ params }) => {
       const order = findOrder(params[0]);
-      const targets = printers().filter((p) => p.enabled && order.lines.some((l) => p.categories.includes(l.category)));
+      const targets = printers().filter((p) => p.enabled && order.lines.some((l) => l.firedAt !== null && p.stations.includes(lineStation(l))));
       if (!targets.length) throw new Problem(422, 'NO_PRINTER_FOR_ORDER', 'No printer is set up for this order');
       targets.forEach((p) => { p.lastPrintedAt = iso(Date.now()); });
       save();

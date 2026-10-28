@@ -199,6 +199,12 @@ export const api = {
   moveTable: (fromTableId, tableId) => request('POST', `/tables/${fromTableId}/move`, { tableId }),
   mergeTable: (fromTableId, tableId) => request('POST', `/tables/${fromTableId}/merge`, { tableId }),
 
+  fireCourse: (orderId, course) => request('POST', `/orders/${orderId}/courses/${course}/fire`),
+  lineReady: (orderId, lineId, ready) => request('POST', `/orders/${orderId}/lines/${lineId}/ready${query({ ready })}`),
+  stations: () => request('GET', '/stations'),
+  saveStation: (id, station) => (id ? request('PUT', `/stations/${id}`, station) : request('POST', '/stations', station)),
+  deleteStation: (id) => request('DELETE', `/stations/${id}`),
+
   tables: () => request('GET', '/floor/tables'),
   coupons: () => request('GET', '/coupons'),
   dashboard: (days) => request('GET', `/analytics/dashboard${query({ days })}`),

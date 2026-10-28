@@ -3,6 +3,9 @@ package com.umutvarol.restaurant.printing;
 import com.umutvarol.restaurant.common.config.RestaurantProperties;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
+import com.umutvarol.restaurant.menu.StationService;
+import com.umutvarol.restaurant.order.CourseFiredEvent;
+import com.umutvarol.restaurant.order.LineVoidedEvent;
 import com.umutvarol.restaurant.order.Order;
 import com.umutvarol.restaurant.order.OrderChangedEvent;
 import com.umutvarol.restaurant.order.OrderLine;
@@ -18,6 +21,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +50,7 @@ public class PrintingService {
     private static final Logger log = LoggerFactory.getLogger(PrintingService.class);
 
     private final PrinterRepository printers;
+    private final StationService stations;
     private final PrintJobRepository jobs;
     private final OrderRepository orders;
     private final PrinterClient client;
@@ -54,10 +60,11 @@ public class PrintingService {
     private final TransactionTemplate transaction;
     private final Clock clock;
 
-    public PrintingService(PrinterRepository printers, PrintJobRepository jobs, OrderRepository orders,
+    public PrintingService(PrinterRepository printers, StationService stations, PrintJobRepository jobs, OrderRepository orders,
                            PrinterClient client, PrintingProperties properties, RestaurantProperties restaurant,
                            ApplicationEventPublisher events, PlatformTransactionManager transactionManager, Clock clock) {
         this.printers = printers;
+        this.stations = stations;
         this.jobs = jobs;
         this.orders = orders;
         this.client = client;
@@ -85,7 +92,8 @@ public class PrintingService {
         }
         String host = request.host().strip();
         PrinterAddressPolicy.resolve(host, request.port(), properties);
-        printer.update(name, host, request.port(), Integer.parseInt(request.paperWidth()), request.categories(),
+        stations.requireExisting(request.stations());
+        printer.update(name, host, request.port(), Integer.parseInt(request.paperWidth()), request.stations(),
                 request.enabled());
         return PrinterResponse.from(printers.save(printer));
     }
@@ -103,24 +111,40 @@ public class PrintingService {
         Printer printer = find(id);
         KitchenTicket ticket = orderId == null
                 ? KitchenTicket.test(printer, properties.language(), clock.instant(), restaurant.timeZone())
-                : ticketFor(printer, order(orderId), false);
+                : ticketFor(printer, order(orderId), KitchenTicket.Mode.TICKET, 0);
         return new TicketPreview(printer.getName(), printer.columns(), ticket.text(printer.columns()));
     }
 
     // ------------------------------------------------------------------------------------------- tickets
 
-    /** Queues the new order's tickets once it is safely committed. */
+    /** Queues the new order's tickets once it is safely committed: the dishes sent to the kitchen now. */
     @TransactionalEventListener
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onOrderChanged(OrderChangedEvent event) {
         if (event.kind() == OrderChangedEvent.Kind.CREATED) {
-            queue(order(event.orderId()), PrintJob.Kind.TICKET, null);
+            queue(order(event.orderId()), PrintJob.Kind.TICKET, null, OrderLine::isFired, job -> job);
         }
+    }
+
+    /** A held course was fired: its stations print it. */
+    @TransactionalEventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onCourseFired(CourseFiredEvent event) {
+        queue(order(event.orderId()), PrintJob.Kind.FIRE, null, line -> line.getCourse() == event.course(),
+                job -> job.forCourse(event.course()));
+    }
+
+    /** Dishes being made were voided: their station gets a slip. */
+    @TransactionalEventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onLineVoided(LineVoidedEvent event) {
+        queue(order(event.orderId()), PrintJob.Kind.VOID, null, line -> line.getId().equals(event.lineId()),
+                job -> job.forVoid(event.lineId(), event.units()));
     }
 
     /** Prints an order's tickets again, e.g. after the kitchen printer jammed. */
     public List<PrintJobResponse> reprint(Long orderId, String actor) {
-        List<PrintJob> queued = queue(order(orderId), PrintJob.Kind.REPRINT, actor);
+        List<PrintJob> queued = queue(order(orderId), PrintJob.Kind.REPRINT, actor, OrderLine::isFired, job -> job);
         if (queued.isEmpty()) {
             throw new BusinessRuleException("NO_PRINTER_FOR_ORDER", "No printer is set up for this order's dishes");
         }
@@ -137,14 +161,15 @@ public class PrintingService {
         return jobs.findByOrderIdOrderByIdAsc(orderId).stream().map(PrintJobResponse::from).toList();
     }
 
-    private List<PrintJob> queue(Order order, PrintJob.Kind kind, @Nullable String actor) {
+    private List<PrintJob> queue(Order order, PrintJob.Kind kind, @Nullable String actor, Predicate<OrderLine> which,
+                                 UnaryOperator<PrintJob> details) {
         List<PrintJob> queued = new ArrayList<>();
         Instant now = clock.instant();
         for (Printer printer : printers.findByEnabledTrue()) {
-            boolean hasLines = order.getLines().stream()
-                    .anyMatch(line -> line.activeQuantity() > 0 && printer.prints(line.getCategory()));
+            boolean hasLines = order.getLines().stream().filter(which)
+                    .anyMatch(line -> (kind == PrintJob.Kind.VOID || line.activeQuantity() > 0) && printer.prints(line.getStationCode()));
             if (hasLines) {
-                queued.add(jobs.save(new PrintJob(printer, kind, order.getId(), actor, now)));
+                queued.add(jobs.save(details.apply(new PrintJob(printer, kind, order.getId(), actor, now))));
             }
         }
         return queued;
@@ -188,9 +213,17 @@ public class PrintingService {
             return null;
         }
         Printer printer = job.getPrinter();
-        KitchenTicket ticket = job.getKind() == PrintJob.Kind.TEST || job.getOrderId() == null
-                ? KitchenTicket.test(printer, properties.language(), clock.instant(), restaurant.timeZone())
-                : ticketFor(printer, order(job.getOrderId()), job.getKind() == PrintJob.Kind.REPRINT);
+        KitchenTicket ticket = switch (job.getKind()) {
+            case TEST -> KitchenTicket.test(printer, properties.language(), clock.instant(), restaurant.timeZone());
+            case VOID -> {
+                Order order = order(job.getOrderId());
+                OrderLine line = order.getLines().stream().filter(l -> l.getId().equals(job.getLineId())).findFirst().orElseThrow();
+                yield KitchenTicket.voidSlip(printer, order, line, job.getUnits(), properties.language(), restaurant.timeZone());
+            }
+            case FIRE -> ticketFor(printer, order(job.getOrderId()), KitchenTicket.Mode.FIRE, job.getCourse());
+            case REPRINT -> ticketFor(printer, order(job.getOrderId()), KitchenTicket.Mode.REPRINT, 0);
+            case TICKET -> ticketFor(printer, order(job.getOrderId()), KitchenTicket.Mode.TICKET, 0);
+        };
         return new Prepared(printer.getHost(), printer.getPort(), ticket.escPos(printer.columns()));
     }
 
@@ -213,9 +246,12 @@ public class PrintingService {
                 job.getOrderId(), job.getStatus(), error, at));
     }
 
-    private KitchenTicket ticketFor(Printer printer, Order order, boolean reprint) {
-        List<OrderLine> lines = order.getLines().stream().filter(line -> printer.prints(line.getCategory())).toList();
-        return KitchenTicket.forOrder(printer, order, lines, reprint, properties.language(), restaurant.timeZone());
+    private KitchenTicket ticketFor(Printer printer, Order order, KitchenTicket.Mode mode, int course) {
+        List<OrderLine> lines = order.getLines().stream()
+                .filter(line -> printer.prints(line.getStationCode()))
+                .filter(line -> mode == KitchenTicket.Mode.FIRE ? line.getCourse() == course : line.isFired())
+                .toList();
+        return KitchenTicket.forOrder(printer, order, lines, mode, course, properties.language(), restaurant.timeZone());
     }
 
     private Printer find(Long id) {

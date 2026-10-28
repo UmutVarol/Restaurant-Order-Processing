@@ -23,7 +23,8 @@ import org.jspecify.annotations.Nullable;
 @Table(name = "print_jobs")
 public class PrintJob {
 
-    public enum Kind { TICKET, REPRINT, TEST }
+    /** The first ticket, a reprint, a test page, a course fired later, or a void slip. */
+    public enum Kind { TICKET, REPRINT, TEST, FIRE, VOID }
 
     public enum Status { QUEUED, PRINTED, FAILED }
 
@@ -64,6 +65,13 @@ public class PrintJob {
     @Column(name = "printed_at")
     private Instant printedAt;
 
+    private Integer course;
+
+    @Column(name = "line_id")
+    private Long lineId;
+
+    private Integer units;
+
     protected PrintJob() {
         // for JPA
     }
@@ -76,6 +84,31 @@ public class PrintJob {
         this.status = Status.QUEUED;
         this.createdAt = at;
         this.nextAttemptAt = at;
+    }
+
+    /** A fired course: only its dishes print. */
+    PrintJob forCourse(int course) {
+        this.course = course;
+        return this;
+    }
+
+    /** A void slip: these units of this dish are off. */
+    PrintJob forVoid(Long lineId, int units) {
+        this.lineId = lineId;
+        this.units = units;
+        return this;
+    }
+
+    public @Nullable Integer getCourse() {
+        return course;
+    }
+
+    public @Nullable Long getLineId() {
+        return lineId;
+    }
+
+    public @Nullable Integer getUnits() {
+        return units;
     }
 
     void printed(Instant at) {
