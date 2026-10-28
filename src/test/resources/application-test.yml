@@ -6,6 +6,11 @@ spring:
 restaurant:
   demo:
     enabled: false
+  channels:
+    # Yemeksepeti is connected with a throwaway secret; the other platforms are simulations
+    simulate-unconfigured: true
+    yemeksepeti:
+      webhook-secret: test-only-channel-secret-0123456789
   payments:
     provider: SIMULATED
     allow-simulated: true

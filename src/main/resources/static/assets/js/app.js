@@ -19,6 +19,7 @@ const ROUTES = [
   { id: 'dashboard', icon: 'dashboard', roles: ['ADMIN'], section: 'manage', load: () => import('./views/dashboard.js') },
   { id: 'menu', icon: 'menu', roles: ['ADMIN'], section: 'manage', load: () => import('./views/menu.js') },
   { id: 'stock', icon: 'box', roles: ['ADMIN'], section: 'manage', load: () => import('./views/stock.js') },
+  { id: 'channels', icon: 'delivery', roles: ['ADMIN'], section: 'manage', load: () => import('./views/channels.js') },
   // reached from the user card, not the navigation
   { id: 'settings', icon: 'settings', roles: ALL, section: null, load: () => import('./views/settings.js') },
 ];

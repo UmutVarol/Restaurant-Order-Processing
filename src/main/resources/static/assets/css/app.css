@@ -1331,3 +1331,30 @@ svg.qr { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(-
 .outbox-info small { font-size: 12px; }
 .outbox-info .form-error { margin-top: 4px; }
 .outbox-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Delivery platforms */
+.channel-intro { margin: 0 0 14px; max-width: 760px; }
+.channel-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.channel-card .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.channel-card .card-title { margin-bottom: 6px; }
+.channel-card .card-body { display: grid; gap: 8px; }
+.channel-card.ch-YEMEKSEPETI { border-top: 4px solid #e8174a; }
+.channel-card.ch-GETIR { border-top: 4px solid #5d3ebc; }
+.channel-card.ch-TRENDYOL { border-top: 4px solid #f27a1a; }
+.pill.mode-CONNECTED { background: var(--green-soft); color: var(--green); }
+.pill.mode-SIMULATED { background: var(--blue-soft); color: var(--blue); }
+.channel-actions { gap: 6px; flex-wrap: wrap; }
+.channel-updates { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 12px; }
+.channel-orders small.block { display: block; font-size: 11.5px; }
+.channel-orders tr.attention { background: var(--amber-soft); }
+.channel-state { display: grid; gap: 6px; justify-items: start; }
+.channel-state .pill.link { border: 0; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 650; }
+.type-badge.channel { color: var(--violet); }
+.type-badge.ch-YEMEKSEPETI { color: #c8143f; }
+.type-badge.ch-GETIR { color: #5d3ebc; }
+.type-badge.ch-TRENDYOL { color: #d9620d; }
+.mapping-list { display: grid; gap: 8px; margin-bottom: 12px; }
+.mapping-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.mapping-row small.block { display: block; }
+.mapping-add { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; }
+@media (max-width: 640px) { .mapping-add { grid-template-columns: 1fr; } }

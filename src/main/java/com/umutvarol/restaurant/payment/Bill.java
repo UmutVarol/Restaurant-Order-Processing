@@ -170,6 +170,17 @@ public class Bill {
         return payment;
     }
 
+    /** The guest paid a delivery platform, which settles with the restaurant: the bill is paid in full. */
+    Payment settledByPlatform(String platform, String reference, Instant at, String actor, String idempotencyKey) {
+        BigDecimal value = available();
+        checkPayable(value, Money.ZERO);
+        Payment payment = new Payment(this, PaymentMethod.ONLINE, PaymentStatus.SUCCEEDED, value, Money.ZERO, at, actor,
+                idempotencyKey);
+        payment.paidOnPlatform(platform, reference);
+        payments.add(payment);
+        return payment;
+    }
+
     /** Reserves an amount for an online payment that the guest is about to make on the provider's page. */
     Payment startOnline(BigDecimal amount, BigDecimal tip, @Nullable PaymentLink link, Instant at, String actor) {
         BigDecimal value = Money.normalize(amount);

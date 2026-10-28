@@ -52,11 +52,13 @@ public record AbuseProtectionProperties(
      * @param loginRequestsPerMinute  separate, tighter budget for the sign-in endpoint
      * @param publicRequestsPerMinute separate budget for what needs no sign-in: the guest payment page, provider
      *                                callbacks and notifications, and browser security reports
+     * @param channelRequestsPerMinute separate budget for signed order webhooks from delivery platforms
      */
     public record RateLimit(
             @DefaultValue("true") boolean enabled,
             @Min(1) @DefaultValue("600") int apiRequestsPerMinute,
             @Min(1) @DefaultValue("60") int loginRequestsPerMinute,
-            @Min(1) @DefaultValue("120") int publicRequestsPerMinute) {
+            @Min(1) @DefaultValue("120") int publicRequestsPerMinute,
+            @Min(1) @DefaultValue("300") int channelRequestsPerMinute) {
     }
 }

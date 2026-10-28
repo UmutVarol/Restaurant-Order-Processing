@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.payment;
 
+import com.umutvarol.restaurant.common.crypto.SecretTokens;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.common.money.Money;
@@ -19,6 +20,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -102,6 +104,28 @@ public class PaymentService {
         events.publishEvent(PaymentChangedEvent.payment(payment, now));
         afterPayment(bill, actor, now);
         return new TakePaymentResponse(PaymentResponse.from(payment), BillResponse.from(bill));
+    }
+
+    /**
+     * Records that a delivery platform collected the whole bill of one of its orders. Runs once per platform order:
+     * the reference is its idempotency key.
+     */
+    public void settleByPlatform(Long orderId, String platform, String reference) {
+        String key = "pl-" + SecretTokens.hash(platform + ":" + reference).substring(0, 64);
+        if (payments.findByIdempotencyKey(key).isPresent()) {
+            return;
+        }
+        Bill bill = billService.lock(billService.billForOrder(orderId));
+        if (bill.available().signum() <= 0) {
+            return;
+        }
+        Instant now = clock.instant();
+        String actor = "channel:" + platform.toLowerCase(Locale.ROOT);
+        Payment payment = bill.settledByPlatform(platform, reference, now, actor, key);
+        payments.saveAndFlush(payment);
+        audit.paymentTaken(payment, actor);
+        events.publishEvent(PaymentChangedEvent.payment(payment, now));
+        afterPayment(bill, actor, now);
     }
 
     /** Gives money back from a payment, e.g. after a complaint. Only managers may do this. */

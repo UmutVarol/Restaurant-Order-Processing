@@ -28,7 +28,14 @@ export function statusPill(status) {
   return h('span', { class: `pill s-${status}` }, t(`status.${status}`));
 }
 
+// Platform names are brands: the same in every language.
+export const CHANNEL_LABELS = { YEMEKSEPETI: 'Yemeksepeti', GETIR: 'Getir Yemek', TRENDYOL: 'Trendyol Go' };
+
 export function typeBadge(order) {
+  if (order.channel) {
+    return h('span', { class: `type-badge channel ch-${order.channel}`, 'data-testid': 'channel-badge' }, icon('delivery', 'sm'),
+      CHANNEL_LABELS[order.channel] ?? order.channel);
+  }
   const where = order.type === 'DINE_IN' && order.table ? `${t('pos.table')} ${order.table.code}` : t(`type.${order.type}`);
   return h('span', { class: 'type-badge' }, icon(TYPE_ICONS[order.type], 'sm'), where);
 }

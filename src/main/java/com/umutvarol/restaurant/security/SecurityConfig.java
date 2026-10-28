@@ -148,6 +148,9 @@ class SecurityConfig {
                         .requestMatchers("/api/v1/menu", "/api/v1/menu/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/analytics/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/stock/**", "/api/v1/recipes/**").hasRole(Role.ADMIN.name())
+                        // platforms sign their orders; the signature, not a session, is the permission
+                        .requestMatchers(HttpMethod.POST, "/api/v1/channels/*/webhook").permitAll()
+                        .requestMatchers("/api/v1/channels", "/api/v1/channels/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders", "/api/v1/orders/quote",
                                 "/api/v1/orders/*/cancel", "/api/v1/orders/*/lines/*/adjust", "/api/v1/orders/*/courses/*/fire")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())

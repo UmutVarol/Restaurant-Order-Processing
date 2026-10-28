@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,10 +25,12 @@ public class MenuService {
 
     private final MenuItemRepository repository;
     private final StationService stations;
+    private final ApplicationEventPublisher events;
 
-    public MenuService(MenuItemRepository repository, StationService stations) {
+    public MenuService(MenuItemRepository repository, StationService stations, ApplicationEventPublisher events) {
         this.repository = repository;
         this.stations = stations;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -90,6 +93,7 @@ public class MenuService {
     public MenuItemResponse changeAvailability(Long id, boolean available) {
         MenuItem item = find(id);
         item.changeAvailability(available);
+        events.publishEvent(new MenuAvailabilityChangedEvent(List.of(item.getId())));
         return MenuItemResponse.from(item);
     }
 
@@ -99,11 +103,13 @@ public class MenuService {
      * @return the names of the dishes whose state changed
      */
     public List<String> markStockOut(Map<Long, Boolean> outByItem) {
-        return repository.findAllById(outByItem.keySet()).stream()
+        List<MenuItem> changed = repository.findAllById(outByItem.keySet()).stream()
                 .filter(item -> item.markStockOut(outByItem.get(item.getId())))
-                .map(MenuItem::getName)
-                .sorted()
                 .toList();
+        if (!changed.isEmpty()) {
+            events.publishEvent(new MenuAvailabilityChangedEvent(changed.stream().map(MenuItem::getId).toList()));
+        }
+        return changed.stream().map(MenuItem::getName).sorted().toList();
     }
 
     public void archive(Long id) {

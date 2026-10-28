@@ -111,6 +111,8 @@ restaurant:
       login-requests-per-minute: 60
       # Guest payment pages, provider callbacks and notifications, browser security reports.
       public-requests-per-minute: 120
+      # Signed order webhooks from delivery platforms.
+      channel-requests-per-minute: 300
     max-request-body: 64KB
     # Refunds and closing the day need a sign-in at most this old (step-up authentication).
     step-up-window: 5m
@@ -132,6 +134,22 @@ restaurant:
       api-key: ${IYZICO_API_KEY:}
       secret-key: ${IYZICO_SECRET_KEY:}
       base-url: ${IYZICO_BASE_URL:https://sandbox-api.iyzipay.com}
+  # Delivery platforms. A platform with a webhook secret is connected; without one it is simulated in demo mode
+  # and switched off otherwise. The API settings are where status and availability updates are sent.
+  channels:
+    webhook-tolerance: 5m
+    yemeksepeti:
+      webhook-secret: ${YEMEKSEPETI_WEBHOOK_SECRET:}
+      api-base-url: ${YEMEKSEPETI_API_BASE_URL:}
+      api-token: ${YEMEKSEPETI_API_TOKEN:}
+    getir:
+      webhook-secret: ${GETIR_WEBHOOK_SECRET:}
+      api-base-url: ${GETIR_API_BASE_URL:}
+      api-token: ${GETIR_API_TOKEN:}
+    trendyol:
+      webhook-secret: ${TRENDYOL_WEBHOOK_SECRET:}
+      api-base-url: ${TRENDYOL_API_BASE_URL:}
+      api-token: ${TRENDYOL_API_TOKEN:}
   demo:
     enabled: ${DEMO_MODE:true}
     history-days: 14

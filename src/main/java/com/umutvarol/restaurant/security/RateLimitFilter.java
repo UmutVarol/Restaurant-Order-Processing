@@ -45,6 +45,7 @@ class RateLimitFilter extends OncePerRequestFilter {
     private final Cache<String, Bucket> apiBuckets = buckets();
     private final Cache<String, Bucket> loginBuckets = buckets();
     private final Cache<String, Bucket> publicBuckets = buckets();
+    private final Cache<String, Bucket> channelBuckets = buckets();
 
     RateLimitFilter(AbuseProtectionProperties properties, MeterRegistry meters,
                     @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
@@ -66,11 +67,13 @@ class RateLimitFilter extends OncePerRequestFilter {
                 .tryConsumeAndReturnRemaining(1);
         if (probe.isConsumed() && isLogin(request)) {
             probe = loginBuckets.get(client, key -> perMinute(limits.loginRequestsPerMinute())).tryConsumeAndReturnRemaining(1);
+        } else if (probe.isConsumed() && isChannelWebhook(request)) {
+            probe = channelBuckets.get(client, key -> perMinute(limits.channelRequestsPerMinute())).tryConsumeAndReturnRemaining(1);
         } else if (probe.isConsumed() && isPublic(request)) {
             probe = publicBuckets.get(client, key -> perMinute(limits.publicRequestsPerMinute())).tryConsumeAndReturnRemaining(1);
         }
         if (!probe.isConsumed()) {
-            String endpoint = isLogin(request) ? "login" : isPublic(request) ? "public" : "api";
+            String endpoint = isLogin(request) ? "login" : isChannelWebhook(request) ? "channel" : isPublic(request) ? "public" : "api";
             meters.counter("sofra.security.rate_limited", "endpoint", endpoint).increment();
             resolver.resolveException(request, response, null, new TooManyRequestsException("RATE_LIMITED",
                     "Too many requests. Slow down and try again shortly.", Duration.ofNanos(probe.getNanosToWaitForRefill())));
@@ -83,6 +86,12 @@ class RateLimitFilter extends OncePerRequestFilter {
     private static boolean isPublic(HttpServletRequest request) {
         String uri = request.getRequestURI();
         return PUBLIC_PREFIXES.stream().anyMatch(uri::startsWith);
+    }
+
+    /** Delivery platforms send bursts at lunchtime, from a few addresses: they get their own budget. */
+    private static boolean isChannelWebhook(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri.startsWith("/api/v1/channels/") && uri.endsWith("/webhook");
     }
 
     private static boolean isLogin(HttpServletRequest request) {

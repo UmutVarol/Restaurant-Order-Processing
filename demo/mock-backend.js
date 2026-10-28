@@ -311,6 +311,7 @@
       couponCode: order.couponCode,
       lines: order.lines.map((line, index) => lineView(line, index, order)),
       heldCourses: heldCourses(order),
+      channel: order.channel ?? null,
       itemCount: order.lines.reduce((sum, line) => sum + line.quantity - (line.voided || 0), 0),
       manualDiscount: order.manual ? { percent: order.manual.percent ?? null, amount: order.manual.amountC != null ? toLira(order.manual.amountC) : null } : null,
       adjustments: (order.adjustments || []).map((a) => ({ ...a, amount: a.amountC != null ? toLira(a.amountC) : null, amountC: undefined, at: iso(a.at) })),
@@ -940,6 +941,93 @@
     });
     const sum = (field) => Math.round(rows.reduce((total, r) => total + r[field], 0) * 100) / 100;
     return { from: iso(from), to: iso(to), rows, soldCost: sum('soldCost'), wasteCost: sum('wasteCost'), deliveredCost: sum('deliveredCost'), varianceCost: sum('varianceCost') };
+  }
+
+  // ------------------------------------------------------------------------------------------- delivery platforms
+  // Mirrors ChannelService in its demo mode: every platform is a simulation, orders are made up from mapped dishes,
+  // an unmapped item stops its order, and status or sold-out updates are only recorded.
+  const CHANNELS = { YEMEKSEPETI: ['Yemeksepeti', 'YS-'], GETIR: ['Getir Yemek', 'GTR-'], TRENDYOL: ['Trendyol Go', 'TY-'] };
+  const CHANNEL_ITEMS = [['Adana Kebap', 'Adana Kebap (Porsiyon)'], ['Lahmacun', 'Lahmacun'], ['İskender', 'İskender Kebap'],
+    ['Mercimek Çorbası', 'Mercimek Çorbası'], ['Künefe', 'Künefe'], ['Ayran', 'Ayran 300 ml']];
+
+  function channelState() {
+    if (state.channelData) return state.channelData;
+    const data = { mappings: [], orders: [], updates: [], nextId: 1 };
+    for (const [channel, [, prefix]] of Object.entries(CHANNELS)) {
+      CHANNEL_ITEMS.forEach(([dish, name], index) => {
+        const item = state.menu.find((m) => m.name === dish);
+        if (item) data.mappings.push({ channel, externalId: `${prefix}${1001 + index}`, externalName: name, menuItemId: item.id });
+      });
+    }
+    state.channelData = data;
+    return data;
+  }
+
+  const channelOf = (value) => {
+    const channel = String(value).toUpperCase();
+    if (!CHANNELS[channel]) throw new Problem(404, 'CHANNEL_NOT_FOUND', `Channel ${value} was not found`);
+    return channel;
+  };
+
+  function recordUpdate(channel, what, target, value) {
+    const data = channelState();
+    data.updates.unshift({ channel, what, target, value, at: Date.now() });
+    data.updates.length = Math.min(data.updates.length, 60);
+  }
+
+  function channelOrderView(record) {
+    const mapped = (item) => channelState().mappings.some((m) => m.channel === record.channel && m.externalId === item.id);
+    return {
+      id: record.id, channel: record.channel, externalId: record.externalId, status: record.status, orderId: record.orderId,
+      customerName: record.payload.customer.name, itemCount: record.payload.items.reduce((n, i) => n + i.quantity, 0),
+      platformTotal: record.payload.total, ourTotal: record.ourTotal, priceDiffers: record.priceDiffers, problemCode: record.problemCode,
+      problem: record.problem, unmapped: record.status === 'ATTENTION' ? record.payload.items.filter((i) => !mapped(i)).map((i) => ({ externalId: i.id, name: i.name })) : [],
+      syncedStatus: record.syncedStatus, syncError: null, receivedAt: iso(record.receivedAt),
+    };
+  }
+
+  /** Same as ChannelService.place: map every item, place it as a takeaway the platform already paid, or wait. */
+  function placeChannelOrder(record) {
+    const [label] = CHANNELS[record.channel];
+    try {
+      const items = record.payload.items.map((item) => {
+        const mapping = channelState().mappings.find((m) => m.channel === record.channel && m.externalId === item.id);
+        if (!mapping) throw new Problem(422, 'CHANNEL_ITEM_UNMAPPED', `"${item.name}" is not mapped to a dish`, { parameters: { name: item.name } });
+        return { menuItemId: mapping.menuItemId, quantity: item.quantity, note: item.note || null, optionIds: [] };
+      });
+      const lines = buildLines(items);
+      const order = createOrder({ type: 'TAKEAWAY', customerName: `${label} · ${record.payload.customer.name}`.slice(0, 80), paymentMethod: 'ONLINE',
+        note: `${label} #${record.externalId}` }, lines, null, Date.now(), `channel:${record.channel.toLowerCase()}`);
+      order.channel = record.channel;
+      lines.forEach((l) => { l.firedAt = order.createdAt; });
+      state.orders.push(order);
+      attach(state, order, order.createdAt);
+      const bill = billFor(order);
+      const payment = newPayment(state, 'ONLINE', 'SUCCEEDED', money(bill).available, 0, Date.now(), `channel:${record.channel.toLowerCase()}`);
+      payment.provider = record.channel;
+      bill.payments.push(payment);
+      Object.assign(record, { status: 'PLACED', orderId: order.id, ourTotal: toLira(order.pricing.total),
+        priceDiffers: order.pricing.total !== toCents(record.payload.total), problemCode: null, problem: null });
+      changed(order, 'CREATED', null);
+    } catch (error) {
+      if (!(error instanceof Problem)) throw error;
+      Object.assign(record, { status: 'ATTENTION', problemCode: error.code, problem: error.message });
+      save();
+    }
+  }
+
+  function pushChannelStatus(order, status) {
+    const record = order.channel && channelState().orders.find((o) => o.orderId === order.id);
+    const value = { PREPARING: 'ACCEPTED', READY: 'READY', COMPLETED: 'PICKED_UP', CANCELLED: 'CANCELLED' }[status];
+    if (!record || !value) return;
+    record.syncedStatus = value;
+    recordUpdate(record.channel, 'status', record.externalId, value);
+  }
+
+  function pushAvailability(dish) {
+    const available = dish.available && !dish.archived && !dish.stockOut;
+    channelState().mappings.filter((m) => m.menuItemId === dish.id)
+      .forEach((m) => recordUpdate(m.channel, 'availability', m.externalId, available ? 'ON' : 'OFF'));
   }
 
   // ------------------------------------------------------------------------------------------- two-step sign-in
@@ -1602,6 +1690,7 @@
     ['PATCH', /^menu\/(\d+)\/availability$/, 'manager', ({ params }, body) => {
       const dish = findDish(params[0]);
       dish.available = Boolean(body.available);
+      pushAvailability(dish);
       menuChanged();
       return menuView(dish);
     }],
@@ -1711,6 +1800,7 @@
         if (refresh(bill, Date.now())) paymentsChanged(bill, null, 'BILL');
         deductForOrder(order);
       }
+      pushChannelStatus(order, next);
       changed(order, 'STATUS_CHANGED', previous);
       return orderView(order);
     }],
@@ -1727,6 +1817,7 @@
       const before = money(bill).refunded;
       refundOverpayment(bill, `Order #${order.id} was cancelled`, Date.now(), user.username);
       if (refresh(bill, Date.now()) || money(bill).refunded !== before) paymentsChanged(bill, null, 'REFUND');
+      pushChannelStatus(order, 'CANCELLED');
       changed(order, 'STATUS_CHANGED', previous);
       return orderView(order);
     }],
@@ -1978,6 +2069,73 @@
       };
     })],
     ['GET', /^coupons$/, 'staff', () => COUPONS.filter((c) => !c.validUntil || Date.now() < Date.parse(c.validUntil)).map((c) => ({ ...c }))],
+    ['GET', /^channels$/, 'manager', () => Object.entries(CHANNELS).map(([channel, [label]]) => ({
+      channel, label, mode: 'SIMULATED', attention: channelState().orders.filter((o) => o.channel === channel && o.status === 'ATTENTION').length,
+      mappings: channelState().mappings.filter((m) => m.channel === channel).length,
+      recentUpdates: channelState().updates.filter((u) => u.channel === channel).map((u) => ({ what: u.what, target: u.target, value: u.value, at: iso(u.at) })),
+    }))],
+    ['GET', /^channels\/orders$/, 'manager', () => [...channelState().orders].sort((a, b) => b.receivedAt - a.receivedAt || b.id - a.id).slice(0, 50).map(channelOrderView)],
+    ['POST', /^channels\/orders\/(\d+)\/(retry|reject)$/, 'manager', ({ params }) => {
+      const record = channelState().orders.find((o) => o.id === Number(params[0]));
+      if (!record) throw new Problem(404, 'CHANNEL_ORDER_NOT_FOUND', `Channel order ${params[0]} was not found`);
+      if (record.status !== 'ATTENTION') throw new Problem(409, 'CHANNEL_ORDER_NOT_WAITING', `This platform order is already ${record.status}`, { parameters: { status: record.status } });
+      if (params[1] === 'retry') {
+        placeChannelOrder(record);
+      } else {
+        record.status = 'REJECTED';
+        record.syncedStatus = 'REJECTED';
+        recordUpdate(record.channel, 'status', record.externalId, 'REJECTED');
+      }
+      save();
+      return channelOrderView(record);
+    }],
+    ['GET', /^channels\/([a-z]+)\/mappings$/, 'manager', ({ params }) => {
+      const channel = channelOf(params[0]);
+      return channelState().mappings.filter((m) => m.channel === channel).sort((a, b) => a.externalName.localeCompare(b.externalName, 'tr'))
+        .map((m) => ({ externalId: m.externalId, externalName: m.externalName, menuItemId: m.menuItemId, menuItemName: findDish(m.menuItemId).name }));
+    }],
+    ['PUT', /^channels\/([a-z]+)\/mappings\/([^/]+)$/, 'manager', ({ params }, body) => {
+      const channel = channelOf(params[0]);
+      const externalId = decodeURIComponent(params[1]);
+      if (!externalId.trim() || externalId.length > 80) throw new Problem(422, 'CHANNEL_ITEM_ID_INVALID', 'A platform item id has 1 to 80 characters');
+      requireFields({ externalName: blank(body.externalName) ? 'must not be blank' : null, menuItemId: body.menuItemId == null ? 'must not be null' : null });
+      const dish = findDish(body.menuItemId);
+      const data = channelState();
+      data.mappings = data.mappings.filter((m) => !(m.channel === channel && m.externalId === externalId));
+      data.mappings.push({ channel, externalId, externalName: String(body.externalName).trim(), menuItemId: dish.id });
+      save();
+      return { externalId, externalName: String(body.externalName).trim(), menuItemId: dish.id, menuItemName: dish.name };
+    }],
+    ['DELETE', /^channels\/([a-z]+)\/mappings\/([^/]+)$/, 'manager', ({ params }) => {
+      const channel = channelOf(params[0]);
+      const externalId = decodeURIComponent(params[1]);
+      channelState().mappings = channelState().mappings.filter((m) => !(m.channel === channel && m.externalId === externalId));
+      save();
+      return [204, null];
+    }],
+    ['POST', /^channels\/([a-z]+)\/simulate$/, 'manager', ({ params }, body) => {
+      const channel = channelOf(params[0]);
+      const withUnmapped = Boolean(body?.withUnmappedItem);
+      const mapped = channelState().mappings.filter((m) => m.channel === channel && findDish(m.menuItemId).available && !findDish(m.menuItemId).stockOut);
+      if (!mapped.length && !withUnmapped) throw new Problem(422, 'CHANNEL_NOTHING_MAPPED', 'Map at least one dish first');
+      const picked = [...mapped].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * 2));
+      const items = picked.map((m) => ({ id: m.externalId, name: m.externalName, quantity: 1 + Math.floor(Math.random() * 2), unitPrice: toLira(findDish(m.menuItemId).priceC), options: [] }));
+      // the platform charges what our menu does, tax included
+      let totalC = items.length ? price(items.reduce((sum, i) => sum + toCents(i.unitPrice) * i.quantity, 0), 'TAKEAWAY', null).total : 0;
+      if (withUnmapped) {
+        items.push({ id: `NEW-${100 + Math.floor(Math.random() * 900)}`, name: 'Günün çorbası', quantity: 1, unitPrice: 150, options: [] });
+        totalC += 16500;
+      }
+      const guests = ['Deniz K.', 'Ayşe Y.', 'Mert A.', 'Selin T.', 'Can B.'];
+      const data = channelState();
+      const record = { id: data.nextId++, channel, externalId: `SIM-${Math.random().toString(16).slice(2, 10).toUpperCase()}`, status: 'ATTENTION',
+        orderId: null, ourTotal: null, priceDiffers: false, problemCode: 'RECEIVED', problem: null, syncedStatus: null, receivedAt: Date.now(),
+        payload: { customer: { name: guests[Math.floor(Math.random() * guests.length)] }, items, total: toLira(totalC) } };
+      data.orders.push(record);
+      placeChannelOrder(record);
+      save();
+      return [201, channelOrderView(record)];
+    }],
     ['GET', /^stock\/ingredients$/, 'manager', () => stock().ingredients.filter((i) => !i.archived).sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(ingredientView)],
     ['POST', /^stock\/ingredients$/, 'manager', (_, body) => {
       validateIngredient(body, null);

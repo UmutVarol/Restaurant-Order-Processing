@@ -34,7 +34,8 @@ public record OrderResponse(
         List<StatusChange> history,
         ManualDiscountView manualDiscount,
         List<AdjustmentResponse> adjustments,
-        List<Integer> heldCourses) {
+        List<Integer> heldCourses,
+        String channel) {
 
     public record ManualDiscountView(BigDecimal percent, BigDecimal amount) {
     }
@@ -75,6 +76,7 @@ public record OrderResponse(
                 order.manualDiscount() == null ? null
                         : new ManualDiscountView(order.manualDiscount().percent(), order.manualDiscount().amount()),
                 order.getAdjustments().stream().map(AdjustmentResponse::from).toList(),
-                order.heldCourses());
+                order.heldCourses(),
+                order.getChannel());
     }
 }

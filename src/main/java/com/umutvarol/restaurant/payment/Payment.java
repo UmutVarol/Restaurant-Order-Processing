@@ -150,6 +150,11 @@ public class Payment {
         this.providerPaymentId = providerPaymentId;
     }
 
+    void paidOnPlatform(String platform, String reference) {
+        this.provider = platform;
+        this.providerPaymentId = reference;
+    }
+
     void succeed(@Nullable String providerPaymentId, Instant at) {
         if (status != PaymentStatus.PENDING && status != PaymentStatus.EXPIRED) {
             throw new IllegalStateException("Payment %d is already %s".formatted(id, status));

@@ -21,7 +21,7 @@ class RequestSizeLimitFilterTest {
     private final HandlerExceptionResolver resolver = mock(HandlerExceptionResolver.class);
     private final RequestSizeLimitFilter filter = new RequestSizeLimitFilter(new AbuseProtectionProperties(
             new AbuseProtectionProperties.Login(5, Duration.ofMinutes(15), Duration.ofSeconds(30), Duration.ofMinutes(15)),
-            new AbuseProtectionProperties.RateLimit(true, 600, 60, 120),
+            new AbuseProtectionProperties.RateLimit(true, 600, 60, 120, 300),
             DataSize.ofBytes(100), Duration.ofMinutes(5)), resolver);
 
     @Test

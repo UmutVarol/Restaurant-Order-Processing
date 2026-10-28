@@ -92,6 +92,10 @@ public class Order {
     @Column(name = "cancellation_reason", length = 255)
     private String cancellationReason;
 
+    /** The delivery platform the order came from (YEMEKSEPETI, GETIR, TRENDYOL), or null for our own. */
+    @Column(length = 20)
+    private String channel;
+
     /** The key the till sent the order with; a retry with the same key gets this order back. */
     @Column(name = "idempotency_key", length = 80, unique = true)
     private String idempotencyKey;
@@ -435,6 +439,14 @@ public class Order {
 
     void rememberIdempotencyKey(String key) {
         this.idempotencyKey = key;
+    }
+
+    void cameFrom(String channel) {
+        this.channel = channel;
+    }
+
+    public String getChannel() {
+        return channel;
     }
 
     public String getCancellationReason() {

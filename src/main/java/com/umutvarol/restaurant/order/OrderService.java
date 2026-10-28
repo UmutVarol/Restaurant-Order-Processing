@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.order;
 
+import com.umutvarol.restaurant.common.crypto.SecretTokens;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.common.money.Money;
@@ -27,6 +28,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -136,6 +138,21 @@ public class OrderService {
         Order order = orders.save(placed);
         events.publishEvent(OrderChangedEvent.created(order));
         return new Placement(OrderResponse.from(order), false);
+    }
+
+    /**
+     * Places an order a delivery platform sent. The platform's order id is the idempotency key, so the same platform
+     * order can never become two orders, whatever the webhook does.
+     */
+    public OrderResponse placeForChannel(PlaceOrderRequest request, String channel, String externalId) {
+        String actor = "channel:" + channel.toLowerCase(Locale.ROOT);
+        // the platform's id may hold any characters; its hash is a valid key and still one per platform order
+        String key = "ch-" + SecretTokens.hash(channel + ":" + externalId).substring(0, 64);
+        Placement placement = placeOrder(request, actor, key);
+        if (!placement.replayed()) {
+            orders.findById(placement.order().id()).orElseThrow().cameFrom(channel);
+        }
+        return OrderResponse.from(orders.findById(placement.order().id()).orElseThrow());
     }
 
     /** The order placed earlier with this key, for the user who placed it. */
