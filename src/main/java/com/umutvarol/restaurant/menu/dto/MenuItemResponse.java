@@ -20,7 +20,8 @@ public record MenuItemResponse(
         boolean available,
         Set<DietaryTag> tags,
         List<OptionGroupResponse> optionGroups,
-        String stationCode) {
+        String stationCode,
+        boolean stockOut) {
 
     public static MenuItemResponse from(MenuItem item) {
         return new MenuItemResponse(
@@ -35,6 +36,7 @@ public record MenuItemResponse(
                 item.isOrderable(),
                 new TreeSet<>(item.getTags()),
                 item.getOptionGroups().stream().map(OptionGroupResponse::from).toList(),
-                item.getStationCode());
+                item.getStationCode(),
+                item.isStockOut());
     }
 }

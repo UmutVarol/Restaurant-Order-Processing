@@ -17,6 +17,7 @@ const ROUTES = [
   { id: 'cashier', icon: 'coins', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/cashier.js') },
   { id: 'dashboard', icon: 'dashboard', roles: ['ADMIN'], section: 'manage', load: () => import('./views/dashboard.js') },
   { id: 'menu', icon: 'menu', roles: ['ADMIN'], section: 'manage', load: () => import('./views/menu.js') },
+  { id: 'stock', icon: 'box', roles: ['ADMIN'], section: 'manage', load: () => import('./views/stock.js') },
   // reached from the user card, not the navigation
   { id: 'settings', icon: 'settings', roles: ALL, section: null, load: () => import('./views/settings.js') },
 ];
@@ -202,6 +203,16 @@ bus.on('print', (event) => {
   if (prefs.sound) chime();
   toast({ title: event.orderId ? t('printing.failedOrder', { printer: event.printer, id: event.orderId }) : t('printing.failedTest', { printer: event.printer }),
     text: event.error || '', kind: 'error', timeout: 12000 });
+});
+
+// managers hear about stock running low; everyone's menu is refreshed by the screens that show it
+bus.on('stock', (event) => {
+  if (!user || user.role !== 'ADMIN') return;
+  if (event.lowIngredients?.length) {
+    toast({ title: t('stock.lowAlert', { list: event.lowIngredients.join(', ') }), kind: 'info', timeout: 9000,
+      action: { label: t('stock.open'), run: () => navigate('stock') } });
+  }
+  if (event.soldOut?.length) toast({ title: t('stock.soldOutAlert', { list: event.soldOut.join(', ') }), kind: 'error', timeout: 9000 });
 });
 
 async function refreshKitchenBadge() {

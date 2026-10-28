@@ -2,8 +2,9 @@
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
-import { money } from '../core/format.js';
+import { money, number } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
+import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
 import { optionGroupsEditor } from './options.js';
 import { CATEGORIES } from './shared.js';
@@ -11,6 +12,10 @@ import { CATEGORIES } from './shared.js';
 const TAGS = ['VEGETARIAN', 'VEGAN', 'GLUTEN_FREE', 'SPICY'];
 // Where a new dish is made unless the manager picks another station (same defaults as the server).
 const DEFAULT_STATION = { STARTER: 'COLD', MAIN: 'HOT', DESSERT: 'DESSERT', DRINK: 'BAR' };
+// Food cost above these shares of the price is worth a look (amber), or a price change (red).
+const FOOD_COST_WARN = 30;
+const FOOD_COST_HIGH = 40;
+const BULK = { GRAM: 1000, MILLILITRE: 1000, PIECE: 1 };
 
 export default {
   title: 'menu.title',
@@ -18,6 +23,7 @@ export default {
   mount(container, { actions }) {
     let items = null;
     let stations = [];
+    let costs = new Map();
     let category = 'ALL';
     const chips = h('div', { class: 'chips' });
     const tableCard = h('div', { class: 'card table-wrap menu-admin' });
@@ -44,6 +50,7 @@ export default {
           h('th', { class: 'hide-sm' }, t('menu.col.tags')),
           h('th', { class: 'hide-sm right' }, t('menu.col.prep')),
           h('th', { class: 'right' }, t('menu.col.price')),
+          h('th', { class: 'hide-sm right' }, t('menu.col.foodCost')),
           h('th', null, t('menu.col.available')),
           h('th', null, h('span', { class: 'sr-only' }, t('menu.col.actions'))))),
         h('tbody', null, visible.map(row))));
@@ -52,18 +59,123 @@ export default {
     function row(item) {
       return h('tr', { class: item.available ? '' : 'off' },
         h('td', null, h('div', { class: 'item-cell' }, h('span', { class: 'emoji' }, item.icon || '🍽️'),
-          h('div', null, h('b', null, item.name, item.popular ? h('span', { class: 'pill plain', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px', background: 'var(--brand-soft)', color: 'var(--brand)' } }, t('pos.popular')) : null),
+          h('div', null, h('b', null, item.name, item.popular ? h('span', { class: 'pill plain', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px', background: 'var(--brand-soft)', color: 'var(--brand)' } }, t('pos.popular')) : null,
+            item.stockOut ? h('span', { class: 'pill stock-out', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px' }, 'data-testid': 'stock-out' }, t('stock.outOfStock')) : null),
             h('small', null, item.description)))),
         h('td', { class: 'hide-sm' }, t(`cat.${item.category}`)),
         h('td', { class: 'hide-sm' }, h('div', { class: 'row', style: { gap: '4px', flexWrap: 'wrap' } },
           item.tags.map((tag) => h('span', { class: `tag t-${tag}` }, t(`tag.${tag}`))))),
         h('td', { class: 'hide-sm right muted' }, t('common.minutes', { n: item.prepTimeMinutes })),
         h('td', { class: 'right num', style: { fontWeight: 650 } }, money(item.price)),
-        h('td', null, h('label', { class: 'switch', title: t('menu.col.available') },
-          h('input', { type: 'checkbox', role: 'switch', checked: item.available, 'aria-label': `${t('menu.col.available')}: ${item.name}`, onchange: (event) => toggle(item, event.target) }), h('span'))),
+        h('td', { class: 'hide-sm right' }, foodCost(item)),
+        h('td', null, h('label', { class: 'switch', title: item.stockOut ? t('stock.outOfStockHint') : t('menu.col.available') },
+          h('input', { type: 'checkbox', role: 'switch', checked: item.available, disabled: item.stockOut, 'aria-label': `${t('menu.col.available')}: ${item.name}`, onchange: (event) => toggle(item, event.target) }), h('span'))),
         h('td', { class: 'right' }, h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '4px' } },
+          h('button', { class: 'icon-btn sm', title: t('recipe.title'), 'data-testid': 'edit-recipe', 'aria-label': `${t('recipe.title')}: ${item.name}`, onclick: () => editRecipe(item) }, icon('basket', 'sm')),
           h('button', { class: 'icon-btn sm', title: t('common.edit'), 'aria-label': `${t('common.edit')}: ${item.name}`, onclick: () => editItem(item) }, icon('edit', 'sm')),
           h('button', { class: 'icon-btn sm', title: t('menu.archive'), 'aria-label': `${t('menu.archive')}: ${item.name}`, onclick: () => archive(item) }, icon('archive', 'sm')))));
+    }
+
+    function foodCost(item) {
+      const cost = costs.get(item.id);
+      if (!cost) return h('span', { class: 'faint' }, '—');
+      const share = Number(cost.foodCostPercent);
+      return h('span', { class: ['food-cost', share >= FOOD_COST_HIGH ? 'high' : share >= FOOD_COST_WARN ? 'mid' : ''], 'data-testid': 'food-cost' },
+        h('b', null, `%${number(share, 1)}`), h('small', { class: 'faint' }, money(cost.cost)));
+    }
+
+    // ------------------------------------------------------------------ recipes
+    async function editRecipe(item) {
+      let recipe;
+      let ingredients;
+      try {
+        [recipe, ingredients] = await Promise.all([api.recipe(item.id), api.ingredients()]);
+      } catch (error) {
+        toast({ title: errorMessage(error), kind: 'error' });
+        return;
+      }
+      if (!ingredients.length) {
+        toast({ title: t('recipe.noIngredients'), kind: 'info' });
+        return;
+      }
+      const byId = new Map(ingredients.map((i) => [i.id, i]));
+      const options = (item.optionGroups ?? []).flatMap((g) => g.choices.map((c) => ({ key: `${g.name}\u0000${c.name}`, group: g.name, choice: c.name })));
+      const rows = recipe.lines.map((line) => ({ ...line, quantity: Number(line.quantity) }));
+      const list = h('div', { class: 'recipe-lines' });
+      const summary = h('div', { class: 'muted', 'data-testid': 'recipe-cost' });
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+
+      const optionKey = (row) => (row.optionGroup ? `${row.optionGroup}\u0000${row.optionChoice}` : '');
+      function renderCost() {
+        const cost = rows.filter((r) => !r.optionGroup && byId.get(r.ingredientId))
+          .reduce((sum, r) => sum + (Number(r.quantity) || 0) * Number(byId.get(r.ingredientId).cost) / BULK[byId.get(r.ingredientId).unit], 0);
+        const share = Number(item.price) ? (cost * 100) / Number(item.price) : 0;
+        summary.textContent = t('recipe.cost', { cost: money(cost), share: number(share, 1) });
+      }
+      function renderRows() {
+        mount(list, rows.length ? rows.map((row, index) => {
+          const ingredient = byId.get(row.ingredientId);
+          const pick = h('select', { class: 'select', 'aria-label': t('recipe.ingredient'), 'data-testid': 'recipe-ingredient',
+            onchange: (event) => { row.ingredientId = Number(event.target.value); renderRows(); renderCost(); } },
+          ingredients.map((i) => h('option', { value: i.id, selected: i.id === row.ingredientId }, i.name)));
+          const amount = h('input', { class: 'input', type: 'number', min: 0, step: 'any', value: row.quantity, 'aria-label': t('recipe.quantity'), 'data-testid': 'recipe-quantity',
+            oninput: (event) => { row.quantity = event.target.value; renderCost(); } });
+          const when = h('select', { class: 'select', 'aria-label': t('recipe.when'),
+            onchange: (event) => {
+              const option = options.find((o) => o.key === event.target.value);
+              row.optionGroup = option?.group ?? null;
+              row.optionChoice = option?.choice ?? null;
+              if (!option) row.replacesIngredientId = null;
+              renderRows();
+              renderCost();
+            } },
+          h('option', { value: '' }, t('recipe.always')),
+          options.map((o) => h('option', { value: o.key, selected: o.key === optionKey(row) }, `${o.group}: ${o.choice}`)));
+          const own = rows.filter((r) => !r.optionGroup);
+          const replaces = row.optionGroup ? h('select', { class: 'select', 'aria-label': t('recipe.replaces'),
+            onchange: (event) => { row.replacesIngredientId = event.target.value ? Number(event.target.value) : null; } },
+          h('option', { value: '' }, t('recipe.adds')),
+          own.map((r) => h('option', { value: r.ingredientId, selected: r.ingredientId === row.replacesIngredientId }, t('recipe.instead', { name: byId.get(r.ingredientId)?.name ?? '?' })))) : null;
+          return h('div', { class: 'recipe-line' },
+            pick,
+            h('div', null, amount, h('div', { class: 'unit-hint' }, ingredient ? t(`recipe.per.${ingredient.unit}`) : '')),
+            h('div', { style: { display: 'grid', gap: '6px' } }, when, replaces),
+            h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': t('recipe.removeLine'), onclick: () => { rows.splice(index, 1); renderRows(); renderCost(); } }, icon('trash', 'sm')));
+        }) : h('p', { class: 'muted' }, t('recipe.empty')));
+      }
+      renderRows();
+      renderCost();
+      openModal({
+        title: t('recipe.titleFor', { name: item.name }),
+        body: [
+          h('p', { class: 'muted' }, t('recipe.hint')),
+          list,
+          h('div', null, h('button', { class: 'btn sm', type: 'button', 'data-testid': 'add-recipe-line', onclick: () => {
+            rows.push({ ingredientId: ingredients[0].id, quantity: '', optionGroup: null, optionChoice: null, replacesIngredientId: null });
+            renderRows();
+          } }, icon('plus', 'sm'), t('recipe.addLine'))),
+          summary,
+          problem,
+        ],
+        footer: (handle) => [
+          h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')),
+          h('button', { class: 'btn primary', 'data-testid': 'save-recipe', onclick: async () => {
+            problem.hidden = true;
+            try {
+              await api.saveRecipe(item.id, rows.map((r) => ({
+                ingredientId: r.ingredientId, quantity: r.quantity === '' ? null : Number(r.quantity),
+                optionGroup: r.optionGroup, optionChoice: r.optionChoice, replacesIngredientId: r.replacesIngredientId ?? null,
+              })));
+              toast({ title: t('recipe.saved', { name: item.name }) });
+              handle.close();
+              load();
+            } catch (error) {
+              problem.replaceChildren(icon('alert', 'sm'), errorMessage(error));
+              problem.hidden = false;
+            }
+          } }, icon('check', 'sm'), t('common.save')),
+        ],
+      });
     }
 
     async function toggle(item, checkbox) {
@@ -180,18 +292,18 @@ export default {
     }
 
     async function load() {
-      try {
-        items = await api.menu();
-      } catch (error) {
-        items = [];
-        toast({ title: errorMessage(error), kind: 'error' });
-      }
+      const [menuResult, costResult] = await Promise.allSettled([api.menu(), api.dishCosts()]);
+      items = menuResult.status === 'fulfilled' ? menuResult.value : [];
+      if (menuResult.status === 'rejected') toast({ title: errorMessage(menuResult.reason), kind: 'error' });
+      costs = new Map(costResult.status === 'fulfilled' ? costResult.value.map((c) => [c.menuItemId, c]) : []);
       render();
     }
 
     render();
     load();
     api.stations().then((list) => { stations = list; }, () => { stations = []; });
-    return null;
+    // a dish selling out or coming back changes its row
+    const offStock = bus.on('stock', load);
+    return { destroy: offStock };
   },
 };

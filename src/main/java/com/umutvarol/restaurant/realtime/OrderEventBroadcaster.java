@@ -2,6 +2,7 @@ package com.umutvarol.restaurant.realtime;
 
 import com.umutvarol.restaurant.common.error.TooManyRequestsException;
 import com.umutvarol.restaurant.guest.GuestRequestChangedEvent;
+import com.umutvarol.restaurant.inventory.StockChangedEvent;
 import com.umutvarol.restaurant.order.OrderChangedEvent;
 import com.umutvarol.restaurant.printing.PrintJobChangedEvent;
 import com.umutvarol.restaurant.payment.PaymentChangedEvent;
@@ -94,6 +95,12 @@ public class OrderEventBroadcaster {
     public void onPaymentChanged(PaymentChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
         broadcast(() -> SseEmitter.event().id(id).name("payment").data(event, MediaType.APPLICATION_JSON));
+    }
+
+    @TransactionalEventListener
+    public void onStockChanged(StockChangedEvent event) {
+        String id = Long.toString(sequence.incrementAndGet());
+        broadcast(() -> SseEmitter.event().id(id).name("stock").data(event, MediaType.APPLICATION_JSON));
     }
 
     /** Keeps idle connections alive through proxies and lets us detect clients that went away. */

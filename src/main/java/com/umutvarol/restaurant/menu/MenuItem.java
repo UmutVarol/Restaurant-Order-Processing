@@ -87,6 +87,10 @@ public class MenuItem {
     @Column(name = "station_code", length = 20)
     private String stationCode;
 
+    /** Set by the stock ledger while one of the dish's ingredients has run out. */
+    @Column(name = "stock_out", nullable = false)
+    private boolean stockOut;
+
     protected MenuItem() {
         // for JPA
     }
@@ -212,7 +216,18 @@ public class MenuItem {
 
     /** Whether the item can currently be put on a new order. */
     public boolean isOrderable() {
-        return available && !archived;
+        return available && !archived && !stockOut;
+    }
+
+    /** @return whether this changed anything */
+    public boolean markStockOut(boolean out) {
+        boolean changed = stockOut != out;
+        this.stockOut = out;
+        return changed;
+    }
+
+    public boolean isStockOut() {
+        return stockOut;
     }
 
     public void changeAvailability(boolean available) {

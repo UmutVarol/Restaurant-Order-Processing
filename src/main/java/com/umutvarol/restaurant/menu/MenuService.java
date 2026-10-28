@@ -93,6 +93,19 @@ public class MenuService {
         return MenuItemResponse.from(item);
     }
 
+    /**
+     * Sells dishes out, or back in, as the stock ledger finds their ingredients run out or restocked.
+     *
+     * @return the names of the dishes whose state changed
+     */
+    public List<String> markStockOut(Map<Long, Boolean> outByItem) {
+        return repository.findAllById(outByItem.keySet()).stream()
+                .filter(item -> item.markStockOut(outByItem.get(item.getId())))
+                .map(MenuItem::getName)
+                .sorted()
+                .toList();
+    }
+
     public void archive(Long id) {
         find(id).archive();
     }

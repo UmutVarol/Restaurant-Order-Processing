@@ -599,6 +599,14 @@ export default {
     panelObserver?.observe(orderPanel);
     const reloadTables = debounce(loadTables, 400);
     const offOrder = bus.on('order', reloadTables);
+    // A dish that sold out (or came back) shows at once; the ticket is left alone, the server has the last word.
+    const reloadMenu = debounce(async () => {
+      try {
+        menu = await api.menu();
+        renderGrid();
+      } catch { /* the grid stays as it was */ }
+    }, 300);
+    const offStock = bus.on('stock', reloadMenu);
 
     load();
     return {
@@ -606,7 +614,9 @@ export default {
         document.removeEventListener('keydown', onKey);
         panelObserver?.disconnect();
         offOrder();
+        offStock();
         reloadTables.cancel();
+        reloadMenu.cancel();
         requestQuote.cancel();
       },
     };

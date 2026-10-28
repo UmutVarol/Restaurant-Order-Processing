@@ -198,6 +198,10 @@
       state.guestRequests = data.guestRequests;
       state.nextGuestRequestId = Math.max(state.nextGuestRequestId || 1, data.nextGuestRequestId);
       publish(data.event, 'guest');
+    } else if (data?.type === 'stock') {
+      state.stock = data.stock;
+      state.menu = data.menu;
+      if (data.event) publish(data.event, 'stock');
     } else if (data?.type === 'menu') {
       state.menu = data.menu;
       state.nextMenuId = Math.max(state.nextMenuId, data.nextMenuId);
@@ -224,7 +228,7 @@
     return items.map((item) => {
       const dish = state.menu.find((m) => m.id === Number(item.menuItemId));
       if (!dish || dish.archived) throw new Problem(422, 'MENU_ITEM_NOT_FOUND', `Menu item ${item.menuItemId} does not exist`, { parameters: { menuItemId: item.menuItemId } });
-      if (!dish.available) throw new Problem(422, 'MENU_ITEM_UNAVAILABLE', `${dish.name} is sold out`, { parameters: { menuItemId: dish.id, name: dish.name } });
+      if (!dish.available || dish.stockOut) throw new Problem(422, 'MENU_ITEM_UNAVAILABLE', `${dish.name} is sold out`, { parameters: { menuItemId: dish.id, name: dish.name } });
       const quantity = Number(item.quantity);
       const options = resolveOptions(dish, item.optionIds || []);
       const unitPriceC = dish.priceC + options.reduce((sum, o) => sum + o.priceDeltaC, 0);
@@ -335,7 +339,8 @@
   const pricingView = (p) => ({ subtotal: toLira(p.subtotal), discount: toLira(p.discount), tax: toLira(p.tax), deliveryFee: toLira(p.deliveryFee), total: toLira(p.total) });
   const menuView = (m) => ({
     id: m.id, name: m.name, description: m.description, category: m.category, price: toLira(m.priceC), icon: m.icon,
-    prepTimeMinutes: m.prepTimeMinutes, popular: m.popular, available: m.available && !m.archived, tags: [...m.tags].sort(),
+    prepTimeMinutes: m.prepTimeMinutes, popular: m.popular, available: m.available && !m.archived && !m.stockOut, tags: [...m.tags].sort(),
+    stockOut: Boolean(m.stockOut),
     stationCode: m.stationCode ?? DEFAULT_STATION[m.category],
     optionGroups: (m.optionGroups || []).map((g) => ({ id: g.id, name: g.name, minSelect: g.minSelect, maxSelect: g.maxSelect,
       choices: g.choices.map((c) => ({ id: c.id, name: c.name, priceDelta: toLira(c.priceDeltaC) })) })),
@@ -723,6 +728,218 @@
     }
     if (held.length) out.push('-'.repeat(cols), `Kurs ${held.join(', ')} bekliyor`);
     return out.join('\n');
+  }
+
+
+  // ------------------------------------------------------------------------------------------- stock and recipes
+  // Mirrors StockService and RecipeService: an append-only ledger of movements in base units (g, ml, pieces), prices
+  // per kg / l / piece, recipes per dish and option (matched by option names), deduction when an order completes.
+  const BULK = { GRAM: 1000, MILLILITRE: 1000, PIECE: 1 };
+  const BULK_UNIT = { GRAM: 'kg', MILLILITRE: 'l', PIECE: 'piece' };
+  const INPUT_UNITS = { G: ['GRAM', 1], KG: ['GRAM', 1000], ML: ['MILLILITRE', 1], L: ['MILLILITRE', 1000], PIECE: ['PIECE', 1] };
+  const qty = (value) => Math.round(Number(value) * 1000) / 1000;
+  // Same data as DemoStockSeeder: name, unit, price per bulk unit, low level, opening stock, tracked.
+  const STOCK_SEED = [
+    ['Kırmızı mercimek', 'GRAM', 90, 2000, 12000], ['Soğan', 'GRAM', 30, 3000, 15000], ['Tereyağı', 'GRAM', 520, 1500, 6000],
+    ['Yufka', 'PIECE', 12, 20, 120], ['Beyaz peynir', 'GRAM', 380, 1000, 5000], ['Nohut', 'GRAM', 85, 1500, 8000],
+    ['Tahin', 'MILLILITRE', 240, 500, 3000], ['Domates', 'GRAM', 45, 4000, 20000], ['Salatalık', 'GRAM', 40, 1500, 8000],
+    ['Kuzu kıyma', 'GRAM', 780, 4000, 15000], ['Dana kıyma', 'GRAM', 650, 3000, 12000], ['Döner eti', 'GRAM', 700, 3000, 10000],
+    ['Lavaş', 'PIECE', 6, 30, 150], ['Pide', 'PIECE', 10, 15, 60], ['Yoğurt', 'GRAM', 110, 2000, 12000],
+    ['Sarımsak', 'GRAM', 160, 300, 2000], ['Mantı hamuru', 'GRAM', 240, 1500, 8000], ['Tavuk but', 'GRAM', 260, 3000, 12000],
+    ['Bulgur', 'GRAM', 70, 1500, 8000], ['Patlıcan', 'GRAM', 50, 2000, 10000], ['Pirinç', 'GRAM', 75, 2000, 10000],
+    ['Levrek', 'PIECE', 280, 6, 18], ['Kadayıf', 'GRAM', 180, 800, 4000], ['Künefe peyniri', 'GRAM', 420, 800, 4000],
+    ['Antep fıstığı', 'GRAM', 1400, 500, 560], ['Baklava', 'PIECE', 25, 40, 160], ['Kaymak', 'GRAM', 600, 300, 1500],
+    ['Dondurma', 'MILLILITRE', 300, 800, 4000], ['Süt', 'MILLILITRE', 40, 4000, 20000], ['Türk kahvesi', 'GRAM', 900, 300, 2000],
+    ['Siyah çay', 'GRAM', 320, 400, 3000], ['Portakal', 'PIECE', 4, 40, 200], ['Limon', 'PIECE', 3, 30, 150],
+    ['Ayran (şişe)', 'PIECE', 9, 24, 120], ['Maden suyu', 'PIECE', 8, 24, 120],
+    ['Zeytinyağı', 'MILLILITRE', 450, null, 0, false], ['Şeker', 'GRAM', 40, null, 0, false],
+  ];
+  // dish → [ingredient, grams], or [ingredient, grams, group, choice, replaces]
+  const RECIPE_SEED = {
+    'Mercimek Çorbası': [['Kırmızı mercimek', 60], ['Soğan', 20], ['Tereyağı', 10]],
+    'Sigara Böreği': [['Yufka', 1], ['Beyaz peynir', 60]],
+    Humus: [['Nohut', 80], ['Tahin', 20], ['Tereyağı', 10]],
+    'Çoban Salata': [['Domates', 120], ['Salatalık', 80], ['Soğan', 20], ['Zeytinyağı', 10], ['Limon', 0.25]],
+    'Acılı Ezme': [['Domates', 100], ['Soğan', 20], ['Zeytinyağı', 10]],
+    'Adana Kebap': [['Kuzu kıyma', 200], ['Lavaş', 1], ['Domates', 60], ['Domates', 80, 'Ekstra', 'Közlenmiş domates'], ['Lavaş', 1, 'Ekstra', 'Ekstra lavaş']],
+    'İskender': [['Döner eti', 180], ['Pide', 1], ['Yoğurt', 80], ['Tereyağı', 25], ['Tereyağı', 12, 'Tereyağı', 'Az', 'Tereyağı'],
+      ['Tereyağı', 15, 'Tereyağı', 'Bol'], ['Yoğurt', 60, 'Ekstra', 'Ekstra yoğurt']],
+    Lahmacun: [['Kuzu kıyma', 60], ['Domates', 30], ['Soğan', 15], ['Limon', 0.25]],
+    'Mantı': [['Mantı hamuru', 200], ['Yoğurt', 100], ['Sarımsak', 5], ['Tereyağı', 15], ['Sarımsak', 0, 'Sos', 'Sarımsaksız yoğurt', 'Sarımsak'],
+      ['Tereyağı', 15, 'Ekstra', 'Ekstra tereyağı']],
+    'Izgara Tavuk': [['Tavuk but', 220], ['Bulgur', 80], ['Patlıcan', 120]],
+    'Köfte Tabağı': [['Dana kıyma', 180], ['Domates', 60], ['Soğan', 20]],
+    'Karnıyarık': [['Patlıcan', 250], ['Dana kıyma', 100], ['Pirinç', 80]],
+    'Levrek Izgara': [['Levrek', 1], ['Limon', 0.5]],
+    'Sebzeli Güveç': [['Patlıcan', 120], ['Domates', 120], ['Pirinç', 80], ['Zeytinyağı', 15]],
+    'Künefe': [['Kadayıf', 80], ['Künefe peyniri', 70], ['Antep fıstığı', 15], ['Tereyağı', 30], ['Şeker', 40],
+      ['Dondurma', 80, 'Yanında', 'Dondurma'], ['Kaymak', 40, 'Yanında', 'Kaymak']],
+    'Fıstıklı Baklava': [['Baklava', 4], ['Antep fıstığı', 10], ['Kaymak', 30]],
+    'Fırın Sütlaç': [['Süt', 200], ['Pirinç', 30], ['Şeker', 30]],
+    'Türk Kahvesi': [['Türk kahvesi', 7]], 'Demlik Çay': [['Siyah çay', 6]], Ayran: [['Ayran (şişe)', 1]],
+    'Taze Portakal Suyu': [['Portakal', 3]], 'Ev Yapımı Limonata': [['Limon', 2], ['Şeker', 30]], 'Maden Suyu': [['Maden suyu', 1]],
+  };
+
+  function stock() {
+    if (state.stock) return state.stock;
+    const at = state.createdAt;
+    const data = { ingredients: [], recipes: [], movements: [], nextIngredientId: 1, nextMovementId: 1 };
+    for (const [name, unit, cost, low, opening, tracked = true] of STOCK_SEED) {
+      const ingredient = { id: data.nextIngredientId++, name, unit, costC: cost * 100, lowStockLevel: tracked ? low : null, trackStock: tracked, archived: false };
+      data.ingredients.push(ingredient);
+      if (opening) data.movements.push({ id: data.nextMovementId++, ingredientId: ingredient.id, kind: 'COUNT', quantity: opening, unitCostC: ingredient.costC, orderId: null, reason: 'Opening stock', supplier: null, by: 'system', at });
+    }
+    const byName = new Map(data.ingredients.map((i) => [i.name, i.id]));
+    for (const [dish, lines] of Object.entries(RECIPE_SEED)) {
+      const item = state.menu.find((m) => m.name === dish);
+      if (!item) continue;
+      lines.forEach(([ingredient, quantity, group = null, choice = null, replaces = null]) => data.recipes.push({
+        menuItemId: item.id, optionGroup: group, optionChoice: choice, ingredientId: byName.get(ingredient), quantity, replacesIngredientId: replaces ? byName.get(replaces) : null,
+      }));
+    }
+    state.stock = data;
+    return data;
+  }
+
+  const balanceOf = (id) => qty(stock().movements.filter((m) => m.ingredientId === id).reduce((sum, m) => sum + m.quantity, 0));
+  const isLow = (i, balance) => i.trackStock && i.lowStockLevel != null && balance <= i.lowStockLevel;
+  const isOut = (i, balance) => i.trackStock && balance <= 0;
+  const valueC = (i, quantity, costC = i.costC) => (quantity * costC) / BULK[i.unit];
+
+  function findIngredient(id) {
+    const ingredient = stock().ingredients.find((i) => i.id === Number(id) && !i.archived);
+    if (!ingredient) throw new Problem(404, 'INGREDIENT_NOT_FOUND', `Ingredient ${id} was not found`);
+    return ingredient;
+  }
+
+  function ingredientView(i) {
+    const onHand = balanceOf(i.id);
+    return {
+      id: i.id, name: i.name, unit: i.unit, bulkUnit: BULK_UNIT[i.unit], cost: toLira(i.costC), lowStockLevel: i.lowStockLevel, trackStock: i.trackStock,
+      onHand, value: toLira(valueC(i, Math.max(0, onHand))), low: isLow(i, onHand), out: isOut(i, onHand),
+    };
+  }
+
+  const movementView = (m) => ({ id: m.id, ingredientId: m.ingredientId, kind: m.kind, quantity: m.quantity, unitCost: toLira(m.unitCostC),
+    orderId: m.orderId, reason: m.reason, supplier: m.supplier, by: m.by, at: iso(m.at) });
+
+  function validateIngredient(body, exceptId) {
+    const cost = Number(body.cost);
+    requireFields({
+      name: blank(body.name) ? 'must not be blank' : String(body.name).trim().length > 60 ? 'size must be between 0 and 60' : null,
+      unit: !BULK[body.unit] ? 'must not be null' : null,
+      cost: body.cost == null || !(cost >= 0) ? 'must be greater than or equal to 0' : null,
+      lowStockLevel: body.lowStockLevel != null && !(Number(body.lowStockLevel) >= 0) ? 'must be greater than or equal to 0' : null,
+    });
+    const name = String(body.name).trim();
+    if (stock().ingredients.some((i) => !i.archived && i.id !== exceptId && i.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      throw new Problem(422, 'INGREDIENT_NAME_TAKEN', `There is already an ingredient called ${name}`, { parameters: { name } });
+    }
+  }
+
+  const isUsed = (id) => stock().recipes.some((r) => r.ingredientId === id || r.replacesIngredientId === id);
+
+  /** Same as StockService.portion: the dish's own lines, then each picked option adds or swaps in its own. */
+  function portion(recipe, options) {
+    const out = new Map();
+    recipe.filter((r) => !r.optionGroup).forEach((r) => out.set(r.ingredientId, (out.get(r.ingredientId) || 0) + r.quantity));
+    for (const option of options || []) {
+      for (const r of recipe) {
+        if (r.optionGroup && r.optionGroup.toLocaleLowerCase() === option.group.toLocaleLowerCase()
+          && r.optionChoice.toLocaleLowerCase() === option.choice.toLocaleLowerCase()) {
+          if (r.replacesIngredientId != null) out.delete(r.replacesIngredientId);
+          out.set(r.ingredientId, (out.get(r.ingredientId) || 0) + r.quantity);
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Sells dishes out or back in after stock moved; returns the names that changed. */
+  function refreshAvailability(dishIds) {
+    const soldOut = [];
+    const backOnSale = [];
+    for (const id of new Set(dishIds)) {
+      const dish = state.menu.find((m) => m.id === id);
+      if (!dish) continue;
+      const out = stock().recipes.filter((r) => r.menuItemId === id && !r.optionGroup)
+        .some((r) => { const i = stock().ingredients.find((x) => x.id === r.ingredientId); return i && isOut(i, balanceOf(i.id)); });
+      if (Boolean(dish.stockOut) !== out) {
+        dish.stockOut = out;
+        (out ? soldOut : backOnSale).push(dish.name);
+      }
+    }
+    return { soldOut: soldOut.sort(), backOnSale: backOnSale.sort() };
+  }
+
+  /** Re-checks the dishes made with these ingredients, warns about any that just went low, and tells the screens. */
+  function stockMoved(wasLow) {
+    const ids = [...wasLow.keys()];
+    const low = ids.map((id) => stock().ingredients.find((i) => i.id === id))
+      .filter((i) => !wasLow.get(i.id) && isLow(i, balanceOf(i.id))).map((i) => i.name).sort();
+    const dishes = stock().recipes.filter((r) => !r.optionGroup && ids.includes(r.ingredientId)).map((r) => r.menuItemId);
+    stockChanged({ lowIngredients: low, ...refreshAvailability(dishes) });
+  }
+
+  function stockChanged(change) {
+    save();
+    const event = { lowIngredients: [], soldOut: [], backOnSale: [], ...change, occurredAt: iso(Date.now()) };
+    if (!event.lowIngredients.length && !event.soldOut.length && !event.backOnSale.length) {
+      channel?.postMessage({ type: 'stock', stock: state.stock, menu: state.menu, event: null });
+      return;
+    }
+    publish(event, 'stock');
+    channel?.postMessage({ type: 'stock', stock: state.stock, menu: state.menu, event });
+  }
+
+  /** What a completed order used: voided units were never made, comped ones were. Once per order. */
+  function deductForOrder(order) {
+    const data = stock();
+    if (data.movements.some((m) => m.orderId === order.id)) return;
+    const used = new Map();
+    for (const line of order.lines) {
+      const made = line.quantity - (line.voided || 0);
+      const recipe = data.recipes.filter((r) => r.menuItemId === line.menuItemId);
+      if (made <= 0 || !recipe.length) continue;
+      portion(recipe, line.options).forEach((quantity, id) => used.set(id, (used.get(id) || 0) + quantity * made));
+    }
+    const wasLow = new Map();
+    used.forEach((quantity, id) => {
+      const ingredient = data.ingredients.find((i) => i.id === id);
+      if (!ingredient || quantity <= 0) return;
+      wasLow.set(id, isLow(ingredient, balanceOf(id)));
+      data.movements.push({ id: data.nextMovementId++, ingredientId: id, kind: 'SALE', quantity: -qty(quantity), unitCostC: ingredient.costC,
+        orderId: order.id, reason: null, supplier: null, by: 'system', at: Date.now() });
+    });
+    if (wasLow.size) stockMoved(wasLow);
+  }
+
+  function recipeView(dish) {
+    const lines = stock().recipes.filter((r) => r.menuItemId === dish.id);
+    const ingredient = (id) => stock().ingredients.find((i) => i.id === id);
+    const costC = lines.filter((r) => !r.optionGroup).reduce((sum, r) => sum + valueC(ingredient(r.ingredientId), r.quantity), 0);
+    return {
+      menuItemId: dish.id, name: dish.name, price: toLira(dish.priceC),
+      lines: lines.map((r) => ({ ingredientId: r.ingredientId, ingredient: ingredient(r.ingredientId).name, unit: ingredient(r.ingredientId).unit, quantity: r.quantity,
+        optionGroup: r.optionGroup, optionChoice: r.optionChoice, replacesIngredientId: r.replacesIngredientId, cost: toLira(valueC(ingredient(r.ingredientId), r.quantity)) })),
+      cost: toLira(costC), foodCostPercent: lines.length ? Math.round((costC * 1000) / dish.priceC) / 10 : null,
+    };
+  }
+
+  function stockReport(fromDay, toDay) {
+    const from = new Date(`${fromDay}T00:00:00`).getTime();
+    const to = new Date(`${toDay}T00:00:00`).getTime() + 24 * 60 * MINUTE;
+    if (!(to > from) || to - from > 366 * 24 * 60 * MINUTE) throw new Problem(422, 'REPORT_PERIOD_INVALID', 'Pick a period of one day to a year', { parameters: { max: 366 } });
+    const moved = stock().movements.filter((m) => m.at >= from && m.at < to);
+    const rows = stock().ingredients.filter((i) => !i.archived || moved.some((m) => m.ingredientId === i.id)).map((i) => {
+      const of = (kind) => moved.filter((m) => m.ingredientId === i.id && m.kind === kind);
+      const q = (kind) => qty(of(kind).reduce((sum, m) => sum + m.quantity, 0));
+      const v = (kind) => toLira(of(kind).reduce((sum, m) => sum + valueC(i, m.quantity, m.unitCostC), 0));
+      return { ingredientId: i.id, name: i.name, unit: i.unit, sold: -q('SALE'), soldCost: -v('SALE'), wasted: -q('WASTE'), wasteCost: -v('WASTE'),
+        delivered: q('DELIVERY'), deliveredCost: v('DELIVERY'), countDifference: q('COUNT'), varianceCost: v('COUNT'), onHand: balanceOf(i.id) };
+    });
+    const sum = (field) => Math.round(rows.reduce((total, r) => total + r[field], 0) * 100) / 100;
+    return { from: iso(from), to: iso(to), rows, soldCost: sum('soldCost'), wasteCost: sum('wasteCost'), deliveredCost: sum('deliveredCost'), varianceCost: sum('varianceCost') };
   }
 
   // ------------------------------------------------------------------------------------------- two-step sign-in
@@ -1483,6 +1700,7 @@
       if (next === 'COMPLETED') {
         const bill = billFor(order);
         if (refresh(bill, Date.now())) paymentsChanged(bill, null, 'BILL');
+        deductForOrder(order);
       }
       changed(order, 'STATUS_CHANGED', previous);
       return orderView(order);
@@ -1751,6 +1969,119 @@
       };
     })],
     ['GET', /^coupons$/, 'staff', () => COUPONS.filter((c) => !c.validUntil || Date.now() < Date.parse(c.validUntil)).map((c) => ({ ...c }))],
+    ['GET', /^stock\/ingredients$/, 'manager', () => stock().ingredients.filter((i) => !i.archived).sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(ingredientView)],
+    ['POST', /^stock\/ingredients$/, 'manager', (_, body) => {
+      validateIngredient(body, null);
+      const ingredient = { id: stock().nextIngredientId++, name: String(body.name).trim(), unit: body.unit, costC: toCents(body.cost),
+        lowStockLevel: body.lowStockLevel != null ? qty(body.lowStockLevel) : null, trackStock: body.trackStock !== false, archived: false };
+      stock().ingredients.push(ingredient);
+      save();
+      return [201, ingredientView(ingredient)];
+    }],
+    ['PUT', /^stock\/ingredients\/(\d+)$/, 'manager', ({ params }, body) => {
+      const ingredient = findIngredient(params[0]);
+      validateIngredient(body, ingredient.id);
+      if (body.unit !== ingredient.unit) {
+        if (isUsed(ingredient.id) || stock().movements.some((m) => m.ingredientId === ingredient.id)) {
+          throw new Problem(409, 'INGREDIENT_UNIT_LOCKED', `${ingredient.name} is already counted in ${ingredient.unit}`, { parameters: { name: ingredient.name } });
+        }
+        ingredient.unit = body.unit;
+      }
+      const wasLow = isLow(ingredient, balanceOf(ingredient.id));
+      Object.assign(ingredient, { name: String(body.name).trim(), costC: toCents(body.cost), lowStockLevel: body.lowStockLevel != null ? qty(body.lowStockLevel) : null,
+        trackStock: body.trackStock !== false });
+      stockMoved(new Map([[ingredient.id, wasLow]]));
+      return ingredientView(ingredient);
+    }],
+    ['DELETE', /^stock\/ingredients\/(\d+)$/, 'manager', ({ params }) => {
+      const ingredient = findIngredient(params[0]);
+      if (isUsed(ingredient.id)) throw new Problem(409, 'INGREDIENT_IN_USE', `${ingredient.name} is in a recipe`, { parameters: { name: ingredient.name } });
+      ingredient.archived = true;
+      save();
+      return [204, null];
+    }],
+    ['POST', /^stock\/ingredients\/(\d+)\/movements$/, 'manager', ({ params, user }, body) => {
+      const ingredient = findIngredient(params[0]);
+      const amount = Number(body.quantity);
+      requireFields({
+        kind: !['SALE', 'WASTE', 'DELIVERY', 'COUNT'].includes(body.kind) ? 'must not be null' : null,
+        quantity: body.quantity == null || !(amount >= 0 && amount <= 1_000_000) ? 'must be between 0 and 1000000' : null,
+        unit: !INPUT_UNITS[body.unit] ? 'must not be null' : null,
+      });
+      if (body.kind === 'SALE') throw new Problem(422, 'MOVEMENT_KIND_NOT_ALLOWED', 'Sales are recorded by completed orders, not by hand');
+      const [base, factor] = INPUT_UNITS[body.unit];
+      if (base !== ingredient.unit) throw new Problem(422, 'UNIT_MISMATCH', `${ingredient.unit} cannot be counted in ${body.unit}`, { parameters: { unit: body.unit, expected: ingredient.unit } });
+      const quantity = qty(amount * factor);
+      const before = balanceOf(ingredient.id);
+      const note = clean(body.reason);
+      const movement = { id: null, ingredientId: ingredient.id, kind: body.kind, unitCostC: ingredient.costC, orderId: null, reason: note, supplier: null, by: user.username, at: Date.now() };
+      if (body.kind !== 'COUNT' && quantity <= 0) throw new Problem(422, 'QUANTITY_REQUIRED', 'Enter how much');
+      if (body.kind === 'WASTE' && !note) throw new Problem(422, 'WASTE_REASON_REQUIRED', 'Say why it was thrown away');
+      movement.id = stock().nextMovementId++;
+      if (body.kind === 'DELIVERY') {
+        if (body.unitCost != null) ingredient.costC = toCents(body.unitCost);
+        Object.assign(movement, { quantity, unitCostC: ingredient.costC, supplier: clean(body.supplier) });
+      } else if (body.kind === 'WASTE') {
+        movement.quantity = -quantity;
+      } else {
+        movement.quantity = qty(quantity - before);
+      }
+      stock().movements.push(movement);
+      stockMoved(new Map([[ingredient.id, isLow(ingredient, before)]]));
+      return [201, movementView(movement)];
+    }],
+    ['GET', /^stock\/ingredients\/(\d+)\/movements$/, 'manager', ({ params, query }) => {
+      const ingredient = findIngredient(params[0]);
+      const limit = Math.min(200, Math.max(1, Number(query.get('limit') || 50)));
+      return stock().movements.filter((m) => m.ingredientId === ingredient.id).sort((a, b) => b.at - a.at || b.id - a.id).slice(0, limit).map(movementView);
+    }],
+    ['GET', /^stock\/report$/, 'manager', ({ query }) => {
+      const today = new Date();
+      const day = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const to = query.get('to') || day(today);
+      return stockReport(query.get('from') || day(new Date(new Date(`${to}T00:00:00`).getTime() - 6 * 24 * 60 * MINUTE)), to);
+    }],
+    ['GET', /^recipes\/costs$/, 'manager', () => state.menu.filter((m) => !m.archived && stock().recipes.some((r) => r.menuItemId === m.id))
+      .map((m) => { const view = recipeView(m); return { menuItemId: m.id, cost: view.cost, foodCostPercent: view.foodCostPercent }; })],
+    ['GET', /^recipes\/(\d+)$/, 'manager', ({ params }) => recipeView(findDish(params[0]))],
+    ['PUT', /^recipes\/(\d+)$/, 'manager', ({ params }, body) => {
+      const dish = findDish(params[0]);
+      requireFields({ lines: !Array.isArray(body.lines) ? 'must not be null' : body.lines.length > 40 ? 'size must be between 0 and 40' : null });
+      const known = (id) => {
+        const ingredient = stock().ingredients.find((i) => i.id === Number(id) && !i.archived);
+        if (!ingredient) throw new Problem(422, 'INGREDIENT_NOT_FOUND', `Ingredient ${id} does not exist`, { parameters: { id } });
+        return ingredient;
+      };
+      const own = new Set(body.lines.filter((l) => blank(l.optionGroup) && blank(l.optionChoice)).map((l) => Number(l.ingredientId)));
+      const seen = new Set();
+      const lines = body.lines.map((line) => {
+        if (line.quantity == null || !(Number(line.quantity) >= 0)) {
+          throw new Problem(400, 'VALIDATION_FAILED', 'Request body is invalid.', { errors: [{ field: 'lines[].quantity', message: 'must not be null' }] });
+        }
+        const ingredient = known(line.ingredientId);
+        const base = blank(line.optionGroup) && blank(line.optionChoice);
+        let group = null;
+        let choice = null;
+        if (!base) {
+          if (blank(line.optionGroup) || blank(line.optionChoice)) throw new Problem(422, 'RECIPE_LINE_INVALID', 'An option line needs both the group and the choice');
+          const g = (dish.optionGroups || []).find((x) => x.name.toLocaleLowerCase() === String(line.optionGroup).trim().toLocaleLowerCase());
+          const c = g?.choices.find((x) => x.name.toLocaleLowerCase() === String(line.optionChoice).trim().toLocaleLowerCase());
+          if (!c) throw new Problem(422, 'RECIPE_OPTION_NOT_FOUND', 'No such option', { parameters: { group: String(line.optionGroup).trim(), choice: String(line.optionChoice).trim() } });
+          group = g.name;
+          choice = c.name;
+        }
+        const replaces = line.replacesIngredientId == null ? null : Number(line.replacesIngredientId);
+        if (replaces != null && (base || !own.has(known(replaces).id))) throw new Problem(422, 'RECIPE_LINE_INVALID', 'Only an option can replace one of the dish\'s own ingredients');
+        if (Number(line.quantity) === 0 && replaces == null) throw new Problem(422, 'RECIPE_QUANTITY_INVALID', 'Enter how much', { parameters: { name: ingredient.name } });
+        const key = `${group}|${choice}|${ingredient.id}`;
+        if (seen.has(key)) throw new Problem(422, 'RECIPE_DUPLICATE_INGREDIENT', `${ingredient.name} is in the recipe twice`, { parameters: { name: ingredient.name } });
+        seen.add(key);
+        return { menuItemId: dish.id, optionGroup: group, optionChoice: choice, ingredientId: ingredient.id, quantity: qty(line.quantity), replacesIngredientId: replaces };
+      });
+      stock().recipes = stock().recipes.filter((r) => r.menuItemId !== dish.id).concat(lines);
+      stockChanged(refreshAvailability([dish.id]));
+      return recipeView(dish);
+    }],
     ['GET', /^analytics\/dashboard$/, 'manager', ({ query }) => {
       const days = Number(query.get('days') || 7);
       if (!(days >= 1 && days <= 90)) {
