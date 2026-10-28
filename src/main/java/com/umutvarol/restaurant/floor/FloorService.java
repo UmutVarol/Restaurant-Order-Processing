@@ -54,6 +54,7 @@ public class FloorService {
                 open.stream()
                         .map(order -> new OpenOrder(order.getId(), order.getStatus(), order.getCustomerName(),
                                 order.itemCount(), order.getPricing().total(), order.getCreatedAt()))
-                        .toList());
+                        .toList(),
+                table.getQrIssuedAt());
     }
 }

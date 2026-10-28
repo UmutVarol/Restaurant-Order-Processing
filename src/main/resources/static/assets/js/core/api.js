@@ -213,6 +213,17 @@ export const api = {
   // Guests paying from their phone: no session, the link token is the permission.
   publicBill: (token) => request('GET', `/public/pay/${encodeURIComponent(token)}`, undefined, { auth: false }),
   publicCheckout: (token, body) => request('POST', `/public/pay/${encodeURIComponent(token)}/checkout`, body, { auth: false }),
+  // Guests ordering from their table's QR code.
+  publicTable: (token) => request('GET', `/public/table/${encodeURIComponent(token)}`, undefined, { auth: false }),
+  guestOrder: (token, cart) => request('POST', `/public/table/${encodeURIComponent(token)}/orders`, cart, { auth: false }),
+  guestCall: (token, call) => request('POST', `/public/table/${encodeURIComponent(token)}/calls`, call, { auth: false }),
+  guestRequest: (token, id) => request('GET', `/public/table/${encodeURIComponent(token)}/requests/${encodeURIComponent(id)}`, undefined, { auth: false }),
+  // Staff inbox and table codes.
+  guestRequests: () => request('GET', '/guest-requests'),
+  acceptGuestRequest: (id) => request('POST', `/guest-requests/${id}/accept`),
+  rejectGuestRequest: (id, reason) => request('POST', `/guest-requests/${id}/reject`, { reason }),
+  doneGuestRequest: (id) => request('POST', `/guest-requests/${id}/done`),
+  issueTableQr: (tableId) => request('POST', `/tables/${tableId}/qr`),
   simulatedCheckout: (token) => request('GET', `/public/sim-checkout/${encodeURIComponent(token)}`, undefined, { auth: false }),
   simulatedDecision: (token, approve) => request('POST', `/public/sim-checkout/${encodeURIComponent(token)}`, { approve }, { auth: false }),
 };

@@ -8,6 +8,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 
 /** A physical table in the dining room that dine-in orders are served to. */
 @Entity
@@ -27,6 +29,12 @@ public class DiningTable {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private TableZone zone;
+
+    @Column(name = "qr_token_hash", length = 64)
+    private String qrTokenHash;
+
+    @Column(name = "qr_issued_at")
+    private Instant qrIssuedAt;
 
     protected DiningTable() {
         // for JPA
@@ -52,5 +60,15 @@ public class DiningTable {
 
     public TableZone getZone() {
         return zone;
+    }
+
+    /** Replaces the table's QR code: the old printed code stops working. */
+    public void issueQrToken(String tokenHash, Instant at) {
+        this.qrTokenHash = tokenHash;
+        this.qrIssuedAt = at;
+    }
+
+    public @Nullable Instant getQrIssuedAt() {
+        return qrIssuedAt;
     }
 }

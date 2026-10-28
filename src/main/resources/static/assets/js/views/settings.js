@@ -4,7 +4,8 @@ import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { dateTime } from '../core/format.js';
 import { api, currentDevice, errorMessage, forgetDevice, saveDevice, updateDevice } from '../core/api.js';
-import { confirmDialog, toast } from '../core/ui.js';
+import { confirmDialog, openModal, toast } from '../core/ui.js';
+import { qrCode } from './qr.js';
 import { withRecentSignIn } from './reauth.js';
 
 const IDLE_CHOICES = [1, 2, 5, 10, 0];
@@ -17,8 +18,10 @@ export default {
     const pinCard = h('div', { class: 'card settings-card' });
     const deviceCard = h('div', { class: 'card settings-card' });
     const devicesCard = h('div', { class: 'card settings-card' });
+    const qrCard = h('div', { class: 'card settings-card' });
     let devices = null;
-    mount(container, h('div', { class: 'settings-grid' }, pinCard, deviceCard, manager ? devicesCard : null));
+    let tables = null;
+    mount(container, h('div', { class: 'settings-grid' }, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null));
 
     const head = (iconName, title, sub) => h('div', { class: 'card-head' },
       h('span', { class: 'settings-ic' }, icon(iconName, 'sm')),
@@ -150,6 +153,65 @@ export default {
       }
     }
 
+    // ------------------------------------------------------------------ table QR codes (managers)
+    // A code is shown once, when it is made; printing new codes is how a table's old code is retired.
+    const tableLink = (token) => `${location.origin}${location.pathname}#/t/${token}`;
+
+    function renderQr() {
+      if (!manager) return;
+      mount(qrCard,
+        head('table', t('qr.title'), t('qr.sub')),
+        h('div', { class: 'card-body settings-form' },
+          h('p', { class: 'muted' }, t('qr.text')),
+          tables == null ? h('div', { class: 'skeleton', style: { height: '80px' } })
+            : h('div', { class: 'qr-tables' }, tables.map((table) => h('button', {
+              type: 'button', class: 'qr-table', 'data-testid': `qr-${table.code}`, onclick: () => printCodes([table]),
+            }, h('b', null, table.code), h('small', null, table.qrIssuedAt ? dateTime(table.qrIssuedAt) : t('qr.none'))))),
+          tables?.length ? h('div', null, h('button', { class: 'btn', 'data-testid': 'qr-all', onclick: () => printCodes(tables) },
+            icon('printer', 'sm'), t('qr.printAll'))) : null));
+    }
+
+    async function printCodes(list) {
+      const replacing = list.some((table) => table.qrIssuedAt);
+      if (replacing && !(await confirmDialog({
+        title: list.length === 1 ? t('qr.replaceOne', { table: list[0].code }) : t('qr.replaceAll'),
+        text: t('qr.replaceText'), confirmLabel: t('qr.makeNew'),
+      }))) return;
+      const issued = [];
+      try {
+        for (const table of list) issued.push(await api.issueTableQr(table.id));
+      } catch (error) {
+        toast({ title: errorMessage(error), kind: 'error' });
+      }
+      if (!issued.length) return;
+      loadTables();
+      const sheet = () => h('div', { class: 'qr-sheet' }, issued.map((code) => h('div', { class: 'qr-tent' },
+        h('div', { class: 'qr-tent-head' }, h('b', null, t('guest.table', { table: code.tableCode }))),
+        qrCode(tableLink(code.token), { label: t('guest.table', { table: code.tableCode }) }),
+        h('div', { class: 'qr-tent-foot' }, t('qr.scan')))));
+      openModal({
+        title: t('qr.ready', { n: issued.length }),
+        body: [h('p', { class: 'muted' }, t('qr.readyText')), sheet(),
+          issued.length === 1 ? h('a', { class: 'faint qr-link', href: tableLink(issued[0].token), target: '_blank', rel: 'noopener', 'data-testid': 'qr-link' }, t('qr.openLink')) : null],
+        footer: (handle) => [
+          h('button', { class: 'btn ghost', onclick: handle.close }, t('common.close')),
+          h('button', { class: 'btn primary', onclick: () => { document.getElementById('print-root').replaceChildren(sheet()); window.print(); } },
+            icon('printer', 'sm'), t('detail.printNow')),
+        ],
+      });
+    }
+
+    async function loadTables() {
+      if (!manager) return;
+      try {
+        tables = await api.tables();
+      } catch (error) {
+        tables = [];
+        toast({ title: errorMessage(error), kind: 'error' });
+      }
+      renderQr();
+    }
+
     async function loadDevices() {
       if (!manager) return;
       try {
@@ -165,6 +227,8 @@ export default {
     renderDevice();
     renderDevices();
     loadDevices();
+    renderQr();
+    loadTables();
     return null;
   },
 };

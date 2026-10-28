@@ -148,6 +148,9 @@ class SecurityConfig {
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/tables/*/move", "/api/v1/tables/*/merge")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
+                        .requestMatchers(HttpMethod.POST, "/api/v1/tables/*/qr").hasRole(Role.ADMIN.name())
+                        .requestMatchers("/api/v1/guest-requests", "/api/v1/guest-requests/**")
+                                .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2

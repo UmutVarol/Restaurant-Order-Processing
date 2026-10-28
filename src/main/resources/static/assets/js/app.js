@@ -3,7 +3,7 @@ import { h, initials, mount } from './core/dom.js';
 import { icon, logoMark } from './core/icons.js';
 import { onLangChange, t } from './core/i18n.js';
 import { api, clearSession, currentDevice, currentSession, saveSession } from './core/api.js';
-import { bus } from './core/store.js';
+import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { time } from './core/format.js';
 import { langButton, themeButton, toast } from './core/ui.js';
@@ -27,6 +27,7 @@ let user = null;
 let activeView = null;
 let renderToken = 0;
 let kitchenCount = 0;
+let guestCount = 0;
 
 // ------------------------------------------------------------------------------- routing
 
@@ -52,6 +53,13 @@ async function render() {
   activeView = null;
 
   // A guest paying by QR code needs no account and sees none of the staff app.
+  const tableCode = parseHash().route.match(/^t\/([A-Za-z0-9_-]{20,100})$/);
+  if (tableCode) {
+    const { renderTable } = await import('./views/table.js');
+    if (token !== renderToken) return;
+    activeView = { destroy: renderTable(root, tableCode[1]) };
+    return;
+  }
   const guest = parseHash().route.match(/^(pay|sim-checkout)\/([A-Za-z0-9_-]{6,100})$/);
   if (guest) {
     const { renderGuest } = await import('./views/pay.js');
@@ -128,11 +136,18 @@ function renderShell(current) {
     h('span', null, realtimeStatus() === 'on' ? t('live.on') : t('live.off')));
   const clock = h('span', { class: 'clock', id: 'clock' }, time(new Date().toISOString()));
 
+  // carts and calls sent from tables reach whoever takes orders
+  const inbox = ['ADMIN', 'WAITER'].includes(user.role) ? h('button', {
+    class: 'icon-btn inbox-btn', title: t('inbox.title'), 'aria-label': t('inbox.title'), 'data-testid': 'open-inbox',
+    onclick: async () => { const { openInbox } = await import('./views/inbox.js'); openInbox(user); },
+  }, icon('bell'), h('span', { class: 'badge', id: 'guest-badge', hidden: guestCount === 0 }, guestCount)) : null;
+
   const topbar = h('header', { class: 'topbar' },
     h('div', null, title, subtitle),
     h('div', { class: 'spacer' }),
     actions,
     h('div', { class: 'topbar-tools' },
+      inbox,
       live,
       clock,
       langButton(),
@@ -158,6 +173,28 @@ function updateLiveIndicator(status) {
   el.className = `live ${status}`;
   el.lastChild.textContent = status === 'on' ? t('live.on') : t('live.off');
 }
+
+async function refreshGuestBadge() {
+  if (!user || !currentSession() || !['ADMIN', 'WAITER'].includes(user.role)) return;
+  try {
+    guestCount = (await api.guestRequests()).length;
+    const badge = document.getElementById('guest-badge');
+    if (badge) {
+      badge.textContent = guestCount;
+      badge.hidden = guestCount === 0;
+    }
+  } catch { /* badge is best effort */ }
+}
+
+bus.on('guest', (event) => {
+  if (!user || !['ADMIN', 'WAITER'].includes(user.role)) return;
+  refreshGuestBadge();
+  if (event.status === 'OPEN') {
+    if (prefs.sound) chime();
+    toast({ title: t(`inbox.new.${event.kind}`, { table: event.tableCode }), kind: 'info',
+      action: { label: t('inbox.open'), run: async () => { const { openInbox } = await import('./views/inbox.js'); openInbox(user); } } });
+  }
+});
 
 async function refreshKitchenBadge() {
   if (!user || !currentSession()) return;
@@ -194,6 +231,7 @@ async function onSignedIn(tokenResponse) {
   user = tokenResponse.user;
   startRealtime();
   refreshKitchenBadge();
+  refreshGuestBadge();
   navigate(HOME[user.role]);
 }
 
@@ -246,6 +284,7 @@ async function boot() {
       user = await api.me();
       startRealtime();
       refreshKitchenBadge();
+      refreshGuestBadge();
     } catch {
       clearSession();
       user = null;

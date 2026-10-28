@@ -188,6 +188,10 @@
     } else if (data?.type === 'payments') {
       Object.assign(state, data.payments);
       publish(data.event, 'payment');
+    } else if (data?.type === 'guest') {
+      state.guestRequests = data.guestRequests;
+      state.nextGuestRequestId = Math.max(state.nextGuestRequestId || 1, data.nextGuestRequestId);
+      publish(data.event, 'guest');
     } else if (data?.type === 'menu') {
       state.menu = data.menu;
       state.nextMenuId = Math.max(state.nextMenuId, data.nextMenuId);
@@ -609,6 +613,51 @@
       order.table = { id: to.id, code: to.code };
       order.updatedAt = Date.now();
     }
+  }
+
+  // ------------------------------------------------------------------------------------------- ordering from the table
+  // Mirrors GuestService: a table's QR token opens its page, carts wait for a waiter, calls fold into the open one.
+  const guestRequests = () => (state.guestRequests ??= []);
+  const qr = () => (state.qr ??= { tokens: {}, issued: {} });
+
+  function tableForToken(token) {
+    const tableId = qr().tokens[token];
+    const table = tableId && TABLES.find((x) => x.id === tableId);
+    if (!table) throw new Problem(404, 'NOT_FOUND', 'Table ? was not found');
+    return table;
+  }
+
+  function guestChanged(request) {
+    save();
+    const event = { id: request.id, kind: request.kind, status: request.status, tableCode: request.tableCode, occurredAt: iso(Date.now()) };
+    publish(event, 'guest');
+    // the guest's phone is another tab in the demo: tell the staff tabs
+    channel?.postMessage({ type: 'guest', event, guestRequests: state.guestRequests, nextGuestRequestId: state.nextGuestRequestId });
+  }
+
+  const guestView = (r) => ({ id: r.publicId, kind: r.kind, status: r.status, total: r.totalC == null ? null : toLira(r.totalC), reason: r.reason,
+    createdAt: iso(r.createdAt), lines: r.lines.map((l) => ({ name: l.name, icon: l.icon, quantity: l.quantity, options: l.options, lineTotal: toLira(l.lineTotalC) })) });
+  const staffGuestView = (r) => ({ id: r.id, kind: r.kind, status: r.status, tableId: r.tableId, tableCode: r.tableCode, guestName: r.guestName, note: r.note,
+    quotedTotal: r.totalC == null ? null : toLira(r.totalC), orderId: r.orderId ?? null, reason: r.reason, createdAt: iso(r.createdAt),
+    handledAt: r.handledAt ? iso(r.handledAt) : null, handledBy: r.handledBy ?? null,
+    lines: r.lines.map((l) => ({ name: l.name, icon: l.icon, quantity: l.quantity, options: l.options, note: l.note, lineTotal: toLira(l.lineTotalC) })) });
+
+  function newGuestRequest(table, kind, extra = {}) {
+    const open = guestRequests().filter((r) => r.tableId === table.id && r.status === 'OPEN');
+    if (open.length >= 5) throw new Problem(429, 'GUEST_TOO_MANY_OPEN', 'This table already has several requests waiting', { parameters: { retryAfterSeconds: 60 } });
+    state.nextGuestRequestId ??= 1;
+    const request = { id: state.nextGuestRequestId++, publicId: crypto.randomUUID(), tableId: table.id, tableCode: table.code, kind, status: 'OPEN',
+      guestName: null, note: null, totalC: null, reason: null, createdAt: Date.now(), lines: [], ...extra };
+    guestRequests().push(request);
+    guestChanged(request);
+    return request;
+  }
+
+  function findGuestRequest(id) {
+    const request = guestRequests().find((r) => r.id === Number(id));
+    if (!request) throw new Problem(404, 'NOT_FOUND', `Guest request ${id} was not found`);
+    if (request.status !== 'OPEN') throw new Problem(409, 'GUEST_REQUEST_HANDLED', 'This request has already been dealt with');
+    return request;
   }
 
   function requireFields(errors) {
@@ -1336,11 +1385,81 @@
       paymentsChanged(target, null, 'BILL');
       return billView(target);
     }],
+    ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})$/, 'public', ({ params }) => {
+      const table = tableForToken(params[0]);
+      return { restaurant: 'Sofra Bistro', tableCode: table.code,
+        openCalls: ['CALL_WAITER', 'REQUEST_BILL'].filter((kind) => guestRequests().some((r) => r.tableId === table.id && r.kind === kind && r.status === 'OPEN')) };
+    }],
+    ['POST', /^public\/table\/([A-Za-z0-9_-]{20,100})\/orders$/, 'public', ({ params }, body) => {
+      const table = tableForToken(params[0]);
+      requireFields({ items: !(body.items || []).length || body.items.length > 20 ? 'size must be between 1 and 20' : null });
+      if (guestRequests().some((r) => r.tableId === table.id && r.kind === 'ORDER' && Date.now() - r.createdAt < 15_000)) {
+        throw new Problem(429, 'GUEST_SLOW_DOWN', 'A cart was just sent from this table', { parameters: { retryAfterSeconds: 15 } });
+      }
+      const lines = buildLines(body.items.map((item) => ({ ...item, quantity: Math.min(20, Number(item.quantity)) })));
+      const totalC = price(lines.reduce((sum, l) => sum + l.lineTotalC, 0), 'DINE_IN', null).total;
+      const request = newGuestRequest(table, 'ORDER', {
+        guestName: clean(body.guestName), note: clean(body.note), totalC,
+        lines: lines.map((l, i) => ({ menuItemId: l.menuItemId, name: l.name, icon: l.icon, quantity: l.quantity, note: l.note,
+          optionIds: l.options.map((o) => o.choiceId), options: optionText(l), lineTotalC: l.lineTotalC, index: i })),
+      });
+      return [201, guestView(request)];
+    }],
+    ['POST', /^public\/table\/([A-Za-z0-9_-]{20,100})\/calls$/, 'public', ({ params }, body) => {
+      const table = tableForToken(params[0]);
+      if (!['CALL_WAITER', 'REQUEST_BILL'].includes(body.kind)) throw new Problem(422, 'GUEST_CALL_INVALID', 'Send a cart to order');
+      const waiting = guestRequests().find((r) => r.tableId === table.id && r.kind === body.kind && r.status === 'OPEN');
+      return [201, guestView(waiting || newGuestRequest(table, body.kind))];
+    }],
+    ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})\/requests\/([0-9a-f-]{36})$/, 'public', ({ params }) => {
+      const table = tableForToken(params[0]);
+      const request = guestRequests().find((r) => r.publicId === params[1] && r.tableId === table.id);
+      if (!request) throw new Problem(404, 'NOT_FOUND', 'Request ? was not found');
+      return guestView(request);
+    }],
+    ['GET', /^guest-requests$/, 'till', () => guestRequests().filter((r) => r.status === 'OPEN').map(staffGuestView)],
+    ['POST', /^guest-requests\/(\d+)\/accept$/, 'till', ({ params, user }) => {
+      const request = findGuestRequest(params[0]);
+      const table = TABLES.find((x) => x.id === request.tableId);
+      const lines = buildLines(request.lines.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity, note: l.note, optionIds: l.optionIds })));
+      const order = createOrder({ type: 'DINE_IN', customerName: request.guestName || `QR ${table.code}`, note: request.note, paymentMethod: 'CARD',
+        table: { ...table } }, lines, null, Date.now(), user.username);
+      state.orders.push(order);
+      attach(state, order, order.createdAt);
+      Object.assign(request, { status: 'ACCEPTED', orderId: order.id, handledAt: Date.now(), handledBy: user.username });
+      changed(order, 'CREATED', null);
+      guestChanged(request);
+      return staffGuestView(request);
+    }],
+    ['POST', /^guest-requests\/(\d+)\/reject$/, 'till', ({ params, user }, body) => {
+      requireFields({ reason: blank(body.reason) ? 'must not be blank' : null });
+      const request = findGuestRequest(params[0]);
+      if (request.kind !== 'ORDER') throw new Problem(409, 'GUEST_REQUEST_HANDLED', 'Not an order');
+      Object.assign(request, { status: 'REJECTED', reason: String(body.reason).trim().slice(0, 140), handledAt: Date.now(), handledBy: user.username });
+      guestChanged(request);
+      return staffGuestView(request);
+    }],
+    ['POST', /^guest-requests\/(\d+)\/done$/, 'till', ({ params, user }) => {
+      const request = findGuestRequest(params[0]);
+      if (request.kind === 'ORDER') throw new Problem(409, 'GUEST_REQUEST_NOT_A_CALL', 'Accept or reject an order request');
+      Object.assign(request, { status: 'DONE', handledAt: Date.now(), handledBy: user.username });
+      guestChanged(request);
+      return staffGuestView(request);
+    }],
+    ['POST', /^tables\/(\d+)\/qr$/, 'manager', ({ params }) => {
+      const table = tableById(params[0]);
+      for (const [token, tableId] of Object.entries(qr().tokens)) if (tableId === table.id) delete qr().tokens[token];
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('');
+      qr().tokens[token] = table.id;
+      qr().issued[table.id] = Date.now();
+      save();
+      return { tableId: table.id, tableCode: table.code, token, issuedAt: iso(qr().issued[table.id]) };
+    }],
     ['GET', /^floor\/tables$/, 'staff', () => TABLES.map((table) => {
       const open = state.orders.filter((o) => o.type === 'DINE_IN' && o.table && o.table.id === table.id && ACTIVE.includes(o.status))
         .sort((a, b) => a.createdAt - b.createdAt);
       return {
-        ...table, occupied: open.length > 0, occupiedSince: open.length ? iso(open[0].createdAt) : null,
+        ...table, qrIssuedAt: qr().issued[table.id] ? iso(qr().issued[table.id]) : null, occupied: open.length > 0, occupiedSince: open.length ? iso(open[0].createdAt) : null,
         openTotal: toLira(open.reduce((sum, o) => sum + o.pricing.total, 0)),
         openOrders: open.map((o) => ({ id: o.id, status: o.status, customerName: o.customerName, itemCount: o.lines.reduce((n, l) => n + l.quantity - (l.voided || 0), 0), total: toLira(o.pricing.total), createdAt: iso(o.createdAt) })),
       };
