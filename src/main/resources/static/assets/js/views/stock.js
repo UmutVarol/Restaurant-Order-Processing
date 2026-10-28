@@ -208,7 +208,6 @@ export default {
           } }, icon('check', 'sm'), t('common.save')),
         ],
       });
-      setTimeout(() => amount.focus(), 50);
     }
 
     function history(ingredient) {

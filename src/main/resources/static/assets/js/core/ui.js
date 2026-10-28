@@ -81,7 +81,10 @@ function layer(build, { onClose } = {}) {
   document.body.append(overlay, panel);
   openLayers.push(handle);
   syncInert();
-  requestAnimationFrame(() => panel.querySelector('[autofocus], input, textarea, select, button.primary')?.focus());
+  // Only when nothing inside has focus yet: a fast typist or a barcode scanner may already be in the second field.
+  requestAnimationFrame(() => {
+    if (!panel.contains(document.activeElement)) panel.querySelector('[autofocus], input, textarea, select, button.primary')?.focus();
+  });
   handle.el = panel;
   syncInert();
   return handle;
