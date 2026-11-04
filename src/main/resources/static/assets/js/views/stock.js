@@ -20,7 +20,7 @@ export function quantity(base, unit) {
   if (unit === 'PIECE') return t('stock.pieces', { n: number(value, value % 1 ? 2 : 0) });
   const big = Math.abs(value) >= 1000;
   const shown = big ? value / 1000 : value;
-  const label = unit === 'GRAM' ? (big ? 'kg' : 'g') : (big ? 'l' : 'ml');
+  const label = t(`stock.input.${unit === 'GRAM' ? (big ? 'KG' : 'G') : (big ? 'L' : 'ML')}`);
   return `${number(shown, Number.isInteger(shown) ? 0 : 2)} ${label}`;
 }
 

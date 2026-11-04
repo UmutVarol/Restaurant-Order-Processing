@@ -43,7 +43,7 @@ export default {
         return;
       }
       const visible = items.filter((item) => category === 'ALL' || item.category === category);
-      mount(tableCard, h('table', { class: 'data-table' },
+      mount(tableCard, h('table', { class: 'data-table menu-table' },
         h('thead', null, h('tr', null,
           h('th', null, t('menu.col.item')),
           h('th', { class: 'hide-sm' }, t('menu.col.category')),
@@ -58,20 +58,20 @@ export default {
 
     function row(item) {
       return h('tr', { class: item.available ? '' : 'off' },
-        h('td', null, h('div', { class: 'item-cell' }, h('span', { class: 'emoji' }, item.icon || '🍽️'),
-          h('div', null, h('b', null, item.name, item.popular ? h('span', { class: 'pill plain', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px', background: 'var(--brand-soft)', color: 'var(--brand)' } }, t('pos.popular')) : null,
-            item.stockOut ? h('span', { class: 'pill stock-out', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px' }, 'data-testid': 'stock-out' }, t('stock.outOfStock')) : null,
-            item.needsApproval ? h('span', { class: 'pill plain', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px' }, title: t('menu.needsApprovalHint') }, t('menu.needsApprovalShort')) : null),
-            h('small', null, item.description)))),
+        h('td', { class: 'm-item' }, h('div', { class: 'item-cell' }, h('span', { class: 'emoji' }, item.icon || '🍽️'),
+          h('div', null, h('b', null, item.name, item.popular ? h('span', { class: 'pill plain name-pill popular' }, t('pos.popular')) : null,
+            item.stockOut ? h('span', { class: 'pill stock-out name-pill', 'data-testid': 'stock-out' }, t('stock.outOfStock')) : null,
+            item.needsApproval ? h('span', { class: 'pill plain name-pill', title: t('menu.needsApprovalHint') }, t('menu.needsApprovalShort')) : null),
+            h('small', { dir: 'auto' }, item.description)))),
         h('td', { class: 'hide-sm' }, t(`cat.${item.category}`)),
         h('td', { class: 'hide-sm' }, h('div', { class: 'row', style: { gap: '4px', flexWrap: 'wrap' } },
           item.tags.map((tag) => h('span', { class: `tag t-${tag}` }, t(`tag.${tag}`))))),
         h('td', { class: 'hide-sm right muted' }, t('common.minutes', { n: item.prepTimeMinutes })),
-        h('td', { class: 'right num', style: { fontWeight: 650 } }, money(item.price)),
-        h('td', { class: 'hide-sm right' }, foodCost(item)),
-        h('td', null, h('label', { class: 'switch', title: item.stockOut ? t('stock.outOfStockHint') : t('menu.col.available') },
+        h('td', { class: 'right num m-price', style: { fontWeight: 650 } }, money(item.price)),
+        h('td', { class: 'hide-sm right m-cost' }, foodCost(item)),
+        h('td', { class: 'm-on' }, h('label', { class: 'switch', title: item.stockOut ? t('stock.outOfStockHint') : t('menu.col.available') },
           h('input', { type: 'checkbox', role: 'switch', checked: item.available, disabled: item.stockOut, 'aria-label': `${t('menu.col.available')}: ${item.name}`, onchange: (event) => toggle(item, event.target) }), h('span'))),
-        h('td', { class: 'right' }, h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '4px' } },
+        h('td', { class: 'right m-actions' }, h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '4px' } },
           h('button', { class: 'icon-btn sm', title: t('recipe.title'), 'data-testid': 'edit-recipe', 'aria-label': `${t('recipe.title')}: ${item.name}`, onclick: () => editRecipe(item) }, icon('basket', 'sm')),
           h('button', { class: 'icon-btn sm', title: t('common.edit'), 'aria-label': `${t('common.edit')}: ${item.name}`, onclick: () => editItem(item) }, icon('edit', 'sm')),
           h('button', { class: 'icon-btn sm', title: t('menu.archive'), 'aria-label': `${t('menu.archive')}: ${item.name}`, onclick: () => archive(item) }, icon('archive', 'sm')))));

@@ -1,7 +1,7 @@
 // Overlay primitives: toasts, modals, drawers and confirmation dialogs.
 import { h } from './dom.js';
 import { icon } from './icons.js';
-import { lang, setLang, t } from './i18n.js';
+import { lang, LANGUAGES, setLang, t } from './i18n.js';
 import { prefs } from './store.js';
 
 const TOAST_ICONS = { success: 'check', error: 'alert', info: 'bell' };
@@ -220,7 +220,26 @@ export function themeButton() {
 
 export function langButton() {
   return h('button', {
-    class: 'icon-btn bordered', title: t('action.langTitle'), 'aria-label': t('action.langTitle'),
-    onclick: () => setLang(lang() === 'tr' ? 'en' : 'tr'),
-  }, h('span', { class: 'lang-code', lang: lang() === 'tr' ? 'en' : 'tr' }, lang() === 'tr' ? 'EN' : 'TR'));
+    class: 'icon-btn bordered', title: t('action.langTitle'), 'aria-label': t('action.langTitle'), 'data-testid': 'lang-button',
+    onclick: () => chooseLanguage(),
+  }, h('span', { class: 'lang-code' }, lang().toUpperCase()));
+}
+
+/** Lists the languages by their own names; picking one switches the whole app at once. */
+export function chooseLanguage() {
+  const modal = openModal({
+    title: t('action.langTitle'),
+    size: 'sm',
+    body: h('div', { class: 'lang-list', role: 'radiogroup', 'aria-label': t('action.langTitle') }, LANGUAGES.map((language) => h('button', {
+      type: 'button', class: ['lang-option', language.code === lang() ? 'active' : ''], role: 'radio',
+      'aria-checked': String(language.code === lang()), lang: language.code, dir: language.dir ?? 'ltr',
+      'data-testid': `lang-${language.code}`,
+      onclick: async () => {
+        modal.close();
+        await setLang(language.code);
+      },
+    }, h('span', null, language.name), h('span', { class: 'lang-tag' }, language.code.toUpperCase()),
+    language.code === lang() ? icon('check', 'sm') : null))),
+  });
+  return modal;
 }

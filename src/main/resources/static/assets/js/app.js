@@ -1,13 +1,13 @@
 // Sofra web client: boots the session, renders the app shell and routes between screens.
 import { h, initials, mount } from './core/dom.js';
 import { icon, logoMark } from './core/icons.js';
-import { lang, onLangChange, setLang, t } from './core/i18n.js';
+import { languageName, onLangChange, ready as languageReady, t } from './core/i18n.js';
 import { api, clearSession, currentDevice, currentSession, saveSession } from './core/api.js';
 import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { clearOutbox, entries as outboxEntries, flush, isOnline, registerServiceWorker } from './core/offline.js';
 import { time } from './core/format.js';
-import { confirmDialog, langButton, openModal, themeButton, toast } from './core/ui.js';
+import { chooseLanguage, confirmDialog, langButton, openModal, themeButton, toast } from './core/ui.js';
 
 const ALL = ['ADMIN', 'WAITER', 'KITCHEN'];
 const ROUTES = [
@@ -212,7 +212,7 @@ function openMore(routes, current) {
       }))),
       h('div', { class: 'more-list' },
         row('settings', t('nav.settings'), { href: '#/settings', 'data-testid': 'more-settings', onclick: () => modal.close() }),
-        row('globe', t('more.language', { lang: lang() === 'tr' ? 'English' : 'Türkçe' }), { onclick: () => { modal.close(); setLang(lang() === 'tr' ? 'en' : 'tr'); } }),
+        row('globe', t('more.language', { lang: languageName() }), { 'data-testid': 'more-language', onclick: () => { modal.close(); chooseLanguage(); } }),
         row(prefs.theme === 'dark' ? 'sun' : 'moon', t(prefs.theme === 'dark' ? 'more.light' : 'more.dark'), { onclick: () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; modal.close(); } }),
         currentDevice()
           ? row('switchUser', t('lock.switch'), { 'data-testid': 'more-switch-user', onclick: () => { modal.close(); signOut(); } })
@@ -389,6 +389,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 async function boot() {
+  await languageReady;
   const session = currentSession();
   if (session) {
     try {

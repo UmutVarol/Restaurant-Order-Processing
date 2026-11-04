@@ -71,8 +71,8 @@ export default {
       if (!table.occupied || !canTakeOrders(user)) return card;
       // the card itself opens the order, so moving and merging sit next to it rather than inside it
       return h('div', { class: 'table-slot' }, card, h('div', { class: 'table-actions' },
-        h('button', { class: 'btn sm ghost', 'data-testid': `move-${table.code}`, onclick: () => transfer(table, 'move') }, icon('arrowRight', 'sm'), t('floor.move')),
-        h('button', { class: 'btn sm ghost', 'data-testid': `merge-${table.code}`, onclick: () => transfer(table, 'merge') }, icon('users', 'sm'), t('floor.merge'))));
+        h('button', { class: 'btn sm ghost', 'data-testid': `move-${table.code}`, title: t('floor.move'), onclick: () => transfer(table, 'move') }, icon('arrowRight', 'sm'), h('span', null, t('floor.move'))),
+        h('button', { class: 'btn sm ghost', 'data-testid': `merge-${table.code}`, title: t('floor.merge'), onclick: () => transfer(table, 'merge') }, icon('users', 'sm'), h('span', null, t('floor.merge')))));
     }
 
     /** Moving needs a free table; merging needs another seated one. */
@@ -121,8 +121,8 @@ export default {
     function kpi(iconName, label, value, sub) {
       return h('div', { class: 'card kpi' },
         h('div', { class: 'label' }, h('span', { class: 'ic' }, icon(iconName, 'sm')), label),
-        h('div', { class: 'row', style: { alignItems: 'baseline' } }, h('div', { class: 'value' }, value),
-          sub ? h('span', { class: 'muted' }, sub) : null));
+        h('div', { class: 'row kpi-line' }, h('div', { class: 'value' }, value),
+          sub ? h('span', { class: 'muted kpi-sub' }, sub) : null));
     }
 
     async function load() {

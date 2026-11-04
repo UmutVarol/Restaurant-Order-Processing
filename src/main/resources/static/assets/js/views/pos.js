@@ -193,7 +193,7 @@ export default {
         item.available ? null : h('span', { class: 'soldout-label' }, t('pos.soldOut'))),
       h('div', { class: 'body' },
         h('div', { class: 'name' }, item.name),
-        h('div', { class: 'desc' }, item.description),
+        h('div', { class: 'desc', dir: 'auto' }, item.description),
         h('div', { class: 'tags' }, item.tags.map((tag) => h('span', { class: `tag t-${tag}` }, t(`tag.${tag}`)))),
         h('div', { class: 'foot' },
           h('div', null, h('div', { class: 'price' }, money(item.price)),

@@ -1,5 +1,5 @@
 // Locale-aware formatting for money, numbers, times and durations.
-import { lang, locale, t, tn } from './i18n.js';
+import { locale, t, tn } from './i18n.js';
 
 const cache = new Map();
 
@@ -72,7 +72,7 @@ export function elapsed(iso, now = Date.now()) {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
   const hours = Math.floor(minutes / 60);
-  return `${hours}${lang() === 'tr' ? 'sa' : 'h'} ${String(minutes % 60).padStart(2, '0')}${lang() === 'tr' ? 'dk' : 'm'}`;
+  return t('time.hoursMinutes', { h: hours, m: String(minutes % 60).padStart(2, '0') });
 }
 
 export function durationMinutes(minutes) {

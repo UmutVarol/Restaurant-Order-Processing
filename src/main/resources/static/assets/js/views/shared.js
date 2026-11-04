@@ -132,7 +132,7 @@ function drawerContent(order, user, handle, run) {
     h('div', { class: 'drawer-body' },
       section(t('detail.guest'), h('dl', { class: 'kv' },
         kv(t('pos.customer'), order.customerName),
-        order.customerPhone ? kv(t('pos.phone'), order.customerPhone) : null,
+        order.customerPhone ? kv(t('pos.phone'), h('span', { dir: 'ltr' }, order.customerPhone)) : null,
         order.deliveryAddress ? kv(t('pos.address'), order.deliveryAddress) : null,
         kv(t('detail.placedBy'), order.createdBy),
         kv(t('detail.payment'), h('span', { class: 'row', style: { justifyContent: 'flex-end', gap: '6px' } },

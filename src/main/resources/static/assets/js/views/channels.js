@@ -3,7 +3,7 @@
 // guessed: map the item and try again, or turn the order down.
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
-import { has, t } from '../core/i18n.js';
+import { has, t, tn } from '../core/i18n.js';
 import { dateTime, money, time } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
@@ -54,7 +54,7 @@ export default {
         mount(list, h('div', { class: 'empty' }, h('div', { class: 'art' }, '🛵'), h('h4', null, t('channels.none'))));
         return;
       }
-      mount(list, h('table', { class: 'data-table' },
+      mount(list, h('table', { class: 'data-table channel-table' },
         h('thead', null, h('tr', null,
           h('th', null, t('channels.col.received')),
           h('th', null, t('channels.col.order')),
@@ -65,13 +65,13 @@ export default {
 
     function row(o) {
       return h('tr', { dataset: { externalId: o.externalId }, class: o.status === 'ATTENTION' ? 'attention' : '' },
-        h('td', { class: 'muted' }, dateTime(o.receivedAt)),
-        h('td', null, h('b', null, `${CHANNEL_LABELS[o.channel]} #${o.externalId}`),
-          h('small', { class: 'faint block' }, `${o.customerName} · ${t('outbox.items', { n: o.itemCount })}`)),
-        h('td', { class: 'right num' }, money(o.platformTotal),
+        h('td', { class: 'muted c-received' }, dateTime(o.receivedAt)),
+        h('td', { class: 'c-order' }, h('b', null, `${CHANNEL_LABELS[o.channel]} #${o.externalId}`),
+          h('small', { class: 'faint block' }, `${o.customerName} · ${tn('outbox.items', o.itemCount)}`)),
+        h('td', { class: 'right num c-total' }, money(o.platformTotal),
           o.priceDiffers ? h('small', { class: 'block danger-text', 'data-testid': 'price-differs', title: t('channels.priceDiffersHint') },
             t('channels.priceDiffers', { ours: money(o.ourTotal) })) : null),
-        h('td', null, state(o)));
+        h('td', { class: 'c-state' }, state(o)));
     }
 
     function state(o) {

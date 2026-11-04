@@ -85,8 +85,12 @@ function shapes(name) {
 }
 
 /** Returns an inline SVG icon element. */
+// Icons that point along the line of text; a right-to-left language (Arabic) mirrors them.
+const DIRECTIONAL = new Set(['arrowRight', 'arrowLeft', 'chevronRight', 'chevronLeft', 'logout']);
+
 export function icon(name, className = '') {
-  return s('svg', { viewBox: '0 0 24 24', class: `icon ${className}`.trim(), 'aria-hidden': 'true' },
+  const classes = `icon ${DIRECTIONAL.has(name) ? 'dir-flip ' : ''}${className}`.trim();
+  return s('svg', { viewBox: '0 0 24 24', class: classes, 'aria-hidden': 'true' },
     shapes(name).map(([tag, attributes]) => s(tag, attributes)));
 }
 

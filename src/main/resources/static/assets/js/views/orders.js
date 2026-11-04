@@ -60,9 +60,9 @@ export default {
       oninput: debounce((event) => { state.query = event.target.value; state.page = 0; load(); }, 250),
     });
     const statusChips = h('div', { class: 'chips' });
-    const rangeSwitch = h('div', { class: 'segmented', style: { width: '300px' } });
+    const rangeSwitch = h('div', { class: 'segmented range-switch' });
     const typeSelect = h('select', {
-      class: 'select', style: { width: '170px' }, 'aria-label': t('orders.col.type'),
+      class: 'select type-select', 'aria-label': t('orders.col.type'),
       onchange: (event) => { state.type = event.target.value; state.page = 0; load(); },
     },
     h('option', { value: '' }, `${t('orders.col.type')}: ${t('orders.all')}`),
@@ -71,7 +71,7 @@ export default {
 
     mount(container,
       h('div', { class: 'toolbar' },
-        h('div', { class: 'input-icon', style: { flex: '1 1 320px', maxWidth: '440px' } }, icon('search'), search),
+        h('div', { class: 'input-icon orders-search' }, icon('search'), search),
         h('div', { class: 'spacer' }),
         typeSelect,
         rangeSwitch),
@@ -126,9 +126,9 @@ export default {
           },
           h('td', { class: 'order-no' }, `#${order.id}`),
           h('td', { class: 'when' }, dateTime(order.createdAt)),
-          h('td', { class: 'customer' }, h('b', null, order.customerName), order.customerPhone ? h('small', null, order.customerPhone) : null),
+          h('td', { class: 'customer' }, h('b', { dir: 'auto' }, order.customerName), order.customerPhone ? h('small', { dir: 'ltr' }, order.customerPhone) : null),
           h('td', { class: 'hide-sm' }, typeBadge(order)),
-          h('td', { class: 'items hide-sm', title: itemsSummary(order) }, itemsSummary(order)),
+          h('td', { class: 'items hide-sm', title: itemsSummary(order), dir: 'auto' }, itemsSummary(order)),
           h('td', { class: 'right num total', style: { fontWeight: 650 } }, money(order.pricing.total)),
           h('td', { class: 'state' }, statusPill(order.status)))))),
         h('div', { class: 'pagination' },

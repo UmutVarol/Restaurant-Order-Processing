@@ -1,7 +1,7 @@
 // The till: bills still open, and for managers the day's takings (Z report) and the end-of-day cash count.
 import { debounce, h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
-import { t } from '../core/i18n.js';
+import { t, tn } from '../core/i18n.js';
 import { dateTime, elapsed, money } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
@@ -60,7 +60,7 @@ export default {
       if (!manager) return;
       const picker = h('input', { type: 'date', class: 'input sm date-pick', value: date, max: today(), 'aria-label': t('cashier.date'),
         onchange: (event) => { date = event.target.value || today(); report = null; renderReport(); loadReport(); } });
-      const head = h('div', { class: 'card-head' }, h('div', null, h('div', { class: 'card-title' }, t('cashier.zReport')),
+      const head = h('div', { class: 'card-head z-head' }, h('div', null, h('div', { class: 'card-title' }, t('cashier.zReport')),
         h('div', { class: 'card-sub' }, t('cashier.zSub'))), h('div', { class: 'spacer', style: { flex: 1 } }), picker);
       if (!report) {
         mount(reportCard, head, h('div', { class: 'card-body' }, h('div', { class: 'skeleton', style: { height: '220px' } })));
@@ -70,12 +70,12 @@ export default {
       const summary = report.summary;
       const by = Object.fromEntries(summary.methods.map((m) => [m.method, m]));
       mount(kpis,
-        kpi('cash', t('pay.CASH'), money(Number(by.CASH.amount) - Number(by.CASH.refunds)), t('cashier.count', { n: by.CASH.count })),
-        kpi('card', t('pay.CARD'), money(Number(by.CARD.amount) - Number(by.CARD.refunds)), t('cashier.count', { n: by.CARD.count })),
-        kpi('online', t('pay.ONLINE'), money(Number(by.ONLINE.amount) - Number(by.ONLINE.refunds)), t('cashier.count', { n: by.ONLINE.count })),
+        kpi('cash', t('pay.CASH'), money(Number(by.CASH.amount) - Number(by.CASH.refunds)), tn('cashier.count', by.CASH.count)),
+        kpi('card', t('pay.CARD'), money(Number(by.CARD.amount) - Number(by.CARD.refunds)), tn('cashier.count', by.CARD.count)),
+        kpi('online', t('pay.ONLINE'), money(Number(by.ONLINE.amount) - Number(by.ONLINE.refunds)), tn('cashier.count', by.ONLINE.count)),
         kpi('coins', t('bill.tips'), money(summary.tips), null));
 
-      const row = (cells, cls = '') => h('tr', { class: cls }, cells.map((cell, i) => h(i === 0 ? 'th' : 'td', { class: i ? 'right num' : '' }, cell)));
+      const row = (cells, cls = '') => h('tr', { class: cls }, cells.map((cell, i) => h(i === 0 ? 'th' : 'td', { class: i ? `right num c${i}` : '' }, cell)));
       mount(reportCard, head, h('div', { class: 'card-body' },
         h('table', { class: 'z-table' },
           h('thead', null, row([t('cashier.method'), t('cashier.payments'), t('cashier.sales'), t('bill.tips'), t('cashier.refunds')])),
@@ -164,7 +164,9 @@ export default {
     function kpi(iconName, label, value, sub) {
       return h('div', { class: 'card kpi' },
         h('div', { class: 'label' }, h('span', { class: 'ic' }, icon(iconName, 'sm')), label),
-        h('div', { class: 'row', style: { alignItems: 'baseline' } }, h('div', { class: 'value' }, value), sub ? h('span', { class: 'muted' }, sub) : null));
+        h('div', { class: 'value' }, value),
+        // always on its own line, so the four tiles read alike whatever the amount's length
+        sub ? h('div', { class: 'muted kpi-foot' }, sub) : null);
     }
 
     async function loadBills() {

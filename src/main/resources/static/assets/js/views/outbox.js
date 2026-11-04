@@ -2,7 +2,7 @@
 // whose prices or dishes changed in the meantime waits here for the waiter to send it at the new total or drop it.
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
-import { t } from '../core/i18n.js';
+import { t, tn } from '../core/i18n.js';
 import { dateTime, money } from '../core/format.js';
 import { errorMessage, ApiError } from '../core/api.js';
 import { bus } from '../core/store.js';
@@ -26,7 +26,7 @@ export function openOutbox() {
     return h('div', { class: ['outbox-row', `s-${entry.status}`], dataset: { key: entry.key } },
       h('div', { class: 'outbox-info' },
         h('b', null, `${order.customerName} · ${where}`),
-        h('small', null, `${t('outbox.items', { n: items })}${entry.seen.total != null ? ` · ${money(entry.seen.total)}` : ''}`
+        h('small', null, `${tn('outbox.items', items)}${entry.seen.total != null ? ` · ${money(entry.seen.total)}` : ''}`
           + `${entry.payment ? ` · ${t('outbox.paid', { method: t(`pay.${entry.payment.method}`) })}` : ''}`),
         h('small', { class: 'faint' }, dateTime(new Date(entry.createdAt).toISOString())),
         entry.status === 'pending' ? h('span', { class: 'pill plain' }, t('outbox.state.pending')) : problem(entry)),

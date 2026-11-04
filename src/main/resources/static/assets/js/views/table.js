@@ -90,7 +90,7 @@ export function renderTable(root, token) {
       h('div', { class: 'emoji' }, item.icon || '🍽️'),
       h('div', { class: 'info' },
         h('b', null, item.name),
-        item.description ? h('small', null, item.description) : null,
+        item.description ? h('small', { dir: 'auto' }, item.description) : null,
         h('div', { class: 'price' }, money(item.price), item.optionGroups?.length ? h('span', { class: 'faint' }, ` · ${t('table.hasOptions')}`) : null,
           item.needsApproval && state.table.mode !== 'CLASSIC' ? h('span', { class: 'faint' }, ` · ${t('table.needsApproval')}`) : null)),
       h('button', {

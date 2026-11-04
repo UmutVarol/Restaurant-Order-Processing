@@ -107,6 +107,12 @@ export function barChart(bars, { height = 190, format = String } = {}) {
 }
 
 /** Donut chart with a centre label. */
+/** A font size at which the donut's centre text fits its hole: long amounts ("327,6 тыс. ₺") get smaller. */
+function centreSize(text, size) {
+  const room = size * 0.5;
+  return Math.max(11, Math.min(19, Math.floor(room / (String(text).length * 0.62))));
+}
+
 export function donutChart(slices, { size = 160, thickness = 22, center } = {}) {
   const total = slices.reduce((sum, slice) => sum + slice.value, 0) || 1;
   const r = 50 - thickness / 2 - 1;
@@ -126,7 +132,8 @@ export function donutChart(slices, { size = 160, thickness = 22, center } = {}) 
       return segment;
     }));
   return h('div', { style: { position: 'relative', width: `${size}px`, height: `${size}px` } }, svg,
-    center ? h('div', { class: 'donut-label' }, h('b', { class: 'donut-center' }, center.value), h('span', null, center.label)) : null);
+    center ? h('div', { class: 'donut-label' }, h('b', { class: 'donut-center', style: { fontSize: `${centreSize(center.value, size)}px` } }, center.value),
+      h('span', { style: { maxWidth: `${Math.round(size * 0.5)}px` } }, center.label)) : null);
 }
 
 /** Tiny decorative trend line for KPI tiles. */

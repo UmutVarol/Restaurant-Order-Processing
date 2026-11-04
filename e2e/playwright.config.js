@@ -21,7 +21,7 @@ module.exports = defineConfig({
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: /mobile\.spec\.js/ },
-    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /(layout|mobile)\.spec\.js/ },
+    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /(layout|mobile|language-layout)\.spec\.js/ },
   ],
   webServer: {
     // The suite drives a whole service from one address, faster than any till would; lift the per-client budget.
