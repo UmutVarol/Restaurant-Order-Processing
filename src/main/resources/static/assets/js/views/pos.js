@@ -5,7 +5,7 @@ import { t, tn } from '../core/i18n.js';
 import { itemCount, money } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
-import { toast } from '../core/ui.js';
+import { haptic, isPhone, swipeToClose, toast } from '../core/ui.js';
 import { enqueue, isOnline, lastReference, rememberReference } from '../core/offline.js';
 import { chooseOptions, chosen, defaultOptionIds, optionKey, optionsPrice } from './options.js';
 import { CATEGORIES, openOrderDrawer, PAY_ICONS, totals, TYPE_ICONS } from './shared.js';
@@ -79,12 +79,29 @@ export default {
     const totalsSection = h('div');
     const paySection = h('div', { class: 'pay-methods' });
     const placeButton = h('button', { class: 'btn primary lg block', onclick: placeOrder });
-    const orderPanel = h('aside', { class: 'card order-panel' });
-    // On narrow screens the ticket sits below the menu; this bar keeps the running total in reach.
+    const orderPanel = h('aside', { class: 'card order-panel', 'aria-label': t('pos.current') });
+    // On a tablet the ticket sits below the menu and this bar scrolls to it; on a phone the ticket is a sheet the
+    // bar opens, so the waiter never scrolls past the menu to send an order.
     const mobileBar = h('button', {
-      class: 'mobile-cart', hidden: true, 'aria-label': t('pos.jumpToTicket'),
-      onclick: () => orderPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      class: 'mobile-cart', hidden: true, 'aria-label': t('pos.jumpToTicket'), 'data-testid': 'open-ticket',
+      onclick: () => (isPhone() ? openTicket() : orderPanel.scrollIntoView({ behavior: 'smooth', block: 'start' })),
     });
+    const ticketBackdrop = h('div', { class: 'ticket-backdrop', onclick: () => closeTicket() });
+    const posRoot = h('div', { class: 'pos' });
+    function openTicket() {
+      orderPanel.style.transform = '';
+      posRoot.classList.add('ticket-open');
+      document.body.classList.add('sheet-locked');
+      haptic();
+    }
+    function closeTicket() {
+      if (!posRoot.classList.contains('ticket-open')) return;
+      posRoot.classList.remove('ticket-open');
+      document.body.classList.remove('sheet-locked');
+      // a dragged-away sheet keeps its offset until the slide out is over
+      setTimeout(() => { orderPanel.style.transform = ''; }, 350);
+    }
+    swipeToClose(orderPanel, closeTicket, '.card-head');
     const countLabel = h('span', { class: 'card-sub' });
     // Clearing is instant but reversible: the toast offers an undo instead of a confirmation dialog.
     const clearButton = h('button', {
@@ -103,7 +120,7 @@ export default {
       },
     }, icon('trash', 'sm'), t('pos.clear'));
 
-    mount(container, h('div', { class: 'pos' },
+    mount(container, mount(posRoot,
       h('div', { class: 'pos-menu' },
         h('div', { class: 'pos-filters' },
           h('div', { class: 'input-icon' }, icon('search'), search, h('kbd', null, '/')),
@@ -113,9 +130,11 @@ export default {
       mount(orderPanel,
         h('div', { class: 'card-head' },
           h('div', { style: { flex: 1 } }, h('div', { class: 'card-title' }, t('pos.current')), countLabel),
-          clearButton),
+          clearButton,
+          h('button', { class: 'icon-btn sheet-close', 'aria-label': t('common.close'), 'data-testid': 'close-ticket', onclick: () => closeTicket() }, icon('x', 'sm'))),
         h('div', { class: 'scroll' }, typeSection, linesSection, couponSection, noteSection),
-        h('div', { class: 'checkout' }, deliveryHint, totalsSection, paySection, placeButton))),
+        h('div', { class: 'checkout' }, deliveryHint, totalsSection, paySection, placeButton)),
+      ticketBackdrop),
       mobileBar);
 
     // ------------------------------------------------------------------ menu
@@ -219,6 +238,7 @@ export default {
       if (line && line.quantity >= MAX_QUANTITY) return;
       if (line) line.quantity += 1;
       else ticket.lines.push(added);
+      haptic();
       cartChanged();
     }
 
@@ -582,12 +602,15 @@ export default {
         resetTicket();
         couponDraft = '';
         quote = null;
+        haptic('success');
+        closeTicket();
         loadTables();
       } catch (error) {
         if (error instanceof ApiError && error.status === 0) {
           await queueOffline(body);
         } else {
           if (error instanceof ApiError && error.code === 'VALIDATION_FAILED') fieldErrors = error.fieldErrors();
+          haptic('error');
           toast({ title: errorMessage(error), kind: 'error' });
         }
       } finally {
@@ -653,6 +676,10 @@ export default {
     }
 
     const onKey = (event) => {
+      if (event.key === 'Escape' && posRoot.classList.contains('ticket-open') && !document.getElementById('app')?.inert) {
+        closeTicket();
+        return;
+      }
       if (event.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
         event.preventDefault();
         search.focus();
@@ -685,6 +712,7 @@ export default {
     return {
       destroy() {
         document.removeEventListener('keydown', onKey);
+        document.body.classList.remove('sheet-locked');
         panelObserver?.disconnect();
         offOrder();
         offStock();

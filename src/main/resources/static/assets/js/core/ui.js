@@ -6,6 +6,58 @@ import { prefs } from './store.js';
 
 const TOAST_ICONS = { success: 'check', error: 'alert', info: 'bell' };
 const MAX_TOASTS = 3;
+const PHONE = matchMedia('(max-width: 720px)');
+const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)');
+
+/** Whether the screen is phone-sized: dialogs and drawers then open as sheets from the bottom. */
+export const isPhone = () => PHONE.matches;
+
+/**
+ * A short buzz under the finger for what a tap did, on phones that can (Android; iOS ignores it). Skipped when the
+ * user asked for less motion.
+ */
+export function haptic(kind = 'tap') {
+  if (REDUCED_MOTION.matches || !navigator.vibrate) return;
+  try { navigator.vibrate({ tap: 8, success: [10, 40, 14], error: [30, 50, 30] }[kind] ?? 8); } catch { /* not allowed */ }
+}
+
+/**
+ * Lets a sheet be dragged down and let go to close it, the way phone sheets behave. Only the sheet's top (its grab
+ * handle and heading) starts a drag, so scrolling the content never closes it by accident.
+ *
+ * @param grabSelector what inside the sheet starts a drag, besides the top 28px with the handle
+ */
+export function swipeToClose(sheet, close, grabSelector) {
+  let start = null;
+  sheet.addEventListener('pointerdown', (event) => {
+    if (!isPhone() || event.button !== 0 || event.target.closest('button, a, input, select, textarea, [contenteditable]')) return;
+    const fromTop = event.clientY - sheet.getBoundingClientRect().top;
+    if (fromTop > 28 && !event.target.closest(grabSelector)) return;
+    start = { y: event.clientY, at: performance.now(), id: event.pointerId };
+    sheet.style.transition = 'none';
+  });
+  sheet.addEventListener('pointermove', (event) => {
+    if (!start || event.pointerId !== start.id) return;
+    const dy = Math.max(0, event.clientY - start.y);
+    if (dy > 4 && !sheet.hasPointerCapture(event.pointerId)) sheet.setPointerCapture(event.pointerId);
+    sheet.style.transform = `translateY(${dy}px)`;
+  });
+  const end = (event) => {
+    if (!start || event.pointerId !== start.id) return;
+    const dy = Math.max(0, event.clientY - start.y);
+    const speed = dy / Math.max(1, performance.now() - start.at);
+    start = null;
+    sheet.style.transition = '';
+    if (dy > 120 || (dy > 40 && speed > 0.6)) {
+      sheet.style.transform = 'translateY(100%)';
+      close();
+    } else {
+      sheet.style.transform = '';
+    }
+  };
+  sheet.addEventListener('pointerup', end);
+  sheet.addEventListener('pointercancel', end);
+}
 
 /** Removes an element once its exit transition ends (or straight away when transitions are off). */
 function leave(el, className) {
@@ -78,12 +130,20 @@ function layer(build, { onClose } = {}) {
   };
   const panel = build(handle);
   overlay.addEventListener('click', handle.close);
+  swipeToClose(panel, handle.close, '.modal-head, .drawer-head');
   document.body.append(overlay, panel);
   openLayers.push(handle);
   syncInert();
   // Only when nothing inside has focus yet: a fast typist or a barcode scanner may already be in the second field.
+  // On a phone the sheet itself takes focus: a keyboard popping up at once would cover half of it.
   requestAnimationFrame(() => {
-    if (!panel.contains(document.activeElement)) panel.querySelector('[autofocus], input, textarea, select, button.primary')?.focus();
+    if (panel.contains(document.activeElement)) return;
+    if (isPhone()) {
+      panel.tabIndex = -1;
+      panel.focus({ preventScroll: true });
+    } else {
+      panel.querySelector('[autofocus], input, textarea, select, button.primary')?.focus();
+    }
   });
   handle.el = panel;
   syncInert();

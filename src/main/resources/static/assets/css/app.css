@@ -1389,3 +1389,155 @@ svg.qr { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(-
 .pill.f-FAILED { background: var(--red-soft); color: var(--red); }
 .pill.f-PENDING, .pill.f-WAITING { background: var(--amber-soft); color: var(--amber); }
 .fiscal-doc { display: grid; gap: 3px; justify-items: start; }
+
+/* ==========================================================================
+   Phone first: most shifts are worked from a phone in the hand.
+   A tab bar with labels, sheets that slide up from the bottom and follow the finger, controls the thumb reaches,
+   room for the notch and the home indicator, and motion on transform and opacity only, so it stays smooth on
+   modest phones.
+   ========================================================================== */
+:root { --tabbar-h: 62px; --sheet-radius: 24px; }
+.tabbar, .sheet-close { display: none; }
+body.sheet-locked { overflow: hidden; }
+
+@media (max-width: 720px) {
+  /* the sidebar gives way to a tab bar */
+  .sidebar { display: none; }
+  .tabbar {
+    position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; display: flex; align-items: stretch;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding: 0 6px env(safe-area-inset-bottom);
+    background: color-mix(in srgb, var(--surface) 94%, transparent); border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 18px -12px rgba(31, 26, 23, .25);
+  }
+  .tab {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    border: 0; background: none; color: var(--muted); font: 600 11px/1.1 var(--font-sans); text-decoration: none;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .tab-ic { position: relative; display: grid; place-items: center; width: 52px; height: 30px; border-radius: 99px; transition: background-color .2s var(--ease), color .2s var(--ease), transform .12s var(--ease); }
+  .tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab.active { color: var(--brand); }
+  .tab.active .tab-ic { background: var(--brand-soft); }
+  .tab:active .tab-ic { transform: scale(.92); }
+  .tab .badge { position: absolute; top: -2px; right: 6px; min-width: 18px; height: 18px; font-size: 10px; margin: 0; }
+
+  /* the page leaves room for the tab bar and the home indicator, and focused fields scroll clear of it */
+  .view { padding: 16px 16px calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom)); }
+  html { scroll-padding-bottom: calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom)); }
+  .topbar { position: sticky; top: 0; z-index: 30; padding-top: max(10px, env(safe-area-inset-top)); }
+  /* language and theme live in "More" on a phone */
+  .topbar-tools > .icon-btn.bordered { display: none; }
+  .topbar .live span:last-child { display: none; }
+
+  /* toasts rise above the tab bar, full width */
+  .toasts { left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); align-items: stretch; }
+  .toast { min-width: 0; max-width: none; }
+  .guest ~ .toasts, body:not(:has(.tabbar)) .toasts { bottom: calc(84px + env(safe-area-inset-bottom)); }
+
+  /* dialogs and drawers are sheets from the bottom, with a handle to drag them away */
+  .overlay { backdrop-filter: none; background: rgba(20, 12, 8, .45); }
+  .modal, .modal.sm {
+    left: 0; right: 0; top: auto; bottom: 0; width: 100%; max-height: calc(100dvh - 40px - env(safe-area-inset-top));
+    transform: none; border-radius: var(--sheet-radius) var(--sheet-radius) 0 0; animation: sheetIn .34s var(--ease);
+    transition: transform .26s var(--ease);
+  }
+  .modal::before, .drawer::before, .order-panel::before {
+    content: ""; flex: none; align-self: center; width: 40px; height: 5px; margin-top: 8px; border-radius: 99px; background: var(--border-strong);
+  }
+  .modal-head { padding: 12px 20px 4px; }
+  .modal-body { padding: 12px 20px 8px; }
+  .modal-foot { padding: 12px 20px calc(16px + env(safe-area-inset-bottom)); }
+  .modal-foot .btn { flex: 1; min-height: 48px; }
+  .drawer {
+    top: auto; left: 0; right: 0; width: 100%; height: calc(100dvh - 24px - env(safe-area-inset-top));
+    border-radius: var(--sheet-radius) var(--sheet-radius) 0 0; animation: sheetIn .36s var(--ease); transition: transform .26s var(--ease);
+  }
+  .drawer-head { padding: 12px 18px 12px; }
+  .drawer-head h2 { font-size: 22px; }
+  .drawer-body { padding: 16px 18px; }
+  .drawer-foot { padding: 12px 18px calc(12px + env(safe-area-inset-bottom)); }
+  .overlay.closing { opacity: 0; transition: opacity .22s var(--ease); }
+  .modal.closing, .drawer.closing { opacity: 1; transform: translateY(100%); transition: transform .24s var(--ease); }
+  .modal.lg { border-radius: 0; animation: sheetIn .34s var(--ease); }
+  .modal.lg::before { display: none; }
+
+  /* the waiter's ticket is a sheet too: the bar at the bottom opens it */
+  .order-panel {
+    position: fixed; z-index: 62; left: 0; right: 0; bottom: 0; top: auto; max-height: calc(100dvh - 40px - env(safe-area-inset-top));
+    border-radius: var(--sheet-radius) var(--sheet-radius) 0 0; box-shadow: var(--shadow-lg);
+    transform: translateY(105%); visibility: hidden; transition: transform .32s var(--ease), visibility 0s linear .32s;
+  }
+  .pos.ticket-open .order-panel { transform: none; visibility: visible; transition: transform .32s var(--ease); }
+  .order-panel .checkout { border-radius: 0; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .order-panel .scroll { flex: 1; }
+  .sheet-close { display: inline-grid; }
+  .ticket-backdrop { position: fixed; inset: 0; z-index: 61; background: rgba(20, 12, 8, .45); opacity: 0; pointer-events: none; transition: opacity .25s var(--ease); }
+  .pos.ticket-open .ticket-backdrop { opacity: 1; pointer-events: auto; }
+  .mobile-cart:not([hidden]) { left: 12px; right: 12px; transform: none; justify-content: space-between; height: 54px; border-radius: 18px; background: var(--brand); color: #fff; }
+  .mobile-cart .badge { background: #fff; color: var(--brand); }
+  .mobile-cart span:nth-child(2) { flex: 1; text-align: left; }
+
+  /* chips scroll sideways in one row instead of filling half the screen */
+  .view .chips, .table-page .chips {
+    flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+    margin-inline: -16px; padding: 2px 16px; scroll-padding-inline: 16px;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 22px), transparent);
+            mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 22px), transparent);
+  }
+  .view .chips::-webkit-scrollbar, .table-page .chips::-webkit-scrollbar { display: none; }
+  .view .chips > *, .table-page .chips > * { flex: none; scroll-snap-align: start; }
+
+  /* orders read as cards, not a squeezed table */
+  .orders-table thead { display: none; }
+  .orders-table, .orders-table tbody { display: block; }
+  .orders-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "no total" "customer state" "when state";
+    gap: 2px 12px; padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  .orders-table td { display: block; padding: 0; border: 0; }
+  .orders-table td.hide-sm { display: none; }
+  .orders-table .order-no { grid-area: no; font-weight: 700; }
+  .orders-table .total { grid-area: total; text-align: right; }
+  .orders-table .customer { grid-area: customer; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .orders-table .customer small { display: none; }
+  .orders-table .state { grid-area: state; align-self: center; justify-self: end; }
+  .orders-table .when { grid-area: when; color: var(--muted); font-size: 12.5px; }
+
+  /* the kitchen swipes from one column to the next */
+  .kds {
+    grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: calc(100vw - 48px);
+    scroll-snap-type: x mandatory; margin-inline: -16px; padding: 0 16px 8px; scroll-padding-inline: 16px; scrollbar-width: none;
+  }
+  .kds-col { scroll-snap-align: start; }
+
+  /* "More" */
+  .more-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .more-row {
+    display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px; border: 0; border-bottom: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font: 600 15px var(--font-sans); text-decoration: none; text-align: left;
+  }
+  .more-row:last-child { border-bottom: 0; }
+  .more-row:active { background: var(--surface-2); }
+  .more-row.active { color: var(--brand); }
+  .more-ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
+  .more-label { flex: 1; }
+  .more-row > .icon:last-child { color: var(--faint); }
+  .more-who { display: flex; align-items: center; gap: 12px; padding: 4px 2px; }
+  .more-who small { display: block; color: var(--muted); }
+}
+@keyframes sheetIn { from { transform: translateY(100%); } }
+
+/* fingers, not cursors: a press shows at once and every target is about 44px */
+@media (pointer: coarse) {
+  .btn, .chip, .icon-btn, .menu-card, .table-card, .table-item .add, .more-row { -webkit-tap-highlight-color: transparent; }
+  .btn:active, .chip:active, .icon-btn:active, .table-item .add:active { transform: scale(.96); }
+  .menu-card:active, .table-card:active { transform: scale(.98); }
+  .icon-btn { min-width: 44px; min-height: 44px; }
+  .icon-btn.sm { min-width: 40px; min-height: 40px; }
+  .btn.sm { min-height: 40px; }
+  .stepper button { width: 40px; height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal, .drawer, .order-panel, .tab-ic, .ticket-backdrop { animation: none !important; transition: none !important; }
+}

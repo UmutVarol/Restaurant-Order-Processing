@@ -106,7 +106,7 @@ export default {
       const from = page.page * page.size + 1;
       const to = from + page.content.length - 1;
       mount(tableCard,
-        h('table', { class: 'data-table', style: { opacity: loading ? 0.6 : 1 } },
+        h('table', { class: 'data-table orders-table', style: { opacity: loading ? 0.6 : 1 } },
           h('thead', null, h('tr', null,
             h('th', null, t('orders.col.order')),
             h('th', null, t('orders.col.time')),
@@ -129,8 +129,8 @@ export default {
           h('td', { class: 'customer' }, h('b', null, order.customerName), order.customerPhone ? h('small', null, order.customerPhone) : null),
           h('td', { class: 'hide-sm' }, typeBadge(order)),
           h('td', { class: 'items hide-sm', title: itemsSummary(order) }, itemsSummary(order)),
-          h('td', { class: 'right num', style: { fontWeight: 650 } }, money(order.pricing.total)),
-          h('td', null, statusPill(order.status)))))),
+          h('td', { class: 'right num total', style: { fontWeight: 650 } }, money(order.pricing.total)),
+          h('td', { class: 'state' }, statusPill(order.status)))))),
         h('div', { class: 'pagination' },
           h('span', null, t('orders.range', { from: number(from), to: number(to), total: number(page.totalElements) })),
           h('div', { class: 'row' },

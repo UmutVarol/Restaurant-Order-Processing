@@ -6,7 +6,7 @@ import { icon, logoMark } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { money } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
-import { langButton, openModal, themeButton } from '../core/ui.js';
+import { haptic, langButton, openModal, themeButton } from '../core/ui.js';
 import { chooseOptions, chosen, defaultOptionIds, optionKey, optionsPrice } from './options.js';
 
 const CATEGORIES = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'];
@@ -119,6 +119,7 @@ export function renderTable(root, token) {
     const same = state.cart.find((line) => line.item.id === item.id && optionKey(line.optionIds) === optionKey(ids));
     if (same) same.quantity = Math.min(MAX_QUANTITY, same.quantity + 1);
     else if (state.cart.length < MAX_LINES) state.cart.push({ item, optionIds: ids, quantity: 1 });
+    haptic();
     render();
   }
 
@@ -171,11 +172,13 @@ export function renderTable(root, token) {
         state.sent.push({ id: view.id, view });
         saveSent();
         state.cart = [];
+        haptic('success');
         modal.close();
         render();
         poll();
       } catch (error) {
         send.disabled = false;
+        haptic('error');
         problem.replaceChildren(icon('alert', 'sm'), errorMessage(error));
         problem.hidden = false;
       }

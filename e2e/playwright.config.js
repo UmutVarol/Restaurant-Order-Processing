@@ -20,8 +20,8 @@ module.exports = defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /layout\.spec\.js/ },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: /mobile\.spec\.js/ },
+    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /(layout|mobile)\.spec\.js/ },
   ],
   webServer: {
     // The suite drives a whole service from one address, faster than any till would; lift the per-client budget.

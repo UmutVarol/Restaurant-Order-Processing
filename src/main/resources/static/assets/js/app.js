@@ -1,13 +1,13 @@
 // Sofra web client: boots the session, renders the app shell and routes between screens.
 import { h, initials, mount } from './core/dom.js';
 import { icon, logoMark } from './core/icons.js';
-import { onLangChange, t } from './core/i18n.js';
+import { lang, onLangChange, setLang, t } from './core/i18n.js';
 import { api, clearSession, currentDevice, currentSession, saveSession } from './core/api.js';
 import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { clearOutbox, entries as outboxEntries, flush, isOnline, registerServiceWorker } from './core/offline.js';
 import { time } from './core/format.js';
-import { confirmDialog, langButton, themeButton, toast } from './core/ui.js';
+import { confirmDialog, langButton, openModal, themeButton, toast } from './core/ui.js';
 
 const ALL = ['ADMIN', 'WAITER', 'KITCHEN'];
 const ROUTES = [
@@ -24,11 +24,14 @@ const ROUTES = [
   { id: 'settings', icon: 'settings', roles: ALL, section: null, load: () => import('./views/settings.js') },
 ];
 const HOME = { ADMIN: 'dashboard', WAITER: 'pos', KITCHEN: 'kitchen' };
+// On a phone the screens each role uses all shift sit in the tab bar; the rest are one tap away under "More".
+const TABS = { ADMIN: ['dashboard', 'pos', 'floor', 'orders'], WAITER: ['pos', 'floor', 'orders', 'cashier'], KITCHEN: ['kitchen', 'floor', 'orders'] };
 
 const root = document.getElementById('app');
 let user = null;
 let activeView = null;
 let renderToken = 0;
+let lastRoute = null;
 let kitchenCount = 0;
 let guestCount = 0;
 
@@ -88,6 +91,9 @@ async function render() {
 
   const shell = renderShell(route);
   mount(root, shell.element);
+  // A new screen starts at its top; redrawing the same one (a language switch) keeps the place.
+  if (route.id !== lastRoute) window.scrollTo(0, 0);
+  lastRoute = route.id;
   updateLiveIndicator();
   try {
     const { default: view } = await route.load();
@@ -117,8 +123,25 @@ function renderShell(current) {
       'aria-current': route.id === current.id ? 'page' : false,
       title: t(`nav.${route.id}`),
     }, icon(route.icon), h('span', null, t(`nav.${route.id}`)),
-    route.id === 'kitchen' ? h('span', { class: 'badge', id: 'kitchen-badge', hidden: kitchenCount === 0 }, kitchenCount) : h('kbd', null, `Alt ${index}`));
+    route.id === 'kitchen' ? h('span', { class: 'badge kitchen-badge', hidden: kitchenCount === 0 }, kitchenCount) : h('kbd', null, `Alt ${index}`));
   });
+
+  // the phone's tab bar: a label under every icon, and "More" for the screens that did not fit
+  const tabIds = TABS[user.role].filter((id) => allowedRoutes().some((r) => r.id === id));
+  const moreRoutes = allowedRoutes().filter((r) => !tabIds.includes(r.id));
+  const tabbar = h('nav', { class: 'tabbar', 'aria-label': t('nav.tabs') },
+    tabIds.map((id) => allowedRoutes().find((r) => r.id === id)).map((route) => h('a', {
+      class: ['tab', route.id === current.id ? 'active' : ''], href: `#/${route.id}`, 'data-testid': `tab-${route.id}`,
+      'aria-current': route.id === current.id ? 'page' : false,
+    }, h('span', { class: 'tab-ic' }, icon(route.icon),
+      route.id === 'kitchen' ? h('span', { class: 'badge kitchen-badge', hidden: kitchenCount === 0 }, kitchenCount) : null),
+    h('span', { class: 'tab-label' }, t(`nav.tab.${route.id}`)))),
+    h('button', {
+      class: ['tab', tabIds.includes(current.id) ? '' : 'active'], type: 'button', 'data-testid': 'tab-more', 'aria-haspopup': 'dialog',
+      onclick: () => openMore(moreRoutes, current),
+    }, h('span', { class: 'tab-ic' }, icon('menu'),
+      moreRoutes.some((r) => r.id === 'kitchen') ? h('span', { class: 'badge kitchen-badge', hidden: kitchenCount === 0 }, kitchenCount) : null),
+    h('span', { class: 'tab-label' }, t('nav.more'))));
 
   const sections = ['service', 'manage'].filter((section) => allowedRoutes().some((r) => r.section === section));
   const sidebar = h('aside', { class: 'sidebar' },
@@ -163,7 +186,7 @@ function renderShell(current) {
       themeButton()));
 
   const skip = h('a', { class: 'skip-link', href: '#view', onclick: (event) => { event.preventDefault(); content.focus(); } }, t('common.skip'));
-  const element = h('div', { class: 'shell' }, skip, sidebar, h('main', { class: 'main' }, topbar, content));
+  const element = h('div', { class: 'shell' }, skip, sidebar, h('main', { class: 'main' }, topbar, content), tabbar);
   return {
     element,
     content,
@@ -174,6 +197,30 @@ function renderShell(current) {
       document.title = `${text} · Sofra`;
     },
   };
+}
+
+/** The phone's "More" sheet: the screens not in the tab bar, settings, language, theme and signing out. */
+function openMore(routes, current) {
+  const row = (iconName, label, attrs) => h(attrs.href ? 'a' : 'button', { class: 'more-row', type: attrs.href ? null : 'button', ...attrs },
+    h('span', { class: 'more-ic' }, icon(iconName, 'sm')), h('span', { class: 'more-label' }, label), icon('chevronRight', 'sm'));
+  const modal = openModal({
+    title: t('nav.more'),
+    body: [
+      h('div', { class: 'more-list' }, routes.filter((r) => r.id !== 'settings').map((route) => row(route.icon, t(`nav.${route.id}`), {
+        href: `#/${route.id}`, 'data-testid': `more-${route.id}`, class: ['more-row', route.id === current.id ? 'active' : ''],
+        onclick: () => modal.close(),
+      }))),
+      h('div', { class: 'more-list' },
+        row('settings', t('nav.settings'), { href: '#/settings', 'data-testid': 'more-settings', onclick: () => modal.close() }),
+        row('globe', t('more.language', { lang: lang() === 'tr' ? 'English' : 'Türkçe' }), { onclick: () => { modal.close(); setLang(lang() === 'tr' ? 'en' : 'tr'); } }),
+        row(prefs.theme === 'dark' ? 'sun' : 'moon', t(prefs.theme === 'dark' ? 'more.light' : 'more.dark'), { onclick: () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; modal.close(); } }),
+        currentDevice()
+          ? row('switchUser', t('lock.switch'), { 'data-testid': 'more-switch-user', onclick: () => { modal.close(); signOut(); } })
+          : row('logout', t('action.logout'), { 'data-testid': 'more-logout', onclick: () => { modal.close(); logOut(); } })),
+      h('div', { class: 'more-who' }, h('div', { class: 'avatar' }, initials(user.displayName)),
+        h('div', null, h('b', null, user.displayName), h('small', null, t(`role.${user.role}`)))),
+    ],
+  });
 }
 
 function updateLiveIndicator() {
@@ -259,11 +306,10 @@ async function refreshKitchenBadge() {
   try {
     const active = await api.activeOrders();
     kitchenCount = active.filter((o) => ['PENDING', 'PREPARING', 'READY'].includes(o.status)).length;
-    const badge = document.getElementById('kitchen-badge');
-    if (badge) {
+    document.querySelectorAll('.kitchen-badge').forEach((badge) => {
       badge.textContent = kitchenCount;
       badge.hidden = kitchenCount === 0;
-    }
+    });
   } catch { /* badge is best effort */ }
 }
 
