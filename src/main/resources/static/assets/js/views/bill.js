@@ -2,7 +2,7 @@
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { locale, t } from '../core/i18n.js';
-import { dateTime, money, time } from '../core/format.js';
+import { dateTime, money, percent, time } from '../core/format.js';
 import { api, ApiError, errorMessage, newIdempotencyKey } from '../core/api.js';
 import { isOnline } from '../core/offline.js';
 import { bus } from '../core/store.js';
@@ -204,7 +204,7 @@ export function openBill(ref, user) {
     const tipChips = h('div', { class: 'chips' }, TIP_RATES.map((rate) => h('button', {
       class: ['chip', state.tip === '' && state.tipRate === rate ? 'active' : ''],
       onclick: () => { state.tipRate = rate; state.tip = ''; render(); },
-    }, rate === 0 ? t('bill.noTip') : `%${Math.round(rate * 100)}`)),
+    }, rate === 0 ? t('bill.noTip') : percent(rate))),
     h('input', {
       class: 'input sm tip-input', inputmode: 'decimal', placeholder: t('bill.otherTip'), value: state.tip === '' ? '' : typed(parseCents(state.tip)), 'aria-label': t('bill.otherTip'),
       onchange: (event) => { state.tip = event.target.value.trim() ? lira(parseCents(event.target.value)) : ''; render(); },

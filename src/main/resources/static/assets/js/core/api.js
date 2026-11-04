@@ -264,6 +264,10 @@ export const api = {
   // Guests paying from their phone: no session, the link token is the permission.
   publicBill: (token) => request('GET', `/public/pay/${encodeURIComponent(token)}`, undefined, { auth: false }),
   publicCheckout: (token, body) => request('POST', `/public/pay/${encodeURIComponent(token)}/checkout`, body, { auth: false }),
+  guestInvoice: (token) => request('GET', `/public/pay/${encodeURIComponent(token)}/invoice`, undefined, { auth: false }),
+  requestGuestInvoice: (token, body) => request('POST', `/public/pay/${encodeURIComponent(token)}/invoice`, body, { auth: false }),
+  tableBill: (token) => request('GET', `/public/table/${encodeURIComponent(token)}/bill`, undefined, { auth: false }),
+  openTableBill: (token) => request('POST', `/public/table/${encodeURIComponent(token)}/bill`, undefined, { auth: false }),
   // Guests ordering from their table's QR code.
   publicTable: (token) => request('GET', `/public/table/${encodeURIComponent(token)}`, undefined, { auth: false }),
   guestOrder: (token, cart) => request('POST', `/public/table/${encodeURIComponent(token)}/orders`, cart, { auth: false }),

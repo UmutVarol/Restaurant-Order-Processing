@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> {
 
     Optional<PaymentLink> findByTokenHash(String tokenHash);
+
+    long countByBillIdAndCreatedBy(Long billId, String createdBy);
 }

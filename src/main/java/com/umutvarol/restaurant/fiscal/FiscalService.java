@@ -5,6 +5,7 @@ import com.umutvarol.restaurant.common.error.DomainException;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.fiscal.dto.FiscalDocumentResponse;
+import com.umutvarol.restaurant.fiscal.dto.GuestInvoiceResponse;
 import com.umutvarol.restaurant.fiscal.dto.InvoiceRequest;
 import com.umutvarol.restaurant.fiscal.dto.ZReportResponse;
 import com.umutvarol.restaurant.order.Order;
@@ -182,6 +183,33 @@ public class FiscalService {
         audit.info("fiscal.invoice-requested id={} bill={}", id, billId);
         attempt(id);
         return tx.execute(status -> response(documents.findById(id).orElseThrow()));
+    }
+
+    /** What a guest paying from their phone sees of the bill's invoice. */
+    public GuestInvoiceResponse guestInvoice(Long billId) {
+        boolean available = devices.device(FiscalKind.E_ARSIV).isPresent();
+        return tx.execute(status -> documents.findByBillId(billId)
+                .filter(document -> document.getBuyerName() != null)
+                .map(document -> new GuestInvoiceResponse(available, document.getBuyerName(), document.getStatus()))
+                .orElseGet(() -> new GuestInvoiceResponse(available, null, null)));
+    }
+
+    /**
+     * A guest asks for the invoice from their own phone. Unlike at the till, details given once cannot be changed
+     * from a phone: whoever holds the payment link could otherwise put the table's invoice in another name.
+     *
+     * @throws InvalidStateException {@code INVOICE_ALREADY_REQUESTED} when someone already gave invoice details
+     */
+    public GuestInvoiceResponse requestInvoiceAsGuest(Long billId, InvoiceRequest request) {
+        boolean taken = Boolean.TRUE.equals(tx.execute(status -> documents.findByBillId(billId)
+                .map(document -> document.getBuyerName() != null).orElse(false)));
+        if (taken) {
+            throw new InvalidStateException("INVOICE_ALREADY_REQUESTED",
+                    "Invoice details were already given for this bill; ask your waiter to change them", Map.of());
+        }
+        requestInvoice(billId, request);
+        audit.info("fiscal.invoice-requested-by-guest bill={}", billId);
+        return guestInvoice(billId);
     }
 
     /** Tries a document that failed again, now. */

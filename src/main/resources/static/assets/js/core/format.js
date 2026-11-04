@@ -32,8 +32,8 @@ export function number(value, digits = 0) {
   return new Intl.NumberFormat(locale(), { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(value ?? 0);
 }
 
-export function percent(value) {
-  return new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(value ?? 0);
+export function percent(value, digits = 0) {
+  return new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: digits }).format(value ?? 0);
 }
 
 let timeFormatter = null;

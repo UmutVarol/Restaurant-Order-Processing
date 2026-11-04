@@ -2,7 +2,7 @@
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
-import { money, number } from '../core/format.js';
+import { money, number, percent } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
@@ -82,7 +82,7 @@ export default {
       if (!cost) return h('span', { class: 'faint' }, '—');
       const share = Number(cost.foodCostPercent);
       return h('span', { class: ['food-cost', share >= FOOD_COST_HIGH ? 'high' : share >= FOOD_COST_WARN ? 'mid' : ''], 'data-testid': 'food-cost' },
-        h('b', null, `%${number(share, 1)}`), h('small', { class: 'faint' }, money(cost.cost)));
+        h('b', null, percent(share / 100, 1)), h('small', { class: 'faint' }, money(cost.cost)));
     }
 
     // ------------------------------------------------------------------ recipes

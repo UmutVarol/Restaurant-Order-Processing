@@ -18,6 +18,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -78,6 +79,11 @@ public class BillService implements SettlementPolicy {
     /** The bill an order is on, opening one if it has none yet. */
     public Bill billFor(Order order) {
         return bills.findByOrderId(order.getId()).orElseGet(() -> attach(order, clock.instant()));
+    }
+
+    /** The open bill of a table, if guests are seated there with something on it. */
+    Optional<Bill> openBillAt(Long tableId) {
+        return bills.findFirstByTableIdAndStatusOrderByOpenedAtDesc(tableId, BillStatus.OPEN).filter(Bill::hasActiveOrders);
     }
 
     Bill billForOrder(Long orderId) {

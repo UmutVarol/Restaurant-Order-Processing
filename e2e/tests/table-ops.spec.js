@@ -53,7 +53,7 @@ test('a waiter voids, comps with a manager PIN, discounts and moves a table', as
 
   // a 10% discount; the manager's name is remembered
   await drawer.getByTestId('discount-order').click();
-  await modal.getByRole('button', { name: '%10' }).click();
+  await modal.getByRole('button', { name: '10%' }).click();
   await modal.getByRole('button', { name: 'Regular guest' }).click();
   await expect(modal.getByLabel('Manager username')).toHaveValue('admin');
   await modal.getByLabel('Manager PIN').fill('2468');

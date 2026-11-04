@@ -229,7 +229,11 @@ public class GuestService {
         return new TableQrResponse(table.getId(), table.getCode(), token, now);
     }
 
-    private DiningTable tableFor(String token) {
+    /**
+     * The table behind a QR code. The code is the guest's permission for what they do at that table, here and in
+     * other features (paying the table's bill).
+     */
+    public DiningTable tableFor(String token) {
         if (token == null || token.length() < 20 || token.length() > 100) {
             throw new ResourceNotFoundException("table", "?");
         }

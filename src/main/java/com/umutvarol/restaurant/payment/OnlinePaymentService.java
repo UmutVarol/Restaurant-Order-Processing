@@ -8,12 +8,14 @@ import com.umutvarol.restaurant.common.error.UpstreamServiceException;
 import com.umutvarol.restaurant.common.money.Money;
 import com.umutvarol.restaurant.order.Order;
 import com.umutvarol.restaurant.order.OrderStatus;
+import com.umutvarol.restaurant.table.DiningTable;
 import com.umutvarol.restaurant.payment.dto.CheckoutResponse;
 import com.umutvarol.restaurant.payment.dto.PaymentLinkResponse;
 import com.umutvarol.restaurant.payment.dto.PublicBillResponse;
 import com.umutvarol.restaurant.payment.dto.PublicBillResponse.LastPayment;
 import com.umutvarol.restaurant.payment.dto.PublicBillResponse.Line;
 import com.umutvarol.restaurant.payment.dto.PublicCheckoutRequest;
+import com.umutvarol.restaurant.payment.dto.TableBillResponse;
 import com.umutvarol.restaurant.payment.gateway.OnlinePaymentGateway;
 import com.umutvarol.restaurant.payment.gateway.OnlinePaymentGateway.CheckoutOutcome;
 import com.umutvarol.restaurant.payment.gateway.OnlinePaymentGateway.CheckoutRequest;
@@ -134,6 +136,57 @@ public class OnlinePaymentService {
         PaymentLink link = links.save(new PaymentLink(bill, hash(token), share, now.plus(properties.linkTtl()), now, actor));
         audit.linkCreated(link, actor);
         return new PaymentLinkResponse(token, baseUrl + "/#/pay/" + token, share, link.getExpiresAt());
+    }
+
+    // ------------------------------------------------------------------------------------------- tables
+
+    /** Who opens a bill from the table's own QR code, in the audit trail and on the link. */
+    static final String TABLE_QR_ACTOR = "table-qr";
+    /**
+     * How many links guests can open on one bill from the table's QR code. A phone keeps the link it opened, so a
+     * table of guests needs a handful; the cap only stops a script from filling the table with links.
+     */
+    static final int TABLE_LINKS_PER_BILL = 24;
+
+    /** What the table owes; nothing is created. */
+    @Transactional(readOnly = true)
+    public TableBillResponse tableBill(DiningTable table) {
+        Bill bill = billService.openBillAt(table.getId()).orElse(null);
+        BigDecimal due = bill == null ? Money.ZERO : bill.available().max(Money.ZERO);
+        String reason = !online.enabled() ? "DISABLED" : due.signum() <= 0 ? "NOTHING_DUE" : null;
+        return new TableBillResponse(reason == null, reason, bill == null ? Money.ZERO : bill.total(), due);
+    }
+
+    /**
+     * A guest opens the table's bill from its QR code, to pay it without waiting for a waiter: a payment link for
+     * whatever is due, as a waiter would show.
+     */
+    @Transactional
+    public PaymentLinkResponse openForTable(DiningTable table, String baseUrl) {
+        online.require();
+        Bill bill = billService.openBillAt(table.getId())
+                .filter(open -> open.available().signum() > 0)
+                .orElseThrow(() -> new BusinessRuleException("TABLE_NOTHING_DUE", "Nothing is waiting to be paid at this table"));
+        if (links.countByBillIdAndCreatedBy(bill.getId(), TABLE_QR_ACTOR) >= TABLE_LINKS_PER_BILL) {
+            audit.suspicious("table_links_exhausted", "bill " + bill.getId());
+            throw new BusinessRuleException("TABLE_LINKS_EXHAUSTED", "Ask your waiter for the bill");
+        }
+        return createLink(bill.getId(), null, baseUrl, TABLE_QR_ACTOR);
+    }
+
+    /**
+     * The bill a payment link is for, so that a guest can ask for things on it, such as an invoice.
+     *
+     * @param usable whether the link must still be usable to pay; a paid bill's link may still be read
+     */
+    @Transactional(readOnly = true)
+    public Long billOfLink(String token, boolean usable) {
+        PaymentLink link = findLink(token);
+        if (usable && !link.isUsable(clock.instant())) {
+            throw new BusinessRuleException("PAYMENT_LINK_EXPIRED",
+                    "This payment link can no longer be used. Ask your waiter for a new one.");
+        }
+        return link.getBill().getId();
     }
 
     // ------------------------------------------------------------------------------------------- guests

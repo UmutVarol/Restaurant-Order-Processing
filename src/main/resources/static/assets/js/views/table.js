@@ -8,16 +8,20 @@ import { money } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { haptic, langButton, openModal, themeButton } from '../core/ui.js';
 import { chooseOptions, chosen, defaultOptionIds, optionKey, optionsPrice } from './options.js';
+import { rememberTable } from './pay.js';
 
 const CATEGORIES = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'];
 const POLL_MS = 5000;
+/** How often the table's bill is looked at again while nothing else is waiting. */
+const BILL_POLL_MS = 20000;
 const MAX_LINES = 20;
 const MAX_QUANTITY = 20;
 
 /** Renders the table page into {@code root}. Returns a cleanup function. */
 export function renderTable(root, token) {
   const sentKey = `sofra.table.${token.slice(0, 12)}`;
-  const state = { table: null, menu: null, error: null, category: 'ALL', cart: [], sent: readSent(), calls: new Set(), busy: false };
+  const payKey = `sofra.table.pay.${token.slice(0, 12)}`;
+  const state = { table: null, menu: null, error: null, category: 'ALL', cart: [], sent: readSent(), calls: new Set(), busy: false, bill: null };
   let timer = null;
   let stopped = false;
 
@@ -54,7 +58,11 @@ export function renderTable(root, token) {
           h('h1', { class: 'guest-title' }, t('guest.table', { table: state.table.tableCode }))),
         h('div', { class: 'table-calls' },
           callButton('CALL_WAITER', 'bell'),
-          callButton('REQUEST_BILL', 'receipt'))),
+          callButton('REQUEST_BILL', 'receipt')),
+        state.bill?.payable ? h('div', { class: 'table-pay' },
+          h('button', { class: 'btn primary lg block', 'data-testid': 'pay-bill', disabled: state.busy, onclick: payBill },
+            icon('card', 'sm'), t('table.payBill', { amount: money(state.bill.due) })),
+          h('small', { class: 'faint' }, t('table.payHint'))) : null),
       state.sent.map(sentCard),
       h('div', { class: 'chips table-cats', role: 'tablist' }, ['ALL', ...CATEGORIES].map((category) => h('button', {
         class: ['chip', state.category === category ? 'active' : ''], role: 'tab', 'aria-selected': String(state.category === category),
@@ -199,6 +207,31 @@ export function renderTable(root, token) {
     }
   }
 
+  /**
+   * Opens the table's bill on this phone. The link this phone opened before is used again while it can still be
+   * paid, so pressing twice does not leave links behind.
+   */
+  async function payBill() {
+    state.busy = true;
+    render();
+    try {
+      let link = null;
+      try { link = sessionStorage.getItem(payKey); } catch { /* private mode */ }
+      if (link && !(await api.publicBill(link).then((bill) => bill.payable, () => false))) link = null;
+      if (!link) {
+        ({ token: link } = await api.openTableBill(token));
+        try { sessionStorage.setItem(payKey, link); } catch { /* private mode */ }
+      }
+      rememberTable(link, token);
+      haptic();
+      location.hash = `/pay/${link}`;
+    } catch (error) {
+      state.busy = false;
+      render();
+      showProblem(error);
+    }
+  }
+
   function showProblem(error) {
     openModal({ title: t('table.problem'), size: 'sm', body: h('p', null, errorMessage(error)),
       footer: (handle) => [h('button', { class: 'btn primary', onclick: handle.close }, t('common.close'))] });
@@ -213,12 +246,16 @@ export function renderTable(root, token) {
       try { sent.view = await api.guestRequest(token, sent.id); } catch { /* try again next time */ }
     }
     try {
-      state.table = await api.publicTable(token);
-      state.calls = new Set(state.table.openCalls);
+      const [table, bill] = await Promise.all([api.publicTable(token), api.tableBill(token).catch(() => state.bill)]);
+      state.table = table;
+      state.bill = bill;
+      state.calls = new Set(table.openCalls);
     } catch { /* keep what we have */ }
     saveSent();
+    if (stopped) return;
     render();
-    if (state.sent.some((sent) => sent.view.status === 'OPEN') || state.calls.size) timer = setTimeout(poll, POLL_MS);
+    const waiting = state.sent.some((sent) => sent.view.status === 'OPEN') || state.calls.size;
+    timer = setTimeout(poll, waiting ? POLL_MS : BILL_POLL_MS);
   }
 
   async function load() {

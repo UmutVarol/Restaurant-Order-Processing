@@ -1107,6 +1107,16 @@
 
   const maskTaxId = (v) => (v ? '•'.repeat(v.length - 3) + v.slice(-3) : null);
 
+  function guestInvoice(billId) {
+    const doc = fiscalState().documents.find((d) => d.billId === billId && d.buyerName);
+    return { available: true, name: doc ? doc.buyerName : null, status: doc ? doc.status : null };
+  }
+
+  /** The open bill of a table with guests still at it. */
+  function tableBill(table) {
+    return state.bills.filter((b) => b.status === 'OPEN' && b.table && b.table.id === table.id && hasActive(b)).pop() || null;
+  }
+
   function fiscalView(d) {
     return {
       id: d.id, billId: d.billId, kind: d.kind, status: d.status, provider: d.status === 'ISSUED' ? 'SIMULATED' : null, reference: d.reference,
@@ -2063,6 +2073,25 @@
       return { restaurant: 'Sofra Bistro', tableCode: table.code, mode: serviceSettings().mode,
         openCalls: ['CALL_WAITER', 'REQUEST_BILL'].filter((kind) => guestRequests().some((r) => r.tableId === table.id && r.kind === kind && r.status === 'OPEN')) };
     }],
+    // Guests open their table's bill from its QR code, without waiting for a waiter's link.
+    ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})\/bill$/, 'public', ({ params }) => {
+      const bill = tableBill(tableForToken(params[0]));
+      const m = bill ? money(bill) : { total: 0, available: 0 };
+      return { payable: m.available > 0, reason: m.available > 0 ? null : 'NOTHING_DUE', total: toLira(m.total), due: toLira(m.available) };
+    }],
+    ['POST', /^public\/table\/([A-Za-z0-9_-]{20,100})\/bill$/, 'public', ({ params }) => {
+      const bill = tableBill(tableForToken(params[0]));
+      if (!bill || money(bill).available <= 0) throw new Problem(422, 'TABLE_NOTHING_DUE', 'Nothing is waiting to be paid at this table');
+      if (state.links.filter((l) => l.billId === bill.id && l.createdBy === 'table-qr').length >= 24) {
+        throw new Problem(422, 'TABLE_LINKS_EXHAUSTED', 'Ask your waiter for the bill');
+      }
+      const link = { token: newToken(), billId: bill.id, amountC: null, expiresAt: Date.now() + linkTtl(), createdBy: 'table-qr' };
+      state.links.push(link);
+      save();
+      channel?.postMessage({ type: 'payments', event: { kind: 'BILL', billId: bill.id }, payments: { links: state.links } });
+      const base = `${location.origin}${location.pathname}${location.search}`;
+      return [201, { token: link.token, url: `${base}#/pay/${link.token}`, amount: null, expiresAt: iso(link.expiresAt) }];
+    }],
     ['POST', /^public\/table\/([A-Za-z0-9_-]{20,100})\/orders$/, 'public', ({ params }, body) => {
       const table = tableForToken(params[0]);
       requireFields({ items: !(body.items || []).length || body.items.length > 20 ? 'size must be between 1 and 20' : null });
@@ -2232,6 +2261,29 @@
       if (bill.status === 'CLOSED') issueFiscal(bill);
       save();
       return fiscalView(doc);
+    }],
+    // A guest paying from their phone gives their invoice details there; once per bill.
+    ['GET', /^public\/pay\/([A-Za-z0-9_-]+)\/invoice$/, 'public', ({ params }) => guestInvoice(findLink(params[0]).billId)],
+    ['POST', /^public\/pay\/([A-Za-z0-9_-]+)\/invoice$/, 'public', ({ params }, body) => {
+      const link = findLink(params[0]);
+      const bill = findBill(link.billId);
+      if (bill.status !== 'OPEN' || Date.now() > link.expiresAt) throw new Problem(422, 'PAYMENT_LINK_EXPIRED', 'This payment link can no longer be used.');
+      const taxId = String(body.taxId ?? '').trim();
+      requireFields({ name: blank(body.name) ? 'must not be blank' : null, taxId: blank(taxId) ? 'must not be blank' : null });
+      if (!(taxId.length === 10 ? isVkn(taxId) : taxId.length === 11 && isTckn(taxId))) {
+        throw new Problem(422, 'TAX_ID_INVALID', 'Enter a valid VKN (10 digits) or TCKN (11 digits)');
+      }
+      const data = fiscalState();
+      let doc = data.documents.find((d) => d.billId === bill.id);
+      if (doc?.buyerName) throw new Problem(409, 'INVOICE_ALREADY_REQUESTED', 'Invoice details were already given for this bill');
+      if (doc && doc.status !== 'WAITING') throw new Problem(409, 'FISCAL_ALREADY_ISSUED', 'This bill already has its legal document', { parameters: { billId: bill.id } });
+      if (!doc) {
+        doc = { id: data.nextId++, billId: bill.id, status: 'WAITING', createdAt: Date.now(), attempts: 0 };
+        data.documents.push(doc);
+      }
+      Object.assign(doc, { kind: 'E_ARSIV', buyerName: String(body.name).trim(), buyerTaxId: taxId, buyerAddress: clean(body.address) });
+      save();
+      return guestInvoice(bill.id);
     }],
     ['POST', /^fiscal\/documents\/(\d+)\/retry$/, 'till', ({ params }) => {
       const doc = fiscalState().documents.find((d) => d.id === Number(params[0]));

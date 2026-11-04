@@ -3,7 +3,7 @@
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
-import { money } from '../core/format.js';
+import { money, percent } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { openModal, toast } from '../core/ui.js';
 
@@ -56,7 +56,7 @@ export function discountOrder(order, user) {
     }, t(`adjust.${m}`))));
     mount(chips, mode === 'percent' ? [5, 10, 15, 20].map((p) => h('button', {
       type: 'button', class: ['chip', value.value === String(p) ? 'active' : ''], onclick: () => { value.value = String(p); renderMode(); },
-    }, `%${p}`)) : null);
+    }, percent(p / 100))) : null);
   };
   value.addEventListener('input', renderMode);
   renderMode();
