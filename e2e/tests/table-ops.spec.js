@@ -26,7 +26,7 @@ test('a waiter voids, comps with a manager PIN, discounts and moves a table', as
   });
 
   await page.goto('/#/floor');
-  await page.locator('.table-card', { hasText: from.code }).click();
+  await page.getByTestId(`table-${from.code}`).click();
   const drawer = page.locator('.drawer');
   await expect(drawer.locator('.line-item')).toContainText('3 × Lahmacun');
 
@@ -63,10 +63,10 @@ test('a waiter voids, comps with a manager PIN, discounts and moves a table', as
 
   // the seating moves to a free table
   await page.getByTestId(`move-${from.code}`).click();
-  await modal.locator('.transfer-picker button', { hasText: to.code }).click();
+  await modal.getByTestId(`pick-${to.code}`).click();
   await modal.getByTestId('transfer-confirm').click();
   await expect(page.locator('.toast', { hasText: `${from.code} moved to ${to.code}` })).toBeVisible();
-  await expect(page.locator('.table-card', { hasText: to.code })).toContainText(guest);
+  await expect(page.getByTestId(`table-${to.code}`)).toContainText(guest);
 
   // leave the table free for the tests that need one
   const moved = (await api(page, 'GET', '/orders/active')).find((o) => o.customerName === guest);

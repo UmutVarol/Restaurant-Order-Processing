@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.floor;
 
+import static org.hamcrest.Matchers.hasItems;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,18 +12,19 @@ import org.junit.jupiter.api.Test;
 
 class FloorApiIntegrationTest extends ApiIntegrationTest {
 
-    private static final String TABLE = "$[?(@.code == 'T4')]";
+    private static final String TABLE = "$[?(@.code == '12')]";
 
     @Test
     void aTableStaysOccupiedUntilTheBillIsClosed() throws Exception {
         mvc.perform(as(WAITER, get("/api/v1/floor/tables")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(12))
+                // the twelve seeded tables, numbered from 1 (other tests may add their own)
+                .andExpect(jsonPath("$[*].code", hasItems("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")))
                 .andExpect(jsonPath(TABLE + ".occupied").value(false));
 
         String created = mvc.perform(json(as(WAITER, post("/api/v1/orders")), """
                         {"type": "DINE_IN", "customerName": "Terrace Guest", "tableId": %d, "paymentMethod": "CASH",
-                         "items": [{"menuItemId": %d, "quantity": 2}]}""".formatted(tableId("T4"), menuItemId("Demlik Çay"))))
+                         "items": [{"menuItemId": %d, "quantity": 2}]}""".formatted(tableId("12"), menuItemId("Demlik Çay"))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         long id = ((Number) JsonPath.read(created, "$.id")).longValue();

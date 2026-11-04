@@ -31,12 +31,12 @@ class OrderTest {
 
     @Test
     void placesAPendingOrderAndRecordsWhoPlacedIt() {
-        Order order = Order.place(dineIn(table(3, "A3")),
+        Order order = Order.place(dineIn(table(3, "3")),
                 List.of(OrderLine.of(adana, 2, "  extra lemon "), OrderLine.of(ayran, 1, " ")),
                 PRICE, PLACED_AT, "waiter");
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
-        assertThat(order.getTable().getCode()).isEqualTo("A3");
+        assertThat(order.getTable().getCode()).isEqualTo("3");
         assertThat(order.itemCount()).isEqualTo(3);
         assertThat(order.getLines()).extracting(OrderLine::getNote).containsExactly("extra lemon", null);
         assertThat(order.getLines()).allSatisfy(line -> assertThat(line.getOrder()).isSameAs(order));
@@ -87,7 +87,7 @@ class OrderTest {
 
     @Test
     void ignoresDetailsThatDoNotApplyToTheOrderType() {
-        OrderDetails takeawayWithTable = new OrderDetails(OrderType.TAKEAWAY, " Can ", " ", table(1, "A1"),
+        OrderDetails takeawayWithTable = new OrderDetails(OrderType.TAKEAWAY, " Can ", " ", table(1, "1"),
                 "Moda Cad.", "", PaymentMethod.CASH, null);
 
         Order order = Order.place(takeawayWithTable, List.of(OrderLine.of(ayran, 1, null)), PRICE, PLACED_AT, "w");
@@ -101,7 +101,7 @@ class OrderTest {
 
     @Test
     void advancesThroughTheDineInLifecycleKeepingAnAuditTrail() {
-        Order order = Order.place(dineIn(table(1, "A1")), List.of(OrderLine.of(adana, 1, null)), PRICE, PLACED_AT, "waiter");
+        Order order = Order.place(dineIn(table(1, "1")), List.of(OrderLine.of(adana, 1, null)), PRICE, PLACED_AT, "waiter");
 
         assertThat(order.advance(PLACED_AT.plus(Duration.ofMinutes(2)), "chef")).isEqualTo(OrderStatus.PREPARING);
         assertThat(order.advance(PLACED_AT.plus(Duration.ofMinutes(20)), "chef")).isEqualTo(OrderStatus.READY);

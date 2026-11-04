@@ -35,15 +35,15 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aTablesRoundsShareOneBillThatCanBeSplitAndClosesWhenPaid() throws Exception {
-        long first = placeDineIn("A1", "Demlik Çay", 2);   // 2 × 45 = 90 + 10 % tax = 99
-        long second = placeDineIn("A1", "Demlik Çay", 1);  // 49.50
+        long first = placeDineIn("1", "Demlik Çay", 2);   // 2 × 45 = 90 + 10 % tax = 99
+        long second = placeDineIn("1", "Demlik Çay", 1);  // 49.50
         long billId = billIdOf(first);
         Assertions.assertThat(billIdOf(second)).isEqualTo(billId);
         serve(first);
         serve(second);
 
         mvc.perform(as(WAITER, get("/api/v1/bills/{id}", billId)))
-                .andExpect(jsonPath("$.table.code").value("A1"))
+                .andExpect(jsonPath("$.table.code").value("1"))
                 .andExpect(jsonPath("$.orders", hasSize(2)))
                 .andExpect(jsonPath("$.total").value(148.50))
                 .andExpect(jsonPath("$.balance").value(148.50));
@@ -71,7 +71,7 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.bill.orders[1].status").value("COMPLETED"));
 
         // The next guests at the table start a new bill.
-        long next = placeDineIn("A1", "Demlik Çay", 1);
+        long next = placeDineIn("1", "Demlik Çay", 1);
         Assertions.assertThat(billIdOf(next)).isNotEqualTo(billId);
     }
 
@@ -195,7 +195,7 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aGuestPaysTheirShareFromTheirPhone() throws Exception {
-        long orderId = placeDineIn("A2", "Demlik Çay", 2);   // 99.00
+        long orderId = placeDineIn("2", "Demlik Çay", 2);   // 99.00
         long billId = billIdOf(orderId);
         serve(orderId);
 
@@ -209,7 +209,7 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
         // No sign-in: the link is the permission. Only what the guest needs is shown.
         mvc.perform(get("/api/v1/public/pay/{token}", token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tableCode").value("A2"))
+                .andExpect(jsonPath("$.tableCode").value("2"))
                 .andExpect(jsonPath("$.due").value(99.00))
                 .andExpect(jsonPath("$.share").value(60.00))
                 .andExpect(jsonPath("$.payable").value(true))

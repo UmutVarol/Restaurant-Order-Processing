@@ -38,7 +38,7 @@ const dictionaries = {
     'login.api': 'Explore the REST API',
     'login.demoMode': 'Demo mode: the API runs inside your browser',
     'login.source': 'Source on GitHub',
-    'login.float1': 'New order · Table A3',
+    'login.float1': 'New order · Table 3',
     'login.float2': 'Ready to serve',
     'login.float3': 'Out for delivery',
 
@@ -1068,7 +1068,7 @@ const dictionaries = {
     'login.api': 'REST API’yi keşfedin',
     'login.demoMode': 'Demo modu: API tarayıcınızın içinde çalışıyor',
     'login.source': 'GitHub’da kaynak kod',
-    'login.float1': 'Yeni sipariş · Masa A3',
+    'login.float1': 'Yeni sipariş · Masa 3',
     'login.float2': 'Servise hazır',
     'login.float3': 'Kurye yolda',
 

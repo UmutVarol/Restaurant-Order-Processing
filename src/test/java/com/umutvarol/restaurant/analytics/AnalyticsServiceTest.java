@@ -58,7 +58,7 @@ class AnalyticsServiceTest {
     void summarisesTheCurrentPeriodAndComparesItWithThePreviousOne() {
         Order today = completed(order(takeaway(), "2026-03-10T09:00:00Z", "100.00"), 12);
         // 01:30 on 10 March in Istanbul, although still 9 March in UTC
-        Order afterMidnight = completed(order(dineIn(table(1, "A1")), "2026-03-09T22:30:00Z", "300.00"), 18);
+        Order afterMidnight = completed(order(dineIn(table(1, "1")), "2026-03-09T22:30:00Z", "300.00"), 18);
         Order cancelled = order(takeaway(), "2026-03-08T10:00:00Z", "999.00");
         cancelled.cancel("guest left", Instant.parse("2026-03-08T10:05:00Z"), "waiter");
         Order lastWeek = completed(order(takeaway(), "2026-03-02T10:00:00Z", "50.00"), 10);

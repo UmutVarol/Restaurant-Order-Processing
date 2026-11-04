@@ -83,7 +83,7 @@ class OrderServiceTest {
     @Test
     void placesAPricedOrderAndAnnouncesIt() {
         when(menuItems.findAllById(anyIterable())).thenReturn(List.of(kebap, tea));
-        when(tables.findById(4L)).thenReturn(Optional.of(table(4, "A4")));
+        when(tables.findById(4L)).thenReturn(Optional.of(table(4, "4")));
         when(orders.save(any(Order.class))).thenAnswer(invocation -> withId(invocation.getArgument(0), 1001L));
 
         OrderResponse response = service.placeOrder(new PlaceOrderRequest(OrderType.DINE_IN, "Ayşe", null, 4L, null,
@@ -91,7 +91,7 @@ class OrderServiceTest {
 
         assertThat(response.id()).isEqualTo(1001L);
         assertThat(response.status()).isEqualTo(OrderStatus.PENDING);
-        assertThat(response.table().code()).isEqualTo("A4");
+        assertThat(response.table().code()).isEqualTo("4");
         assertThat(response.createdAt()).isEqualTo(NOW);
         assertThat(response.createdBy()).isEqualTo("waiter");
         assertThat(response.pricing().subtotal()).isEqualByComparingTo("1130.00");
@@ -101,7 +101,7 @@ class OrderServiceTest {
         verify(events).publishEvent(event.capture());
         assertThat(event.getValue().kind()).isEqualTo(OrderChangedEvent.Kind.CREATED);
         assertThat(event.getValue().orderId()).isEqualTo(1001L);
-        assertThat(event.getValue().tableCode()).isEqualTo("A4");
+        assertThat(event.getValue().tableCode()).isEqualTo("4");
     }
 
     @Test

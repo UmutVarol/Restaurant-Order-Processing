@@ -16,7 +16,7 @@ class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aCartWaitsForAWaiterAndBecomesARealOrder() throws Exception {
-        String table = freeTable();
+        String table = newTable();
         String token = issueQr(table);
         mvc.perform(get("/api/v1/public/table/{token}", token))
                 .andExpect(status().isOk())
@@ -77,7 +77,7 @@ class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void callsFoldIntoTheOneAlreadyWaitingAndARejectedCartTellsTheGuestWhy() throws Exception {
-        String table = freeTable();
+        String table = newTable();
         String token = issueQr(table);
         String first = mvc.perform(json(post("/api/v1/public/table/{token}/calls", token), """
                         {"kind": "CALL_WAITER"}"""))
@@ -114,24 +114,24 @@ class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aReplacedOrMadeUpCodeOpensNothing() throws Exception {
-        String old = issueQr("A2");
-        issueQr("A2");
+        String old = issueQr("2");
+        issueQr("2");
         mvc.perform(get("/api/v1/public/table/{token}", old)).andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/public/table/{token}", "x".repeat(43))).andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/public/table/{token}", "short")).andExpect(status().isBadRequest());
         // another table's token cannot read this table's requests
-        String token = issueQr("A3");
+        String token = issueQr("3");
         String sent = mvc.perform(json(post("/api/v1/public/table/{token}/calls", token), """
                         {"kind": "REQUEST_BILL"}"""))
                 .andReturn().getResponse().getContentAsString();
-        String other = issueQr("T4");
+        String other = issueQr("12");
         mvc.perform(get("/api/v1/public/table/{token}/requests/{id}", other, JsonPath.read(sent, "$.id")))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void onlyManagersIssueCodesAndOnlyTillStaffSeeTheInbox() throws Exception {
-        mvc.perform(as(WAITER, post("/api/v1/tables/{id}/qr", tableId("A1")))).andExpect(status().isForbidden());
+        mvc.perform(as(WAITER, post("/api/v1/tables/{id}/qr", tableId("1")))).andExpect(status().isForbidden());
         mvc.perform(as(CHEF, get("/api/v1/guest-requests"))).andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/guest-requests")).andExpect(status().isUnauthorized());
     }

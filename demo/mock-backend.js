@@ -8,7 +8,7 @@
 (function () {
   'use strict';
 
-  const STORE_KEY = 'sofra.demo.state.v3';
+  const STORE_KEY = 'sofra.demo.state.v4';
   const TAX_RATE_PERCENT = 10;
   const DELIVERY_FEE = 3990;           // in kuruş
   const FREE_DELIVERY_THRESHOLD = 75000;
@@ -64,9 +64,10 @@
     [21, ['Bardak', 1, 1, [['İnce belli', 0], ['Büyük bardak', 15]]]],
   ];
 
-  const TABLES = [['A1', 2, 'INDOOR'], ['A2', 4, 'INDOOR'], ['A3', 4, 'INDOOR'], ['A4', 6, 'INDOOR'], ['A5', 4, 'INDOOR'],
-    ['A6', 8, 'INDOOR'], ['W1', 2, 'WINDOW'], ['W2', 2, 'WINDOW'], ['T1', 4, 'TERRACE'], ['T2', 4, 'TERRACE'],
-    ['T3', 6, 'TERRACE'], ['T4', 2, 'TERRACE']].map(([code, seats, zone], i) => ({ id: i + 1, code, seats, zone }));
+  // numbered from 1, like the V18 migration
+  const TABLES = [[2, 'INDOOR'], [4, 'INDOOR'], [4, 'INDOOR'], [6, 'INDOOR'], [4, 'INDOOR'], [8, 'INDOOR'],
+    [2, 'WINDOW'], [2, 'WINDOW'], [4, 'TERRACE'], [4, 'TERRACE'], [6, 'TERRACE'], [2, 'TERRACE']]
+    .map(([seats, zone], i) => ({ id: i + 1, code: String(i + 1), seats, zone }));
 
   const COUPONS = [
     { code: 'HOSGELDIN', description: 'Welcome offer: 10% off', discountType: 'PERCENTAGE', discountValue: 10, minimumSubtotal: 0, maxDiscount: 150, validUntil: null },

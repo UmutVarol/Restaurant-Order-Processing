@@ -7,7 +7,7 @@ with iyzico.
 
 ```mermaid
 flowchart LR
-    O1[Order #1<br/>table A2] --> B[Bill #5001<br/>table A2]
+    O1[Order #1<br/>table 2] --> B[Bill #5001<br/>table 2]
     O2[Order #2<br/>same table, later round] --> B
     B --> P1[Cash 400 ₺<br/>change 50 ₺]
     B --> P2[Card 300 ₺<br/>approval code]

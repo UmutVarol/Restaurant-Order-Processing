@@ -26,7 +26,7 @@ class TableOperationsApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aWaiterVoidsFreelyBeforeTheKitchenStartsAndNeedsAManagerAfter() throws Exception {
-        String order = placeDineIn("A4", "Lahmacun", 3);
+        String order = placeDineIn("4", "Lahmacun", 3);
         long id = id(order);
         long line = lineId(order);
 
@@ -71,7 +71,7 @@ class TableOperationsApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aCompAndADiscountAreRepricedLikeANewOrder() throws Exception {
-        String order = placeDineIn("A5", "Adana Kebap", 2);
+        String order = placeDineIn("5", "Adana Kebap", 2);
         long id = id(order);
         long line = lineId(order);
 
@@ -114,7 +114,7 @@ class TableOperationsApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aPaidBillCannotBeMadeCheaperWithoutARefund() throws Exception {
-        String order = placeDineIn("A6", "Demlik Çay", 2); // 99.00
+        String order = placeDineIn("6", "Demlik Çay", 2); // 99.00
         long id = id(order);
         long bill = billIdOf(id);
         mvc.perform(json(as(WAITER, post("/api/v1/bills/{id}/payments", bill)), """
@@ -131,29 +131,29 @@ class TableOperationsApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aSeatingMovesToAFreeTableAndMergesIntoAnotherBill() throws Exception {
-        long first = id(placeDineIn("T1", "Lahmacun", 1));
-        long second = id(placeDineIn("T1", "Demlik Çay", 2));
-        long other = id(placeDineIn("T2", "Adana Kebap", 1));
+        long first = id(placeDineIn("9", "Lahmacun", 1));
+        long second = id(placeDineIn("9", "Demlik Çay", 2));
+        long other = id(placeDineIn("10", "Adana Kebap", 1));
         long bill = billIdOf(first);
 
-        mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/move", tableId("T1"))), """
-                        {"tableId": %d}""".formatted(tableId("T2"))))
+        mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/move", tableId("9"))), """
+                        {"tableId": %d}""".formatted(tableId("10"))))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("TABLE_OCCUPIED"));
-        mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/move", tableId("T1"))), """
-                        {"tableId": %d}""".formatted(tableId("T3"))))
+        mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/move", tableId("9"))), """
+                        {"tableId": %d}""".formatted(tableId("11"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(bill))
-                .andExpect(jsonPath("$.table.code").value("T3"));
+                .andExpect(jsonPath("$.table.code").value("11"));
         mvc.perform(as(WAITER, get("/api/v1/orders/{id}", second)))
-                .andExpect(jsonPath("$.table.code").value("T3"))
+                .andExpect(jsonPath("$.table.code").value("11"))
                 .andExpect(jsonPath("$.adjustments[0].kind").value("MOVE"))
-                .andExpect(jsonPath("$.adjustments[0].detail").value("T1 → T3"));
+                .andExpect(jsonPath("$.adjustments[0].detail").value("9 → 11"));
 
-        // T2 joins T3's bill: one bill, three orders; T2's own bill is void
+        // 10 joins 11's bill: one bill, three orders; 10's own bill is void
         long otherBill = billIdOf(other);
-        String merged = mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/merge", tableId("T2"))), """
-                        {"tableId": %d}""".formatted(tableId("T3"))))
+        String merged = mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/merge", tableId("10"))), """
+                        {"tableId": %d}""".formatted(tableId("11"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(bill))
                 .andExpect(jsonPath("$.orders.length()").value(3))
@@ -162,27 +162,27 @@ class TableOperationsApiIntegrationTest extends ApiIntegrationTest {
         mvc.perform(as(WAITER, get("/api/v1/bills/{id}", otherBill)))
                 .andExpect(jsonPath("$.status").value("VOID"));
         mvc.perform(as(WAITER, get("/api/v1/orders/{id}", other)))
-                .andExpect(jsonPath("$.table.code").value("T3"));
+                .andExpect(jsonPath("$.table.code").value("11"));
 
-        // nobody left at T1 or T2
-        mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/move", tableId("T1"))), """
-                        {"tableId": %d}""".formatted(tableId("T2"))))
+        // nobody left at 9 or 10
+        mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/move", tableId("9"))), """
+                        {"tableId": %d}""".formatted(tableId("10"))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("TABLE_NOT_SEATED"));
-        mvc.perform(json(as(CHEF, post("/api/v1/tables/{id}/move", tableId("T3"))), """
-                        {"tableId": %d}""".formatted(tableId("T1"))))
+        mvc.perform(json(as(CHEF, post("/api/v1/tables/{id}/move", tableId("11"))), """
+                        {"tableId": %d}""".formatted(tableId("9"))))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void aBillThatTookMoneyIsNotMerged() throws Exception {
-        long paidOrder = id(placeDineIn("W2", "Demlik Çay", 1));
-        id(placeDineIn("A3", "Demlik Çay", 1));
+        long paidOrder = id(placeDineIn("8", "Demlik Çay", 1));
+        id(placeDineIn("3", "Demlik Çay", 1));
         mvc.perform(json(as(WAITER, post("/api/v1/bills/{id}/payments", billIdOf(paidOrder))), """
                         {"method": "CASH", "amount": 20, "tendered": 20}"""))
                 .andExpect(status().isCreated());
-        mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/merge", tableId("W2"))), """
-                        {"tableId": %d}""".formatted(tableId("A3"))))
+        mvc.perform(json(as(WAITER, post("/api/v1/tables/{id}/merge", tableId("8"))), """
+                        {"tableId": %d}""".formatted(tableId("3"))))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("MERGE_SOURCE_HAS_PAYMENTS"));
     }

@@ -57,7 +57,7 @@ test('a guest orders from the table QR code and a waiter accepts it', async ({ p
   await cart.getByTestId('inbox-accept').click();
   await expect(page.locator('.toast', { hasText: 'sent to the kitchen' })).toBeVisible();
   await page.locator('.drawer').last().getByRole('button', { name: 'Close' }).first().click();
-  const call = page.locator('.drawer [data-testid="inbox-CALL_WAITER"]', { hasText: table.code });
+  const call = page.locator('.drawer [data-testid="inbox-CALL_WAITER"]', { hasText: `Table ${table.code} ·` });
   await call.getByTestId('inbox-done').click();
 
   // the guest sees it went through

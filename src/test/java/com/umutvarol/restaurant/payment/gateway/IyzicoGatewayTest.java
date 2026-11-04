@@ -181,7 +181,7 @@ class IyzicoGatewayTest {
     }
 
     private static CheckoutRequest request() {
-        return new CheckoutRequest("sofra-p7", "B5001", new BigDecimal("165"), "Sofra Bistro - A1",
+        return new CheckoutRequest("sofra-p7", "B5001", new BigDecimal("165"), "Sofra Bistro - 1",
                 "https://sofra.example/api/v1/payments/callback/iyzico?link=abc", "Elif Doğan", null, "203.0.113.9");
     }
 

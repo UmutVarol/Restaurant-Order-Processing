@@ -49,7 +49,7 @@ export default {
       const order = table.openOrders[0];
       const served = table.occupied && table.openOrders.every((o) => o.status === 'SERVED');
       const card = h('button', {
-        class: ['table-card', table.occupied ? 'occupied' : '', served ? 'attention' : ''],
+        class: ['table-card', table.occupied ? 'occupied' : '', served ? 'attention' : ''], 'data-testid': `table-${table.code}`,
         onclick: () => {
           if (order) openOrderDrawer(order.id, user);
           else if (canTakeOrders(user)) navigate('pos', { table: table.id });
@@ -82,7 +82,7 @@ export default {
       const confirm = h('button', { class: 'btn primary', disabled: true, 'data-testid': 'transfer-confirm' }, icon('check', 'sm'), t(`floor.${kind}Confirm`));
       const list = h('div', { class: 'table-picker transfer-picker' });
       const render = () => mount(list, options.length ? options.map((table) => h('button', {
-        type: 'button', class: picked === table ? 'active' : '', 'aria-pressed': String(picked === table),
+        type: 'button', class: picked === table ? 'active' : '', 'aria-pressed': String(picked === table), 'data-testid': `pick-${table.code}`,
         onclick: () => { picked = table; confirm.disabled = false; render(); },
       }, table.code, h('small', null, kind === 'move' ? tn('floor.seats', table.seats) : money(table.openTotal))))
         : h('p', { class: 'muted' }, t(`floor.${kind}None`)));

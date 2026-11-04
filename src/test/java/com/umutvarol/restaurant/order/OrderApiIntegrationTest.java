@@ -28,13 +28,13 @@ class OrderApiIntegrationTest extends ApiIntegrationTest {
                          "couponCode": "hosgeldin", "note": "Anniversary",
                          "items": [{"menuItemId": %d, "quantity": 2, "note": "extra yogurt"},
                                    {"menuItemId": %d, "quantity": 1}]}
-                        """.formatted(tableId("W1"), menuItemId("İskender"), menuItemId("Künefe"))))
+                        """.formatted(tableId("7"), menuItemId("İskender"), menuItemId("Künefe"))))
                 .andExpect(status().isCreated())
                 .andExpect(header().string(HttpHeaders.LOCATION, matchesPattern(".*/api/v1/orders/\\d+")))
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.nextStatus").value("PREPARING"))
                 .andExpect(jsonPath("$.cancellable").value(true))
-                .andExpect(jsonPath("$.table.code").value("W1"))
+                .andExpect(jsonPath("$.table.code").value("7"))
                 .andExpect(jsonPath("$.couponCode").value("HOSGELDIN"))
                 .andExpect(jsonPath("$.itemCount").value(3))
                 .andExpect(jsonPath("$.lines[0].name").value("İskender"))

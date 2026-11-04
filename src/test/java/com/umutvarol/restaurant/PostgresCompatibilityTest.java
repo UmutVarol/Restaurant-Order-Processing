@@ -80,6 +80,6 @@ class PostgresCompatibilityTest {
                 .andExpect(jsonPath("$.pricing.total").value(517.00));
         mvc.perform(get("/api/v1/floor/tables").header(HttpHeaders.AUTHORIZATION, adminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].code", hasItem("T4")));
+                .andExpect(jsonPath("$[*].code", hasItem("12")));
     }
 }

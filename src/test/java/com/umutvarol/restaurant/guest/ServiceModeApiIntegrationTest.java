@@ -15,9 +15,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * The service mode decides which carts from a table go straight to the kitchen. Each cart comes from a free table of
- * its own (the pause between carts is per table), and each test leaves its tables free and the settings as it found
- * them: the context is shared.
+ * The service mode decides which carts from a table go straight to the kitchen. Each cart comes from a new table of
+ * its own (the pause between carts is per table), and each test leaves the settings as it found them: the context is
+ * shared.
  */
 class ServiceModeApiIntegrationTest extends ApiIntegrationTest {
 
@@ -54,13 +54,13 @@ class ServiceModeApiIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.mode").value("QR_FIRST"))
                 .andExpect(jsonPath("$.updatedBy").value("admin"));
         // the guest's phone learns the mode with the table
-        mvc.perform(get("/api/v1/public/table/{token}", issueQr(freeTable())))
+        mvc.perform(get("/api/v1/public/table/{token}", issueQr(newTable())))
                 .andExpect(jsonPath("$.mode").value("QR_FIRST"));
     }
 
     @Test
     void aCartFromASeatedTableGoesStraightToTheKitchenAndALargeOneWaits() throws Exception {
-        String seated = freeTable();
+        String seated = newTable();
         seat(seated);
         String sent = sendCart(issueQr(seated), "Ayran", 2);
         assertThat((String) JsonPath.read(sent, "$.status")).isEqualTo("ACCEPTED");
@@ -74,7 +74,7 @@ class ServiceModeApiIntegrationTest extends ApiIntegrationTest {
         assertThat(placedBy).contains(GuestService.AUTO_ACTOR);
         assertThat(inboxIds(seated)).isEmpty();
 
-        String other = freeTable();
+        String other = newTable();
         seat(other);
         String token = issueQr(other);
         String large = sendCart(token, "Levrek Izgara", 3);
@@ -99,7 +99,7 @@ class ServiceModeApiIntegrationTest extends ApiIntegrationTest {
     void classicModeHoldsEveryCartAndQrFirstOnlyHoldsDishesThatNeedAWaiter() throws Exception {
         mvc.perform(json(as(ADMIN, put("/api/v1/service-settings")), """
                 {"mode": "CLASSIC", "autoAcceptLimit": null, "firstCartNeedsStaff": false}""")).andExpect(status().isOk());
-        String classicTable = freeTable();
+        String classicTable = newTable();
         String classic = sendCart(issueQr(classicTable), "Ayran", 1);
         assertThat((String) JsonPath.read(classic, "$.waitingFor")).isEqualTo("CLASSIC_MODE");
         reject(classicTable);
@@ -107,7 +107,7 @@ class ServiceModeApiIntegrationTest extends ApiIntegrationTest {
         mvc.perform(json(as(ADMIN, put("/api/v1/service-settings")), """
                 {"mode": "QR_FIRST", "autoAcceptLimit": null, "firstCartNeedsStaff": true}""")).andExpect(status().isOk());
         // nobody is seated at the table, yet the first cart goes to the kitchen
-        String empty = freeTable();
+        String empty = newTable();
         String first = sendCart(issueQr(empty), "Mercimek Çorbası", 1);
         assertThat((String) JsonPath.read(first, "$.status")).isEqualTo("ACCEPTED");
         String active = mvc.perform(as(WAITER, get("/api/v1/orders/active")))
@@ -121,7 +121,7 @@ class ServiceModeApiIntegrationTest extends ApiIntegrationTest {
         setNeedsApproval(salgam, item, true);
         try {
             mvc.perform(get("/api/v1/menu/{id}", salgam)).andExpect(jsonPath("$.needsApproval").value(true));
-            String approvalTable = freeTable();
+            String approvalTable = newTable();
             String held = sendCart(issueQr(approvalTable), "Şalgam", 1);
             assertThat((String) JsonPath.read(held, "$.waitingFor")).isEqualTo("NEEDS_APPROVAL");
             reject(approvalTable);
