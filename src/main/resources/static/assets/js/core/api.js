@@ -245,6 +245,7 @@ export const api = {
   deleteStation: (id) => request('DELETE', `/stations/${id}`),
 
   tables: () => request('GET', '/floor/tables'),
+  clearTable: (id) => request('POST', `/floor/tables/${id}/cleared`),
   coupons: () => request('GET', '/coupons'),
   dashboard: (days) => request('GET', `/analytics/dashboard${query({ days })}`),
 

@@ -3,7 +3,7 @@
 const { test, expect } = require('@playwright/test');
 const { findLayoutProblems } = require('./support/layout-check');
 
-const ROUTES = ['dashboard', 'pos', 'kitchen', 'floor', 'orders', 'cashier', 'menu', 'stock', 'channels', 'settings'];
+const ROUTES = ['dashboard', 'pos', 'service', 'kitchen', 'floor', 'orders', 'cashier', 'menu', 'stock', 'channels', 'settings'];
 
 for (const lang of ['de', 'ru', 'ar']) {
   test(`every screen fits in ${lang}`, async ({ page }) => {

@@ -16,7 +16,8 @@ public record TableStatusResponse(
         Instant occupiedSince,
         BigDecimal openTotal,
         List<OpenOrder> openOrders,
-        Instant qrIssuedAt) {
+        Instant qrIssuedAt,
+        Instant needsClearingSince) {
 
     public record OpenOrder(Long id, OrderStatus status, String customerName, int itemCount, BigDecimal total,
                             Instant createdAt) {

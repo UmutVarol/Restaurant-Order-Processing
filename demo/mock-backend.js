@@ -191,6 +191,7 @@
       const index = state.orders.findIndex((o) => o.id === data.order.id);
       if (index >= 0) state.orders[index] = data.order; else state.orders.push(data.order);
       state.nextOrderId = Math.max(state.nextOrderId, data.order.id + 1);
+      if (data.clearing) state.clearing = data.clearing;
       publish(data.event);
     } else if (data?.type === 'payments') {
       Object.assign(state, data.payments);
@@ -203,20 +204,34 @@
       state.stock = data.stock;
       state.menu = data.menu;
       if (data.event) publish(data.event, 'stock');
+    } else if (data?.type === 'table') {
+      state.clearing = data.clearing;
+      publish(data.event, 'table');
     } else if (data?.type === 'menu') {
       state.menu = data.menu;
       state.nextMenuId = Math.max(state.nextMenuId, data.nextMenuId);
     }
   });
 
+  // Mirrors TableClearingService: a table whose last order completed waits to be cleared, until a waiter clears it or
+  // new guests order there.
+  const clearing = () => (state.clearing ??= {});
+  function trackClearing(order, kind) {
+    if (order.type !== 'DINE_IN' || !order.table) return;
+    if (kind === 'CREATED') delete clearing()[order.table.id];
+    else if (order.status === 'COMPLETED'
+      && !state.orders.some((o) => o.table?.id === order.table.id && ACTIVE.includes(o.status))) clearing()[order.table.id] ??= Date.now();
+  }
+
   function changed(order, kind, previousStatus) {
+    trackClearing(order, kind);
     save();
     const event = {
       kind, orderId: order.id, orderType: order.type, status: order.status, previousStatus: previousStatus || null,
       tableCode: order.table ? order.table.code : null, customerName: order.customerName, occurredAt: iso(order.updatedAt),
     };
     publish(event);
-    channel?.postMessage({ type: 'order', event, order });
+    channel?.postMessage({ type: 'order', event, order, clearing: state.clearing });
   }
 
   function menuChanged() {
@@ -2176,10 +2191,19 @@
         .sort((a, b) => a.createdAt - b.createdAt);
       return {
         ...table, qrIssuedAt: qr().issued[table.id] ? iso(qr().issued[table.id]) : null, occupied: open.length > 0, occupiedSince: open.length ? iso(open[0].createdAt) : null,
+        needsClearingSince: !open.length && clearing()[table.id] ? iso(clearing()[table.id]) : null,
         openTotal: toLira(open.reduce((sum, o) => sum + o.pricing.total, 0)),
         openOrders: open.map((o) => ({ id: o.id, status: o.status, customerName: o.customerName, itemCount: o.lines.reduce((n, l) => n + l.quantity - (l.voided || 0), 0), total: toLira(o.pricing.total), createdAt: iso(o.createdAt) })),
       };
     })],
+    ['POST', /^floor\/tables\/(\d+)\/cleared$/, 'till', ({ params }) => {
+      const table = tableById(params[0]);
+      delete clearing()[table.id];
+      save();
+      publish({ tableId: table.id, tableCode: table.code, needsClearingSince: null, occurredAt: iso(Date.now()) }, 'table');
+      channel?.postMessage({ type: 'table', clearing: state.clearing, event: { tableId: table.id, tableCode: table.code } });
+      return { ...table, occupied: false, needsClearingSince: null, openOrders: [], openTotal: 0 };
+    }],
     ['GET', /^coupons$/, 'staff', () => COUPONS.filter((c) => !c.validUntil || Date.now() < Date.parse(c.validUntil)).map((c) => ({ ...c }))],
     ['GET', /^fiscal\/documents$/, 'till', ({ query }) => {
       const [from, to] = dayRange(query.get('date') || todayIso());

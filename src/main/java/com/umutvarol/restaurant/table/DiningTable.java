@@ -36,6 +36,10 @@ public class DiningTable {
     @Column(name = "qr_issued_at")
     private Instant qrIssuedAt;
 
+    /** Since when the table waits to be cleared after its guests left; null while it is laid or in use. */
+    @Column(name = "needs_clearing_since")
+    private Instant needsClearingSince;
+
     protected DiningTable() {
         // for JPA
     }
@@ -70,5 +74,23 @@ public class DiningTable {
 
     public @Nullable Instant getQrIssuedAt() {
         return qrIssuedAt;
+    }
+
+    /** The guests paid and left: the table waits to be cleared. */
+    public void needsClearing(Instant at) {
+        if (needsClearingSince == null) {
+            this.needsClearingSince = at;
+        }
+    }
+
+    /** Cleared and laid again, or new guests sat down. Returns whether it was waiting to be cleared. */
+    public boolean cleared() {
+        boolean was = needsClearingSince != null;
+        this.needsClearingSince = null;
+        return was;
+    }
+
+    public @Nullable Instant getNeedsClearingSince() {
+        return needsClearingSince;
     }
 }

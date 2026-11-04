@@ -28,7 +28,7 @@ test('a waiter moves between screens from the tab bar and the More sheet', async
   await expect(page.locator('.sidebar')).toBeHidden();
   const tabbar = page.locator('.tabbar');
   await expect(tabbar).toBeVisible();
-  await expect(tabbar.locator('.tab-label')).toHaveText(['Order', 'Floor', 'Orders', 'Cashier', 'More']);
+  await expect(tabbar.locator('.tab-label')).toHaveText(['Service', 'Order', 'Floor', 'Cashier', 'More']);
   await expect(page.getByTestId('tab-pos')).toHaveClass(/active/);
 
   await page.getByTestId('tab-floor').click();

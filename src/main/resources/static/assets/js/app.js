@@ -12,6 +12,7 @@ import { chooseLanguage, confirmDialog, langButton, openModal, themeButton, toas
 const ALL = ['ADMIN', 'WAITER', 'KITCHEN'];
 const ROUTES = [
   { id: 'pos', icon: 'pos', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/pos.js') },
+  { id: 'service', icon: 'flash', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/service.js') },
   { id: 'kitchen', icon: 'kitchen', roles: ALL, section: 'service', load: () => import('./views/kitchen.js') },
   { id: 'floor', icon: 'floor', roles: ALL, section: 'service', load: () => import('./views/floor.js') },
   { id: 'orders', icon: 'orders', roles: ALL, section: 'service', load: () => import('./views/orders.js') },
@@ -25,7 +26,7 @@ const ROUTES = [
 ];
 const HOME = { ADMIN: 'dashboard', WAITER: 'pos', KITCHEN: 'kitchen' };
 // On a phone the screens each role uses all shift sit in the tab bar; the rest are one tap away under "More".
-const TABS = { ADMIN: ['dashboard', 'pos', 'floor', 'orders'], WAITER: ['pos', 'floor', 'orders', 'cashier'], KITCHEN: ['kitchen', 'floor', 'orders'] };
+const TABS = { ADMIN: ['dashboard', 'pos', 'floor', 'orders'], WAITER: ['service', 'pos', 'floor', 'cashier'], KITCHEN: ['kitchen', 'floor', 'orders'] };
 
 const root = document.getElementById('app');
 let user = null;
@@ -34,6 +35,16 @@ let renderToken = 0;
 let lastRoute = null;
 let kitchenCount = 0;
 let guestCount = 0;
+let readyCount = 0;
+/** What the service screen holds: plates ready for a table and guests waiting for a waiter. */
+const serviceCount = () => readyCount + guestCount;
+
+function updateServiceBadge() {
+  document.querySelectorAll('.service-badge').forEach((badge) => {
+    badge.textContent = serviceCount();
+    badge.hidden = serviceCount() === 0;
+  });
+}
 
 // ------------------------------------------------------------------------------- routing
 
@@ -123,7 +134,9 @@ function renderShell(current) {
       'aria-current': route.id === current.id ? 'page' : false,
       title: t(`nav.${route.id}`),
     }, icon(route.icon), h('span', null, t(`nav.${route.id}`)),
-    route.id === 'kitchen' ? h('span', { class: 'badge kitchen-badge', hidden: kitchenCount === 0 }, kitchenCount) : h('kbd', null, `Alt ${index}`));
+    route.id === 'kitchen' ? h('span', { class: 'badge kitchen-badge', hidden: kitchenCount === 0 }, kitchenCount)
+      : route.id === 'service' ? h('span', { class: 'badge service-badge', hidden: serviceCount() === 0 }, serviceCount())
+        : h('kbd', null, `Alt ${index}`));
   });
 
   // the phone's tab bar: a label under every icon, and "More" for the screens that did not fit
@@ -134,7 +147,8 @@ function renderShell(current) {
       class: ['tab', route.id === current.id ? 'active' : ''], href: `#/${route.id}`, 'data-testid': `tab-${route.id}`,
       'aria-current': route.id === current.id ? 'page' : false,
     }, h('span', { class: 'tab-ic' }, icon(route.icon),
-      route.id === 'kitchen' ? h('span', { class: 'badge kitchen-badge', hidden: kitchenCount === 0 }, kitchenCount) : null),
+      route.id === 'kitchen' ? h('span', { class: 'badge kitchen-badge', hidden: kitchenCount === 0 }, kitchenCount)
+        : route.id === 'service' ? h('span', { class: 'badge service-badge', hidden: serviceCount() === 0 }, serviceCount()) : null),
     h('span', { class: 'tab-label' }, t(`nav.tab.${route.id}`)))),
     h('button', {
       class: ['tab', tabIds.includes(current.id) ? '' : 'active'], type: 'button', 'data-testid': 'tab-more', 'aria-haspopup': 'dialog',
@@ -270,6 +284,7 @@ async function refreshGuestBadge() {
       badge.textContent = guestCount;
       badge.hidden = guestCount === 0;
     }
+    updateServiceBadge();
   } catch { /* badge is best effort */ }
 }
 
@@ -306,6 +321,8 @@ async function refreshKitchenBadge() {
   try {
     const active = await api.activeOrders();
     kitchenCount = active.filter((o) => ['PENDING', 'PREPARING', 'READY'].includes(o.status)).length;
+    readyCount = active.filter((o) => o.type === 'DINE_IN' && o.status === 'READY' && o.table).length;
+    updateServiceBadge();
     document.querySelectorAll('.kitchen-badge').forEach((badge) => {
       badge.textContent = kitchenCount;
       badge.hidden = kitchenCount === 0;

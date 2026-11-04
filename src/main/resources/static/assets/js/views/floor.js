@@ -66,10 +66,15 @@ export default {
             h('span', { class: 'since-who', dir: 'auto' }, `· ${order.customerName}`)),
         ]
         : [
-          h('div', { class: 't-free' }, t('floor.available')),
+          table.needsClearingSince ? h('div', { class: 't-dirty' }, t('service.dirty')) : h('div', { class: 't-free' }, t('floor.available')),
           h('div', { class: 'seats' }, tn('floor.seats', table.seats)),
           canTakeOrders(user) ? h('span', { class: 'btn sm', style: { marginTop: '4px' } }, icon('plus', 'sm'), t('floor.seat')) : null,
         ]));
+      if (!table.occupied && table.needsClearingSince && canTakeOrders(user)) {
+        return h('div', { class: 'table-slot' }, card, h('div', { class: 'table-actions' },
+          h('button', { class: 'btn sm ghost', 'data-testid': `clear-${table.code}`, onclick: () => clearTable(table) },
+            icon('sparkle', 'sm'), h('span', null, t('service.cleared')))));
+      }
       if (!table.occupied || !canTakeOrders(user)) return card;
       // the card itself opens the order, so moving and merging sit next to it rather than inside it
       return h('div', { class: 'table-slot' }, card, h('div', { class: 'table-actions' },
@@ -127,6 +132,16 @@ export default {
           sub ? h('span', { class: 'muted kpi-sub' }, sub) : null));
     }
 
+    async function clearTable(table) {
+      try {
+        await api.clearTable(table.id);
+        toast({ title: t('service.clearedToast', { table: table.code }) });
+      } catch (error) {
+        toast({ title: errorMessage(error), kind: 'error' });
+      }
+      reload();
+    }
+
     async function load() {
       try {
         tables = await api.tables();
@@ -138,6 +153,7 @@ export default {
 
     const reload = debounce(load, 200);
     const offOrder = bus.on('order', reload);
+    const offTable = bus.on('table', reload);
     const timer = setInterval(() => {
       zones.querySelectorAll('[data-since]').forEach((el) => { el.textContent = elapsed(el.dataset.since); });
     }, 15_000);
@@ -147,6 +163,7 @@ export default {
     return {
       destroy() {
         offOrder();
+        offTable();
         reload.cancel();
         clearInterval(timer);
       },

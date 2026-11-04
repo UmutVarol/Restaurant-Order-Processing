@@ -1583,9 +1583,14 @@ body.sheet-locked { overflow: hidden; }
 .menu-table th, .menu-table td.m-price, .menu-table td.m-on, .menu-table td.m-actions { white-space: nowrap; }
 .z-table td.num { white-space: nowrap; }
 @media (max-width: 720px) {
-  .z-table { font-size: 12.5px; }
-  .z-table th, .z-table td { padding: 8px 2px; }
-  .z-table .c1 { display: none; }
+  /* a phone shows each method as a block: its name, then sales, tips and refunds with their labels */
+  .z-table, .z-table tbody, .z-table tfoot { display: block; }
+  .z-table thead, .z-table .c1 { display: none; }
+  .z-table tr { display: grid; grid-template-columns: minmax(0, 1fr); padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .z-table th, .z-table td { padding: 2px 0; border: 0; }
+  .z-table td { display: flex; justify-content: space-between; gap: 12px; }
+  .z-table td::before { content: attr(data-label); color: var(--muted); font-weight: 500; }
+  .z-table tr.total { border-bottom: 0; }
   .menu-table thead { display: none; }
   .menu-table, .menu-table tbody { display: block; }
   /* the dish and its on-sale switch on one line, the price and the tools on the next: two independent rows, so the
@@ -1670,7 +1675,6 @@ body.sheet-locked { overflow: hidden; }
   /* the change badge and its note stack, instead of the note running down a narrow column */
   .kpi .foot { flex-wrap: wrap; row-gap: 4px; }
   .kpi .foot > span { flex: 1 1 100%; }
-  .z-table thead th, .z-table thead td { white-space: normal; overflow-wrap: break-word; hyphens: auto; font-size: 11px; }
 }
 
 @media (max-width: 380px) {
@@ -1690,3 +1694,37 @@ body.sheet-locked { overflow: hidden; }
 .since-line .icon { flex: none; }
 .since-time { flex: none; white-space: nowrap; }
 .since-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ==========================================================================
+   Service screen: what a waiter carries and clears, one tap each
+   ========================================================================== */
+.service-summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.service-count { display: inline-flex; align-items: baseline; gap: 6px; padding: 8px 14px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+.service-count b { font-size: 18px; color: var(--text); font-variant-numeric: tabular-nums; }
+.service-count.ready { border-color: color-mix(in srgb, var(--green) 40%, var(--border)); background: var(--green-soft); }
+.service-count.calls { border-color: color-mix(in srgb, var(--amber) 40%, var(--border)); background: var(--amber-soft); }
+.service-count.clear { border-color: color-mix(in srgb, var(--violet) 35%, var(--border)); background: var(--violet-soft); }
+.service-section { margin-bottom: 22px; }
+.service-section h3 { display: flex; align-items: center; gap: 8px; }
+.service-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; }
+.runner-card {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "table body" "act act"; gap: 12px 14px;
+  padding: 14px; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-xs);
+  animation: ticketIn .35s var(--ease);
+}
+.runner-card.ready { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+.service-table {
+  grid-area: table; width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center;
+  background: var(--brand); color: #fff; font: 700 24px/1 var(--font-sans); font-variant-numeric: tabular-nums;
+}
+.runner-card.clear .service-table { background: var(--violet-soft); color: var(--violet); }
+.service-body { grid-area: body; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.service-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.service-head .faint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+.service-since { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--amber); white-space: nowrap; }
+.service-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.service-items small { display: block; color: var(--muted); font-size: 12px; }
+.service-act { grid-area: act; width: 100%; min-height: 48px; font-size: 15px; }
+.service-empty { display: flex; align-items: center; gap: 8px; padding: 12px 4px; }
+.service-list .inbox-item { background: var(--surface); }
+.t-dirty { color: var(--violet); font-weight: 700; font-size: 13px; }

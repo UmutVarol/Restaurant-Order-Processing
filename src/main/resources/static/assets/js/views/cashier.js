@@ -75,10 +75,13 @@ export default {
         kpi('online', t('pay.ONLINE'), money(Number(by.ONLINE.amount) - Number(by.ONLINE.refunds)), tn('cashier.count', by.ONLINE.count)),
         kpi('coins', t('bill.tips'), money(summary.tips), null));
 
-      const row = (cells, cls = '') => h('tr', { class: cls }, cells.map((cell, i) => h(i === 0 ? 'th' : 'td', { class: i ? `right num c${i}` : '' }, cell)));
+      // each figure carries its column's name, so on a phone a method reads as a small block of labelled figures
+      const columns = [t('cashier.method'), t('cashier.payments'), t('cashier.sales'), t('bill.tips'), t('cashier.refunds')];
+      const row = (cells, cls = '') => h('tr', { class: cls }, cells.map((cell, i) => h(i === 0 ? 'th' : 'td',
+        { class: i ? `right num c${i}` : '', dataset: i ? { label: columns[i] } : {} }, cell)));
       mount(reportCard, head, h('div', { class: 'card-body' },
         h('table', { class: 'z-table' },
-          h('thead', null, row([t('cashier.method'), t('cashier.payments'), t('cashier.sales'), t('bill.tips'), t('cashier.refunds')])),
+          h('thead', null, row(columns)),
           h('tbody', null, summary.methods.map((m) => row([
             h('span', { class: 'row', style: { gap: '6px' } }, icon(METHOD_ICONS[m.method], 'sm'), t(`pay.${m.method}`)),
             m.count, money(m.amount), money(m.tips), Number(m.refunds) > 0 ? `−${money(m.refunds)}` : '–']))),

@@ -3,6 +3,7 @@ package com.umutvarol.restaurant.realtime;
 import com.umutvarol.restaurant.common.error.TooManyRequestsException;
 import com.umutvarol.restaurant.fiscal.FiscalDocumentChangedEvent;
 import com.umutvarol.restaurant.guest.GuestRequestChangedEvent;
+import com.umutvarol.restaurant.floor.TableChangedEvent;
 import com.umutvarol.restaurant.inventory.StockChangedEvent;
 import com.umutvarol.restaurant.order.OrderChangedEvent;
 import com.umutvarol.restaurant.printing.PrintJobChangedEvent;
@@ -102,6 +103,12 @@ public class OrderEventBroadcaster {
     public void onFiscalDocument(FiscalDocumentChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
         broadcast(() -> SseEmitter.event().id(id).name("fiscal").data(event, MediaType.APPLICATION_JSON));
+    }
+
+    @TransactionalEventListener
+    public void onTableChanged(TableChangedEvent event) {
+        String id = Long.toString(sequence.incrementAndGet());
+        broadcast(() -> SseEmitter.event().id(id).name("table").data(event, MediaType.APPLICATION_JSON));
     }
 
     @TransactionalEventListener

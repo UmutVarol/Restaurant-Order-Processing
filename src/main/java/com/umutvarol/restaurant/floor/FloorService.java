@@ -39,6 +39,15 @@ public class FloorService {
                 .toList();
     }
 
+    /** One table as the floor plan shows it. */
+    public TableStatusResponse table(DiningTable table) {
+        List<Order> open = orders.findByStatusInOrderByCreatedAtAsc(OrderStatus.activeStatuses()).stream()
+                .filter(order -> order.getType() == OrderType.DINE_IN && order.getTable() != null
+                        && order.getTable().getId().equals(table.getId()))
+                .toList();
+        return toResponse(table, open);
+    }
+
     private static TableStatusResponse toResponse(DiningTable table, List<Order> open) {
         BigDecimal openTotal = open.stream()
                 .map(order -> order.getPricing().total())
@@ -55,6 +64,7 @@ public class FloorService {
                         .map(order -> new OpenOrder(order.getId(), order.getStatus(), order.getCustomerName(),
                                 order.itemCount(), order.getPricing().total(), order.getCreatedAt()))
                         .toList(),
-                table.getQrIssuedAt());
+                table.getQrIssuedAt(),
+                open.isEmpty() ? table.getNeedsClearingSince() : null);
     }
 }
