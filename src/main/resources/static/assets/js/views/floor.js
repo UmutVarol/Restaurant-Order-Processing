@@ -61,7 +61,9 @@ export default {
           h('div', { class: 'row', style: { gap: '6px' } }, statusPill(order.status),
             table.openOrders.length > 1 ? h('span', { class: 'pill plain' }, `+${table.openOrders.length - 1}`) : null),
           h('div', { class: 't-amount' }, money(table.openTotal)),
-          h('div', { class: 'seats', dataset: { since: table.occupiedSince } }, icon('clock', 'sm'), ' ', elapsed(table.occupiedSince), ` · ${order.customerName}`),
+          h('div', { class: 'seats since-line' }, icon('clock', 'sm'),
+            h('span', { class: 'since-time', dataset: { since: table.occupiedSince } }, elapsed(table.occupiedSince)),
+            h('span', { class: 'since-who', dir: 'auto' }, `· ${order.customerName}`)),
         ]
         : [
           h('div', { class: 't-free' }, t('floor.available')),
@@ -137,10 +139,7 @@ export default {
     const reload = debounce(load, 200);
     const offOrder = bus.on('order', reload);
     const timer = setInterval(() => {
-      zones.querySelectorAll('[data-since]').forEach((el) => {
-        const node = el.childNodes[2];
-        if (node) node.textContent = elapsed(el.dataset.since);
-      });
+      zones.querySelectorAll('[data-since]').forEach((el) => { el.textContent = elapsed(el.dataset.since); });
     }, 15_000);
 
     render();
