@@ -165,6 +165,7 @@ class SecurityConfig {
                                 .hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders/*/reprint")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/service-settings").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/guest-requests", "/api/v1/guest-requests/**")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers("/api/v1/**").authenticated()

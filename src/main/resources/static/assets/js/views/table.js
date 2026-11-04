@@ -1,6 +1,6 @@
-// The page behind a table's QR code: the menu, a cart the waiter accepts, and buttons to call the waiter or ask for
-// the bill. Guests need no account; the code in the link is the permission, and nothing they send reaches the
-// kitchen until a waiter accepts it.
+// The page behind a table's QR code: the menu, a cart, and buttons to call the waiter or ask for the bill. Guests
+// need no account; the code in the link is the permission. The restaurant's service rules decide whether a cart goes
+// straight to the kitchen or waits for a waiter, and the guest is told which, and why.
 import { h, mount } from '../core/dom.js';
 import { icon, logoMark } from '../core/icons.js';
 import { t } from '../core/i18n.js';
@@ -78,9 +78,10 @@ export function renderTable(root, token) {
     return h('div', { class: `guest-banner ${tone}`, 'data-testid': 'sent-status' },
       icon(r.status === 'REJECTED' ? 'alert' : r.status === 'OPEN' ? 'clock' : 'check', 'sm'),
       h('div', null,
-        h('b', null, t(`table.status.${r.status}`)),
+        h('b', null, t(r.status === 'ACCEPTED' && r.automatic ? 'table.status.AUTO' : `table.status.${r.status}`)),
         h('div', { class: 'sub' }, r.status === 'REJECTED' && r.reason ? r.reason
-          : `${r.lines.map((line) => `${line.quantity} × ${line.name}`).join(', ')} · ${money(r.total)}`)));
+          : `${r.lines.map((line) => `${line.quantity} × ${line.name}`).join(', ')} · ${money(r.total)}`),
+        r.status === 'OPEN' && r.waitingFor ? h('div', { class: 'sub', 'data-testid': 'sent-wait' }, t(`table.wait.${r.waitingFor}`)) : null));
   }
 
   function menuRow(item) {
@@ -90,7 +91,8 @@ export function renderTable(root, token) {
       h('div', { class: 'info' },
         h('b', null, item.name),
         item.description ? h('small', null, item.description) : null,
-        h('div', { class: 'price' }, money(item.price), item.optionGroups?.length ? h('span', { class: 'faint' }, ` · ${t('table.hasOptions')}`) : null)),
+        h('div', { class: 'price' }, money(item.price), item.optionGroups?.length ? h('span', { class: 'faint' }, ` · ${t('table.hasOptions')}`) : null,
+          item.needsApproval && state.table.mode !== 'CLASSIC' ? h('span', { class: 'faint' }, ` · ${t('table.needsApproval')}`) : null)),
       h('button', {
         class: ['icon-btn', 'add', inCart ? 'has' : ''], 'aria-label': t('table.add', { name: item.name }), 'data-testid': `add-${item.id}`,
         onclick: () => add(item),
@@ -151,7 +153,7 @@ export function renderTable(root, token) {
       size: 'sm',
       body: [lines,
         h('div', { class: 'row options-sum' }, h('span', { class: 'muted' }, t('table.subtotal')), total),
-        h('p', { class: 'faint', style: { fontSize: '12px' } }, t('table.taxNote')),
+        h('p', { class: 'faint', style: { fontSize: '12px' } }, t(`table.taxNote.${state.table.mode || 'CLASSIC'}`)),
         h('div', { class: 'field' }, h('label', { for: 'guest-name' }, t('table.name')), name),
         h('div', { class: 'field' }, h('label', { for: 'guest-note' }, t('table.note')), note),
         problem],

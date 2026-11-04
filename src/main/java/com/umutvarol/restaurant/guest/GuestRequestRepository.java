@@ -17,5 +17,7 @@ public interface GuestRequestRepository extends JpaRepository<GuestRequest, Long
 
     Optional<GuestRequest> findFirstByTableIdAndKindAndStatus(Long tableId, GuestRequestKind kind, GuestRequestStatus status);
 
+    long countByTableIdAndAutoAcceptedTrueAndCreatedAtAfter(Long tableId, Instant after);
+
     boolean existsByTableIdAndKindAndCreatedAtAfter(Long tableId, GuestRequestKind kind, Instant after);
 }

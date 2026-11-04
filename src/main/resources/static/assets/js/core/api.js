@@ -270,6 +270,8 @@ export const api = {
   guestRequest: (token, id) => request('GET', `/public/table/${encodeURIComponent(token)}/requests/${encodeURIComponent(id)}`, undefined, { auth: false }),
   // Staff inbox and table codes.
   guestRequests: () => request('GET', '/guest-requests'),
+  serviceSettings: () => request('GET', '/service-settings'),
+  saveServiceSettings: (settings) => request('PUT', '/service-settings', settings),
   acceptGuestRequest: (id) => request('POST', `/guest-requests/${id}/accept`),
   rejectGuestRequest: (id, reason) => request('POST', `/guest-requests/${id}/reject`, { reason }),
   doneGuestRequest: (id) => request('POST', `/guest-requests/${id}/done`),

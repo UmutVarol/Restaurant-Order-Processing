@@ -40,6 +40,7 @@ export function openInbox(user) {
           line.note ? h('small', { class: 'note' }, `“${line.note}”`) : null),
         h('span', { class: 'num' }, money(line.lineTotal))))) : null,
       request.note ? h('div', { class: 'sticky-note' }, icon('note', 'sm'), request.note) : null,
+      request.holdReason ? h('div', { class: 'inbox-hold', 'data-testid': 'inbox-hold' }, icon('info', 'sm'), t(`inbox.hold.${request.holdReason}`)) : null,
       h('div', { class: 'inbox-actions' }, request.kind === 'ORDER'
         ? [
           h('button', { class: 'btn ghost sm', disabled: busy.has(request.id), onclick: () => reject(request) }, t('inbox.reject')),

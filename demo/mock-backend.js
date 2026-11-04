@@ -341,7 +341,7 @@
   const menuView = (m) => ({
     id: m.id, name: m.name, description: m.description, category: m.category, price: toLira(m.priceC), icon: m.icon,
     prepTimeMinutes: m.prepTimeMinutes, popular: m.popular, available: m.available && !m.archived && !m.stockOut, tags: [...m.tags].sort(),
-    stockOut: Boolean(m.stockOut),
+    stockOut: Boolean(m.stockOut), needsApproval: Boolean(m.needsApproval),
     stationCode: m.stationCode ?? DEFAULT_STATION[m.category],
     optionGroups: (m.optionGroups || []).map((g) => ({ id: g.id, name: g.name, minSelect: g.minSelect, maxSelect: g.maxSelect,
       choices: g.choices.map((c) => ({ id: c.id, name: c.name, priceDelta: toLira(c.priceDeltaC) })) })),
@@ -640,8 +640,40 @@
   }
 
   // ------------------------------------------------------------------------------------------- ordering from the table
-  // Mirrors GuestService: a table's QR token opens its page, carts wait for a waiter, calls fold into the open one.
+  // Mirrors GuestService: a table's QR token opens its page, the service rules (GuestOrderPolicy) send a cart to the
+  // kitchen or hold it for a waiter, and calls fold into the open one.
   const guestRequests = () => (state.guestRequests ??= []);
+  const serviceSettings = () => (state.serviceSettings ??= { mode: 'MIXED', autoAcceptLimit: 1500, firstCartNeedsStaff: true, updatedAt: null, updatedBy: null });
+  const BURST_LIMIT = 6;
+  const BURST_WINDOW_MS = 10 * 60_000;
+
+  function holdReason(table, totalC, lines) {
+    const settings = serviceSettings();
+    if (settings.mode === 'CLASSIC') return 'CLASSIC_MODE';
+    if (lines.some((l) => state.menu.find((m) => m.id === l.menuItemId)?.needsApproval)) return 'NEEDS_APPROVAL';
+    if (settings.mode === 'MIXED') {
+      const seated = state.orders.some((o) => o.table?.id === table.id && ACTIVE.includes(o.status));
+      if (settings.firstCartNeedsStaff && !seated) return 'FIRST_CART';
+      if (settings.autoAcceptLimit != null && totalC > toCents(settings.autoAcceptLimit)) return 'OVER_LIMIT';
+    }
+    const recent = guestRequests().filter((r) => r.tableId === table.id && r.automatic && Date.now() - r.createdAt < BURST_WINDOW_MS).length;
+    return recent >= BURST_LIMIT ? 'BURST' : null;
+  }
+
+  /** Places a cart as a dine-in order, like GuestService.place. */
+  function acceptGuestRequest(request, username, automatic) {
+    const table = TABLES.find((x) => x.id === request.tableId);
+    const lines = buildLines(request.lines.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity, note: l.note, optionIds: l.optionIds })));
+    const order = createOrder({ type: 'DINE_IN', customerName: request.guestName || `QR ${table.code}`, note: request.note, paymentMethod: 'CARD',
+      table: { ...table } }, lines, null, Date.now(), username);
+    state.orders.push(order);
+    const bill = attach(state, order, order.createdAt);
+    Object.assign(request, { status: 'ACCEPTED', orderId: order.id, handledAt: Date.now(), handledBy: username, automatic });
+    changed(order, 'CREATED', null);
+    // the guest's tab may be the one placing it: share the bill too, so the till sees the same one
+    if (bill) paymentsChanged(bill, null, 'BILL');
+    guestChanged(request);
+  }
   const qr = () => (state.qr ??= { tokens: {}, issued: {} });
 
   function tableForToken(token) {
@@ -660,11 +692,13 @@
   }
 
   const guestView = (r) => ({ id: r.publicId, kind: r.kind, status: r.status, total: r.totalC == null ? null : toLira(r.totalC), reason: r.reason,
-    createdAt: iso(r.createdAt), lines: r.lines.map((l) => ({ name: l.name, icon: l.icon, quantity: l.quantity, options: l.options, lineTotal: toLira(l.lineTotalC) })) });
+    createdAt: iso(r.createdAt), lines: r.lines.map((l) => ({ name: l.name, icon: l.icon, quantity: l.quantity, options: l.options, lineTotal: toLira(l.lineTotalC) })),
+    waitingFor: r.status === 'OPEN' ? r.holdReason ?? null : null, automatic: Boolean(r.automatic) });
   const staffGuestView = (r) => ({ id: r.id, kind: r.kind, status: r.status, tableId: r.tableId, tableCode: r.tableCode, guestName: r.guestName, note: r.note,
     quotedTotal: r.totalC == null ? null : toLira(r.totalC), orderId: r.orderId ?? null, reason: r.reason, createdAt: iso(r.createdAt),
     handledAt: r.handledAt ? iso(r.handledAt) : null, handledBy: r.handledBy ?? null,
-    lines: r.lines.map((l) => ({ name: l.name, icon: l.icon, quantity: l.quantity, options: l.options, note: l.note, lineTotal: toLira(l.lineTotalC) })) });
+    lines: r.lines.map((l) => ({ name: l.name, icon: l.icon, quantity: l.quantity, options: l.options, note: l.note, lineTotal: toLira(l.lineTotalC) })),
+    holdReason: r.holdReason ?? null, automatic: Boolean(r.automatic) });
 
   function newGuestRequest(table, kind, extra = {}) {
     const open = guestRequests().filter((r) => r.tableId === table.id && r.status === 'OPEN');
@@ -1207,6 +1241,7 @@
     });
     if (body.stationCode != null) dish.stationCode = body.stationCode;
     else dish.stationCode ??= DEFAULT_STATION[dish.category];
+    if (body.needsApproval != null) dish.needsApproval = Boolean(body.needsApproval);
   }
 
   // ------------------------------------------------------------------------------------------- stations
@@ -2009,14 +2044,14 @@
     }],
     ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})$/, 'public', ({ params }) => {
       const table = tableForToken(params[0]);
-      return { restaurant: 'Sofra Bistro', tableCode: table.code,
+      return { restaurant: 'Sofra Bistro', tableCode: table.code, mode: serviceSettings().mode,
         openCalls: ['CALL_WAITER', 'REQUEST_BILL'].filter((kind) => guestRequests().some((r) => r.tableId === table.id && r.kind === kind && r.status === 'OPEN')) };
     }],
     ['POST', /^public\/table\/([A-Za-z0-9_-]{20,100})\/orders$/, 'public', ({ params }, body) => {
       const table = tableForToken(params[0]);
       requireFields({ items: !(body.items || []).length || body.items.length > 20 ? 'size must be between 1 and 20' : null });
-      if (guestRequests().some((r) => r.tableId === table.id && r.kind === 'ORDER' && Date.now() - r.createdAt < 15_000)) {
-        throw new Problem(429, 'GUEST_SLOW_DOWN', 'A cart was just sent from this table', { parameters: { retryAfterSeconds: 15 } });
+      if (guestRequests().some((r) => r.tableId === table.id && r.kind === 'ORDER' && Date.now() - r.createdAt < 5_000)) {
+        throw new Problem(429, 'GUEST_SLOW_DOWN', 'A cart was just sent from this table', { parameters: { retryAfterSeconds: 5 } });
       }
       const lines = buildLines(body.items.map((item) => ({ ...item, quantity: Math.min(20, Number(item.quantity)) })));
       const totalC = price(lines.reduce((sum, l) => sum + l.lineTotalC, 0), 'DINE_IN', null).total;
@@ -2025,6 +2060,13 @@
         lines: lines.map((l, i) => ({ menuItemId: l.menuItemId, name: l.name, icon: l.icon, quantity: l.quantity, note: l.note,
           optionIds: l.options.map((o) => o.choiceId), options: optionText(l), lineTotalC: l.lineTotalC, index: i })),
       });
+      const reason = holdReason(table, totalC, lines);
+      if (reason) {
+        request.holdReason = reason;
+        guestChanged(request);
+      } else {
+        acceptGuestRequest(request, 'table-qr', true);
+      }
       return [201, guestView(request)];
     }],
     ['POST', /^public\/table\/([A-Za-z0-9_-]{20,100})\/calls$/, 'public', ({ params }, body) => {
@@ -2039,18 +2081,23 @@
       if (!request) throw new Problem(404, 'NOT_FOUND', 'Request ? was not found');
       return guestView(request);
     }],
+    ['GET', /^service-settings$/, 'staff', () => ({ ...serviceSettings() })],
+    ['PUT', /^service-settings$/, 'manager', ({ user }, body) => {
+      const limit = body.autoAcceptLimit == null || body.autoAcceptLimit === '' ? null : Number(body.autoAcceptLimit);
+      requireFields({
+        mode: ['CLASSIC', 'MIXED', 'QR_FIRST'].includes(body.mode) ? null : 'must not be null',
+        autoAcceptLimit: limit != null && !(limit >= 0 && limit <= 100000) ? 'must be between 0.00 and 100000.00' : null,
+        firstCartNeedsStaff: typeof body.firstCartNeedsStaff === 'boolean' ? null : 'must not be null',
+      });
+      state.serviceSettings = { mode: body.mode, autoAcceptLimit: limit == null ? null : Math.round(limit * 100) / 100,
+        firstCartNeedsStaff: body.firstCartNeedsStaff, updatedAt: iso(Date.now()), updatedBy: user.username };
+      save();
+      return { ...state.serviceSettings };
+    }],
     ['GET', /^guest-requests$/, 'till', () => guestRequests().filter((r) => r.status === 'OPEN').map(staffGuestView)],
     ['POST', /^guest-requests\/(\d+)\/accept$/, 'till', ({ params, user }) => {
       const request = findGuestRequest(params[0]);
-      const table = TABLES.find((x) => x.id === request.tableId);
-      const lines = buildLines(request.lines.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity, note: l.note, optionIds: l.optionIds })));
-      const order = createOrder({ type: 'DINE_IN', customerName: request.guestName || `QR ${table.code}`, note: request.note, paymentMethod: 'CARD',
-        table: { ...table } }, lines, null, Date.now(), user.username);
-      state.orders.push(order);
-      attach(state, order, order.createdAt);
-      Object.assign(request, { status: 'ACCEPTED', orderId: order.id, handledAt: Date.now(), handledBy: user.username });
-      changed(order, 'CREATED', null);
-      guestChanged(request);
+      acceptGuestRequest(request, user.username, false);
       return staffGuestView(request);
     }],
     ['POST', /^guest-requests\/(\d+)\/reject$/, 'till', ({ params, user }, body) => {

@@ -27,9 +27,9 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Something a guest asked for from their table: an order to accept, a waiter, or the bill. Guests never place
- * orders directly; a waiter turns an accepted request into a real order, so a photographed QR code cannot flood
- * the kitchen.
+ * Something a guest asked for from their table: an order, a waiter, or the bill. A cart becomes a real order when
+ * a waiter accepts it, or straight away when the restaurant's service rules let it through ({@link GuestOrderPolicy});
+ * a cart the rules hold back records why.
  */
 @Entity
 @Table(name = "guest_requests")
@@ -78,6 +78,13 @@ public class GuestRequest {
     @Column(name = "handled_by", length = 50)
     private String handledBy;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "hold_reason", length = 20)
+    private HoldReason holdReason;
+
+    @Column(name = "auto_accepted", nullable = false)
+    private boolean autoAccepted;
+
     @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id ASC")
     private List<GuestRequestLine> lines = new ArrayList<>();
@@ -124,6 +131,18 @@ public class GuestRequest {
         this.status = GuestRequestStatus.ACCEPTED;
         this.orderId = orderId;
         handled(at, by);
+    }
+
+    /** Sent to the kitchen by the service rules alone, with no waiter involved. */
+    void acceptAutomatically(Long orderId, Instant at, String by) {
+        accept(orderId, at, by);
+        this.autoAccepted = true;
+    }
+
+    /** Waits for a waiter, for the reason the guest and the waiter both see. */
+    void hold(HoldReason reason) {
+        requireOpen(GuestRequestKind.ORDER);
+        this.holdReason = reason;
     }
 
     void reject(String reason, Instant at, String by) {
@@ -205,6 +224,14 @@ public class GuestRequest {
 
     public @Nullable String getHandledBy() {
         return handledBy;
+    }
+
+    public @Nullable HoldReason getHoldReason() {
+        return holdReason;
+    }
+
+    public boolean isAutoAccepted() {
+        return autoAccepted;
     }
 
     public List<GuestRequestLine> getLines() {

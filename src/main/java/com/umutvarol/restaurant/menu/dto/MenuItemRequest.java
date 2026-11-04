@@ -26,7 +26,8 @@ public record MenuItemRequest(
         Boolean popular,
         Set<DietaryTag> tags,
         @Size(max = 8) List<@Valid @NotNull OptionGroupRequest> optionGroups,
-        @Pattern(regexp = "[A-Z][A-Z0-9_]{1,19}") String stationCode) {
+        @Pattern(regexp = "[A-Z][A-Z0-9_]{1,19}") String stationCode,
+        Boolean needsApproval) {
 
 
     public int prepTimeMinutesOrDefault() {

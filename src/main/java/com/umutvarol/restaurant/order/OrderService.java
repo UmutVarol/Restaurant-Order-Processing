@@ -178,6 +178,12 @@ public class OrderService {
     }
 
     /** Orders the kitchen and floor staff still need to act on, oldest first. */
+    /** Whether guests are seated at the table: it has an order still in progress. */
+    @Transactional(readOnly = true)
+    public boolean isTableSeated(Long tableId) {
+        return orders.existsByTableIdAndStatusIn(tableId, OrderStatus.activeStatuses());
+    }
+
     @Transactional(readOnly = true)
     public List<OrderResponse> activeOrders() {
         return orders.findByStatusInOrderByCreatedAtAsc(OrderStatus.activeStatuses()).stream()

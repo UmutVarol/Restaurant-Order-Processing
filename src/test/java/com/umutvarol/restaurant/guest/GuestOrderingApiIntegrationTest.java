@@ -11,15 +11,16 @@ import com.umutvarol.restaurant.support.ApiIntegrationTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** Guests order and call from the table's QR code; nothing reaches the kitchen until a waiter accepts it. */
+/** Guests order and call from the table's QR code; at an empty table, the cart waits until a waiter accepts it. */
 class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aCartWaitsForAWaiterAndBecomesARealOrder() throws Exception {
-        String token = issueQr("A1");
+        String table = freeTable();
+        String token = issueQr(table);
         mvc.perform(get("/api/v1/public/table/{token}", token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tableCode").value("A1"))
+                .andExpect(jsonPath("$.tableCode").value(table))
                 .andExpect(jsonPath("$.restaurant").value("Sofra Bistro"));
 
         String sent = mvc.perform(json(post("/api/v1/public/table/{token}/orders", token), """
@@ -42,7 +43,7 @@ class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
         String inbox = mvc.perform(as(WAITER, get("/api/v1/guest-requests")))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        List<Number> ids = JsonPath.read(inbox, "$[?(@.tableCode == 'A1' && @.kind == 'ORDER')].id");
+        List<Number> ids = JsonPath.read(inbox, "$[?(@.tableCode == '%s' && @.kind == 'ORDER')].id".formatted(table));
         long id = ids.getLast().longValue();
 
         String handled = mvc.perform(as(WAITER, post("/api/v1/guest-requests/{id}/accept", id)))
@@ -58,7 +59,7 @@ class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
         assertThat(accepted).doesNotContain("waiter");
 
         mvc.perform(as(WAITER, get("/api/v1/orders/{id}", orderId)))
-                .andExpect(jsonPath("$.table.code").value("A1"))
+                .andExpect(jsonPath("$.table.code").value(table))
                 .andExpect(jsonPath("$.customerName").value("Deniz"))
                 .andExpect(jsonPath("$.note").value("No onions please"))
                 .andExpect(jsonPath("$.pricing.total").value(533.50));
@@ -76,7 +77,8 @@ class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void callsFoldIntoTheOneAlreadyWaitingAndARejectedCartTellsTheGuestWhy() throws Exception {
-        String token = issueQr("W1");
+        String table = freeTable();
+        String token = issueQr(table);
         String first = mvc.perform(json(post("/api/v1/public/table/{token}/calls", token), """
                         {"kind": "CALL_WAITER"}"""))
                 .andExpect(status().isCreated())
@@ -98,8 +100,8 @@ class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         String inbox = mvc.perform(as(WAITER, get("/api/v1/guest-requests")))
                 .andReturn().getResponse().getContentAsString();
-        List<Number> calls = JsonPath.read(inbox, "$[?(@.tableCode == 'W1' && @.kind == 'CALL_WAITER')].id");
-        List<Number> carts = JsonPath.read(inbox, "$[?(@.tableCode == 'W1' && @.kind == 'ORDER')].id");
+        List<Number> calls = JsonPath.read(inbox, "$[?(@.tableCode == '%s' && @.kind == 'CALL_WAITER')].id".formatted(table));
+        List<Number> carts = JsonPath.read(inbox, "$[?(@.tableCode == '%s' && @.kind == 'ORDER')].id".formatted(table));
         mvc.perform(as(WAITER, post("/api/v1/guest-requests/{id}/done", calls.getFirst().longValue())))
                 .andExpect(jsonPath("$.status").value("DONE"));
         mvc.perform(json(as(WAITER, post("/api/v1/guest-requests/{id}/reject", carts.getFirst().longValue())), """

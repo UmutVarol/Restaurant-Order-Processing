@@ -1,4 +1,5 @@
-// Settings: my PIN for quick switching, this till's registration, and for managers the registered devices.
+// Settings: my PIN for quick switching, this till's registration, and for managers how the restaurant takes orders
+// and the registered devices.
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
@@ -10,6 +11,7 @@ import { qrCode } from './qr.js';
 import { withRecentSignIn } from './reauth.js';
 
 const IDLE_CHOICES = [1, 2, 5, 10, 0];
+const SERVICE_MODES = ['CLASSIC', 'MIXED', 'QR_FIRST'];
 
 export default {
   title: 'settings.title',
@@ -23,17 +25,86 @@ export default {
     const printersCard = h('div', { class: 'card settings-card' });
     const stationsCard = h('div', { class: 'card settings-card' });
     const totpCard = h('div', { class: 'card settings-card' });
+    const serviceCard = h('div', { class: 'card settings-card service-card' });
     let totp = null;
+    let service = null;
     let devices = null;
     let tables = null;
     let printers = null;
     let stations = null;
-    mount(container, h('div', { class: 'settings-grid' }, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
+    mount(container, h('div', { class: 'settings-grid' }, manager ? serviceCard : null, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
       manager ? stationsCard : null, manager ? printersCard : null));
 
     const head = (iconName, title, sub) => h('div', { class: 'card-head' },
       h('span', { class: 'settings-ic' }, icon(iconName, 'sm')),
       h('div', null, h('div', { class: 'card-title' }, title), h('div', { class: 'card-sub' }, sub)));
+
+    // ------------------------------------------------------------------ service mode (managers)
+    function renderService() {
+      if (!manager) return;
+      if (!service) {
+        mount(serviceCard, head('users', t('service.title'), t('service.sub')),
+          h('div', { class: 'card-body' }, h('div', { class: 'skeleton', style: { height: '160px' } })));
+        return;
+      }
+      const draft = { ...service };
+      const limit = h('input', { class: 'input', id: 'service-limit', type: 'number', min: 0, max: 100000, step: '0.01',
+        inputmode: 'decimal', value: draft.autoAcceptLimit ?? '', placeholder: t('service.noLimit') });
+      const firstCart = h('input', { type: 'checkbox', checked: draft.firstCartNeedsStaff, 'data-testid': 'service-first-cart' });
+      const rules = h('div', { class: 'service-rules', hidden: draft.mode !== 'MIXED' },
+        h('div', { class: 'field' }, h('label', { for: 'service-limit' }, t('service.limit')), limit,
+          h('small', { class: 'faint' }, t('service.limitHint'))),
+        h('label', { class: 'checkbox' }, firstCart, t('service.firstCart')),
+        h('small', { class: 'faint' }, t('service.firstCartHint')));
+      const choices = SERVICE_MODES.map((mode) => h('label', { class: ['service-mode', draft.mode === mode ? 'active' : ''], 'data-testid': `service-mode-${mode}` },
+        h('input', { type: 'radio', name: 'service-mode', value: mode, checked: draft.mode === mode, onchange: () => {
+          draft.mode = mode;
+          choices.forEach((choice) => choice.classList.toggle('active', choice.querySelector('input').checked));
+          rules.hidden = mode !== 'MIXED';
+        } }),
+        h('span', null, h('b', null, t(`service.mode.${mode}`)), h('small', null, t(`service.modeHint.${mode}`)))));
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const save = h('button', { class: 'btn primary', type: 'submit', 'data-testid': 'save-service' }, icon('check', 'sm'), t('common.save'));
+      mount(serviceCard,
+        head('users', t('service.title'), t('service.sub')),
+        h('form', {
+          class: 'card-body settings-form',
+          onsubmit: async (event) => {
+            event.preventDefault();
+            problem.hidden = true;
+            save.disabled = true;
+            try {
+              service = await api.saveServiceSettings({
+                mode: draft.mode,
+                autoAcceptLimit: limit.value === '' ? null : Number(limit.value),
+                firstCartNeedsStaff: firstCart.checked,
+              });
+              toast({ title: t('settings.saved') });
+              renderService();
+            } catch (error) {
+              problem.replaceChildren(icon('alert', 'sm'), errorMessage(error));
+              problem.hidden = false;
+              save.disabled = false;
+            }
+          },
+        },
+        h('div', { class: 'service-modes', role: 'radiogroup', 'aria-label': t('service.title') }, choices),
+        rules,
+        h('p', { class: 'faint' }, t('service.always')),
+        problem,
+        h('div', null, save)));
+    }
+
+    async function loadService() {
+      if (!manager) return;
+      try {
+        service = await api.serviceSettings();
+      } catch (error) {
+        toast({ title: errorMessage(error), kind: 'error' });
+        return;
+      }
+      renderService();
+    }
 
     // ------------------------------------------------------------------ my PIN
     function renderPin() {
@@ -541,6 +612,8 @@ export default {
     loadPrinters();
     renderTotp();
     loadTotp();
+    renderService();
+    loadService();
     const offPrint = bus.on('print', () => loadPrinters());
     return { destroy: () => offPrint() };
   },

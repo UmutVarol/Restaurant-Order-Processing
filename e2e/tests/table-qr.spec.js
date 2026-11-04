@@ -41,6 +41,8 @@ test('a guest orders from the table QR code and a waiter accepts it', async ({ p
   await guest.getByLabel('Your name (optional)').fill(name);
   await guest.getByTestId('send-cart').click();
   await expect(guest.getByTestId('sent-status')).toContainText('a waiter is checking your order');
+  // in the default mixed mode, the first cart at an empty table waits for a waiter, and the guest is told why
+  await expect(guest.getByTestId('sent-wait')).toHaveText('Your waiter confirms the first order at the table.');
   await guest.getByTestId('call-CALL_WAITER').click();
   await expect(guest.getByTestId('call-CALL_WAITER')).toHaveText('Waiter on the way');
 

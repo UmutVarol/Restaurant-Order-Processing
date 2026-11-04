@@ -91,6 +91,10 @@ public class MenuItem {
     @Column(name = "stock_out", nullable = false)
     private boolean stockOut;
 
+    /** A waiter confirms the dish when a guest orders it from the table, such as alcohol. */
+    @Column(name = "needs_staff_approval", nullable = false)
+    private boolean needsStaffApproval;
+
     protected MenuItem() {
         // for JPA
     }
@@ -295,6 +299,14 @@ public class MenuItem {
     /** @param code an existing station's code, or null for the category's default */
     public void assignStation(String code) {
         this.stationCode = code;
+    }
+
+    public boolean isNeedsStaffApproval() {
+        return needsStaffApproval;
+    }
+
+    public void requireStaffApproval(boolean needed) {
+        this.needsStaffApproval = needed;
     }
 
     public long getVersion() {

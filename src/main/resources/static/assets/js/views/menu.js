@@ -60,7 +60,8 @@ export default {
       return h('tr', { class: item.available ? '' : 'off' },
         h('td', null, h('div', { class: 'item-cell' }, h('span', { class: 'emoji' }, item.icon || '🍽️'),
           h('div', null, h('b', null, item.name, item.popular ? h('span', { class: 'pill plain', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px', background: 'var(--brand-soft)', color: 'var(--brand)' } }, t('pos.popular')) : null,
-            item.stockOut ? h('span', { class: 'pill stock-out', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px' }, 'data-testid': 'stock-out' }, t('stock.outOfStock')) : null),
+            item.stockOut ? h('span', { class: 'pill stock-out', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px' }, 'data-testid': 'stock-out' }, t('stock.outOfStock')) : null,
+            item.needsApproval ? h('span', { class: 'pill plain', style: { marginLeft: '8px', height: '20px', fontSize: '10.5px' }, title: t('menu.needsApprovalHint') }, t('menu.needsApprovalShort')) : null),
             h('small', null, item.description)))),
         h('td', { class: 'hide-sm' }, t(`cat.${item.category}`)),
         h('td', { class: 'hide-sm' }, h('div', { class: 'row', style: { gap: '4px', flexWrap: 'wrap' } },
@@ -227,6 +228,7 @@ export default {
       inputs.stationCode.addEventListener('change', () => { stationPicked = true; });
       inputs.category.addEventListener('change', () => { if (!stationPicked) fillStations(DEFAULT_STATION[inputs.category.value]); });
       const popular = h('input', { type: 'checkbox', checked: draft.popular });
+      const needsApproval = h('input', { type: 'checkbox', checked: Boolean(draft.needsApproval), 'data-testid': 'menu-needs-approval' });
       const tags = TAGS.map((tag) => h('label', null, h('input', { type: 'checkbox', value: tag, checked: draft.tags.includes(tag) }), t(`tag.${tag}`)));
       const options = optionGroupsEditor(draft.optionGroups ?? []);
       const errors = {};
@@ -245,6 +247,7 @@ export default {
           h('div', { class: 'grid-2' }, field('prepTimeMinutes', t('menu.prep'), inputs.prepTimeMinutes),
             stations.length ? field('stationCode', t('stations.label'), inputs.stationCode) : h('span')),
           h('label', { class: 'checkbox' }, popular, t('menu.popular')),
+          h('label', { class: 'checkbox', title: t('menu.needsApprovalHint') }, needsApproval, t('menu.needsApproval')),
           h('div', { class: 'field' }, h('label', null, t('menu.tags')), h('div', { class: 'tag-picker' }, tags)),
           h('div', { class: 'field' }, h('label', null, t('options.title')), h('small', { class: 'faint' }, t('options.editorHint')), options.element),
         ],
@@ -263,6 +266,7 @@ export default {
                 tags: tags.map((label) => label.querySelector('input')).filter((box) => box.checked).map((box) => box.value),
                 optionGroups: options.value(),
                 stationCode: stations.length ? inputs.stationCode.value : null,
+                needsApproval: needsApproval.checked,
               };
               save.disabled = true;
               Object.values(errors).forEach((el) => { el.textContent = ''; el.parentElement.classList.remove('invalid'); });

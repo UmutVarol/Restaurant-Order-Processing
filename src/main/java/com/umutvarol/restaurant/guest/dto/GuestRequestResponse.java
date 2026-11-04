@@ -3,6 +3,7 @@ package com.umutvarol.restaurant.guest.dto;
 import com.umutvarol.restaurant.guest.GuestRequest;
 import com.umutvarol.restaurant.guest.GuestRequestKind;
 import com.umutvarol.restaurant.guest.GuestRequestStatus;
+import com.umutvarol.restaurant.guest.HoldReason;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -13,7 +14,7 @@ public record GuestRequestResponse(Long id, GuestRequestKind kind, GuestRequestS
                                    String tableCode, @Nullable String guestName, @Nullable String note,
                                    @Nullable BigDecimal quotedTotal, @Nullable Long orderId, @Nullable String reason,
                                    Instant createdAt, @Nullable Instant handledAt, @Nullable String handledBy,
-                                   List<Line> lines) {
+                                   List<Line> lines, @Nullable HoldReason holdReason, boolean automatic) {
 
     public record Line(String name, @Nullable String icon, int quantity, @Nullable String options, @Nullable String note,
                        BigDecimal lineTotal) {
@@ -25,6 +26,7 @@ public record GuestRequestResponse(Long id, GuestRequestKind kind, GuestRequestS
                 request.getQuotedTotal(), request.getOrderId(), request.getReason(), request.getCreatedAt(),
                 request.getHandledAt(), request.getHandledBy(),
                 request.getLines().stream().map(line -> new Line(line.getItemName(), line.getItemIcon(),
-                        line.getQuantity(), line.getOptionsText(), line.getNote(), line.getLineTotal())).toList());
+                        line.getQuantity(), line.getOptionsText(), line.getNote(), line.getLineTotal())).toList(),
+                request.getHoldReason(), request.isAutoAccepted());
     }
 }

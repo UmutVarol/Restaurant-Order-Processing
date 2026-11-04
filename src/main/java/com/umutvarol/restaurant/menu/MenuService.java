@@ -59,6 +59,7 @@ public class MenuService {
         item.replaceOptions(specs(request));
         // Stored explicitly, so the station counts as in use and cannot be removed from under the dish.
         assignStation(item, request.stationCode() != null ? request.stationCode() : Station.defaultCode(item.getCategory()));
+        item.requireStaffApproval(Boolean.TRUE.equals(request.needsApproval()));
         return MenuItemResponse.from(repository.saveAndFlush(item));
     }
 
@@ -71,6 +72,9 @@ public class MenuService {
                 request.prepTimeMinutesOrDefault(), request.popularOrDefault(), request.tags());
         if (request.stationCode() != null) {
             assignStation(item, request.stationCode());
+        }
+        if (request.needsApproval() != null) {
+            item.requireStaffApproval(request.needsApproval());
         }
         // Left out of the request, the options stay as they are; an empty list removes them.
         if (request.optionGroups() != null) {

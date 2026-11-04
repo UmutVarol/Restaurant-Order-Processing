@@ -10,6 +10,8 @@ import com.umutvarol.restaurant.guest.dto.GuestRequestResponse;
 import com.umutvarol.restaurant.guest.dto.GuestRequestView;
 import com.umutvarol.restaurant.guest.dto.PublicTableResponse;
 import com.umutvarol.restaurant.guest.dto.TableQrResponse;
+import com.umutvarol.restaurant.menu.MenuItem;
+import com.umutvarol.restaurant.menu.MenuItemRepository;
 import com.umutvarol.restaurant.order.OrderService;
 import com.umutvarol.restaurant.order.OrderType;
 import com.umutvarol.restaurant.order.PaymentMethod;
@@ -25,6 +27,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -35,32 +39,41 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Ordering from the table. Anyone holding a table's QR code can send a cart or call for a waiter, so: the code is
- * an unguessable token stored only as a hash; a cart never reaches the kitchen until a waiter accepts it, and is
- * then placed exactly like an order from the till (same prices, menu and option rules); each table has a small
- * number of open requests and a short pause between carts; repeated calls fold into the one already waiting.
+ * an unguessable token stored only as a hash; a cart is placed exactly like an order from the till (same prices,
+ * menu and option rules), either when a waiter accepts it or at once when the restaurant's service rules let it
+ * through ({@link GuestOrderPolicy}); each table has a small number of open requests and a short pause between
+ * carts; repeated calls fold into the one already waiting.
  */
 @Service
 @Transactional
 public class GuestService {
 
     static final int MAX_OPEN_PER_TABLE = 5;
-    static final Duration ORDER_PAUSE = Duration.ofSeconds(15);
+    /** Long enough to stop a double tap, short enough for friends at one table to order from their own phones. */
+    static final Duration ORDER_PAUSE = Duration.ofSeconds(5);
     static final Duration CALL_PAUSE = Duration.ofSeconds(30);
+    /** Who placed an order the service rules let through, in the order's history and the audit log. */
+    static final String AUTO_ACTOR = "table-qr";
 
     private static final Logger audit = LoggerFactory.getLogger("guest.audit");
 
     private final GuestRequestRepository requests;
     private final DiningTableRepository tables;
     private final OrderService orders;
+    private final MenuItemRepository menuItems;
+    private final ServiceSettingsService serviceSettings;
     private final RestaurantProperties restaurant;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public GuestService(GuestRequestRepository requests, DiningTableRepository tables, OrderService orders,
+                        MenuItemRepository menuItems, ServiceSettingsService serviceSettings,
                         RestaurantProperties restaurant, ApplicationEventPublisher events, Clock clock) {
         this.requests = requests;
         this.tables = tables;
         this.orders = orders;
+        this.menuItems = menuItems;
+        this.serviceSettings = serviceSettings;
         this.restaurant = restaurant;
         this.events = events;
         this.clock = clock;
@@ -74,7 +87,7 @@ public class GuestService {
         List<GuestRequestKind> openCalls = List.of(GuestRequestKind.CALL_WAITER, GuestRequestKind.REQUEST_BILL).stream()
                 .filter(kind -> requests.findFirstByTableIdAndKindAndStatus(table.getId(), kind, GuestRequestStatus.OPEN).isPresent())
                 .toList();
-        return new PublicTableResponse(restaurant.name(), table.getCode(), openCalls);
+        return new PublicTableResponse(restaurant.name(), table.getCode(), openCalls, serviceSettings.current().getMode());
     }
 
     public GuestRequestView order(String token, GuestOrderRequest cart, String client) {
@@ -105,7 +118,18 @@ public class GuestService {
         requests.save(request);
         audit.info("guest.order table={} request={} total={} client={}", table.getCode(), request.getId(),
                 request.getQuotedTotal(), client);
-        events.publishEvent(GuestRequestChangedEvent.of(request, now));
+        Optional<HoldReason> hold = GuestOrderPolicy.holdReason(serviceSettings.current(),
+                orders.isTableSeated(table.getId()), quote.pricing().total(),
+                needsApproval(lines.stream().map(OrderLineRequest::menuItemId).collect(Collectors.toSet())),
+                requests.countByTableIdAndAutoAcceptedTrueAndCreatedAtAfter(table.getId(),
+                        now.minus(GuestOrderPolicy.BURST_WINDOW)));
+        if (hold.isPresent()) {
+            request.hold(hold.get());
+            audit.info("guest.held request={} reason={}", request.getId(), hold.get());
+            events.publishEvent(GuestRequestChangedEvent.of(request, now));
+        } else {
+            place(request, AUTO_ACTOR, true);
+        }
         return GuestRequestView.from(request);
     }
 
@@ -152,6 +176,11 @@ public class GuestService {
     /** Places the guest's cart as a real dine-in order, checked and priced again as of now. */
     public GuestRequestResponse accept(Long id, String actor) {
         GuestRequest request = find(id);
+        place(request, actor, false);
+        return GuestRequestResponse.from(request);
+    }
+
+    private void place(GuestRequest request, String actor, boolean automatic) {
         DiningTable table = request.getTable();
         String customer = request.getGuestName() != null ? request.getGuestName() : "QR " + table.getCode();
         OrderResponse order = orders.placeOrder(new PlaceOrderRequest(OrderType.DINE_IN, customer, null, table.getId(),
@@ -159,10 +188,18 @@ public class GuestService {
                 request.getLines().stream().map(line -> new OrderLineRequest(line.getMenuItemId(), line.getQuantity(),
                         line.getNote(), line.getOptionIds())).toList()), actor);
         Instant now = clock.instant();
-        request.accept(order.id(), now, actor);
-        audit.info("guest.accepted request={} order={} by={}", request.getId(), order.id(), actor);
+        if (automatic) {
+            request.acceptAutomatically(order.id(), now, actor);
+        } else {
+            request.accept(order.id(), now, actor);
+        }
+        audit.info("guest.accepted request={} order={} by={} automatic={}", request.getId(), order.id(), actor,
+                automatic);
         events.publishEvent(GuestRequestChangedEvent.of(request, now));
-        return GuestRequestResponse.from(request);
+    }
+
+    private boolean needsApproval(Set<Long> menuItemIds) {
+        return menuItems.findAllById(menuItemIds).stream().anyMatch(MenuItem::isNeedsStaffApproval);
     }
 
     public GuestRequestResponse reject(Long id, String reason, String actor) {

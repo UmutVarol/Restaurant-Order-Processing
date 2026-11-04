@@ -5,13 +5,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.umutvarol.restaurant.guest.GuestRequestKind;
+import com.umutvarol.restaurant.guest.GuestRequestRepository;
 import com.umutvarol.restaurant.menu.MenuItem;
 import com.umutvarol.restaurant.menu.MenuItemRepository;
+import com.umutvarol.restaurant.order.OrderRepository;
+import com.umutvarol.restaurant.order.OrderStatus;
 import com.umutvarol.restaurant.security.AppUser;
 import com.umutvarol.restaurant.security.AppUserRepository;
 import com.umutvarol.restaurant.security.Role;
 import com.umutvarol.restaurant.table.DiningTable;
 import com.umutvarol.restaurant.table.DiningTableRepository;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +56,12 @@ public abstract class ApiIntegrationTest {
     private MenuItemRepository menuItems;
     @Autowired
     private DiningTableRepository tables;
+    @Autowired
+    private OrderRepository orders;
+    @Autowired
+    private GuestRequestRepository guestRequests;
+    @Autowired
+    private Clock clock;
 
     @BeforeEach
     void ensureStaffAccounts() {
@@ -99,6 +111,22 @@ public abstract class ApiIntegrationTest {
                 .map(DiningTable::getId)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No table " + code));
+    }
+
+    /**
+     * The code of a table nobody is seated at and no cart came from in the last minute. The context, and with it the
+     * tables, is shared by every test class, so a test that needs an empty table asks for one instead of naming it.
+     * Use it before asking again: seating it or sending a cart from it takes it off the list.
+     */
+    protected String freeTable() {
+        var recently = clock.instant().minus(Duration.ofMinutes(1));
+        return tables.findAllByOrderByIdAsc().stream()
+                .filter(table -> !orders.existsByTableIdAndStatusIn(table.getId(), OrderStatus.activeStatuses()))
+                .filter(table -> !guestRequests.existsByTableIdAndKindAndCreatedAtAfter(table.getId(),
+                        GuestRequestKind.ORDER, recently))
+                .map(DiningTable::getCode)
+                .reduce((first, last) -> last) // from the back: the other tests mostly name the first tables
+                .orElseThrow(() -> new IllegalStateException("No free table left"));
     }
 
     /** Places a takeaway order as the waiter and returns its id. */
