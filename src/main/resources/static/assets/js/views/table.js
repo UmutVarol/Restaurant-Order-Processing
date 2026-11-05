@@ -3,12 +3,13 @@
 // straight to the kitchen or waits for a waiter, and the guest is told which, and why.
 import { h, mount } from '../core/dom.js';
 import { icon, logoMark } from '../core/icons.js';
-import { t } from '../core/i18n.js';
+import { t, tn } from '../core/i18n.js';
 import { money, time } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { haptic, langButton, openModal, themeButton, toast } from '../core/ui.js';
 import { chooseOptions, chosen, defaultOptionIds, optionKey, optionsPrice } from './options.js';
 import { rememberTable } from './pay.js';
+import { allergenList, allergenPicker } from './allergens.js';
 
 const CATEGORIES = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'];
 const POLL_MS = 5000;
@@ -16,6 +17,10 @@ const POLL_MS = 5000;
 const BILL_POLL_MS = 20000;
 const MAX_LINES = 20;
 const MAX_QUANTITY = 20;
+const AVOID_KEY = 'sofra.guest.avoid';
+/** Suggested with the cart: what it lacks of these, most popular first. */
+const PAIRINGS = [['DRINK', (cats) => cats.has('MAIN') || cats.has('STARTER')], ['DESSERT', (cats) => cats.has('MAIN')]];
+const MAX_SUGGESTIONS = 3;
 /** The four steps of an order the guest sees; READY lights the third. */
 const STEPS = ['PENDING', 'PREPARING', 'READY', 'SERVED'];
 
@@ -23,7 +28,7 @@ const STEPS = ['PENDING', 'PREPARING', 'READY', 'SERVED'];
 export function renderTable(root, token) {
   const sentKey = `sofra.table.${token.slice(0, 12)}`;
   const payKey = `sofra.table.pay.${token.slice(0, 12)}`;
-  const state = { table: null, menu: null, error: null, category: 'ALL', cart: [], sent: readSent(), calls: new Set(), busy: false, bill: null, orders: [] };
+  const state = { table: null, menu: null, error: null, category: 'ALL', cart: [], sent: readSent(), calls: new Set(), busy: false, bill: null, orders: [], avoid: readAvoid() };
   let timer = null;
   let stopped = false;
 
@@ -32,6 +37,17 @@ export function renderTable(root, token) {
   mount(root, h('div', { class: 'guest table-guest' },
     h('header', { class: 'guest-top' }, logoMark(), h('b', null, 'Sofra'), h('span', { class: 'spacer' }), langButton(), themeButton()),
     body, bar));
+
+  /** What this guest cannot eat, remembered on the phone for their next visit. */
+  function readAvoid() {
+    try { return JSON.parse(localStorage.getItem(AVOID_KEY) || '[]').filter((code) => typeof code === 'string').slice(0, 14); } catch { return []; }
+  }
+
+  function saveAvoid() {
+    try { localStorage.setItem(AVOID_KEY, JSON.stringify(state.avoid)); } catch { /* private mode */ }
+  }
+
+  const unsafe = (item) => (item.allergens || []).some((code) => state.avoid.includes(code));
 
   function readSent() {
     try { return JSON.parse(sessionStorage.getItem(sentKey) || '[]').slice(-5); } catch { return []; }
@@ -53,7 +69,9 @@ export function renderTable(root, token) {
       mount(body, [120, 60, 220, 220].map((height) => h('div', { class: 'skeleton', style: { height: `${height}px`, borderRadius: '20px' } })));
       return;
     }
-    const items = state.menu.filter((item) => item.available && (state.category === 'ALL' || item.category === state.category));
+    const inCategory = state.menu.filter((item) => item.available && (state.category === 'ALL' || item.category === state.category));
+    const items = inCategory.filter((item) => !unsafe(item));
+    const hidden = inCategory.length - items.length;
     mount(body,
       h('section', { class: 'card table-hero' },
         h('div', null, h('div', { class: 'faint' }, state.table.restaurant),
@@ -69,10 +87,16 @@ export function renderTable(root, token) {
         h('h2', { class: 'track-title' }, t('track.title')), state.orders.map(orderCard)) : null,
       // a cart the kitchen took shows up as an order above; only carts still waiting or turned down stay here
       state.sent.filter((sent) => sent.view.status !== 'ACCEPTED').map(sentCard),
-      h('div', { class: 'chips table-cats', role: 'tablist' }, ['ALL', ...CATEGORIES].map((category) => h('button', {
-        class: ['chip', state.category === category ? 'active' : ''], role: 'tab', 'aria-selected': String(state.category === category),
-        onclick: () => { state.category = category; render(); },
-      }, t(`cat.${category}`)))),
+      h('div', { class: 'table-tools' },
+        h('div', { class: 'chips table-cats', role: 'tablist' }, ['ALL', ...CATEGORIES].map((category) => h('button', {
+          class: ['chip', state.category === category ? 'active' : ''], role: 'tab', 'aria-selected': String(state.category === category),
+          onclick: () => { state.category = category; render(); },
+        }, t(`cat.${category}`)))),
+        h('button', { class: ['btn', 'sm', 'allergy-btn', state.avoid.length ? 'on' : ''], 'data-testid': 'allergies', onclick: openAllergies },
+          icon('wheat', 'sm'), h('span', null, state.avoid.length ? t('allergy.buttonN', { n: state.avoid.length }) : t('allergy.button')))),
+      hidden ? h('div', { class: 'guest-banner info allergy-note', 'data-testid': 'allergy-hidden' }, icon('wheat', 'sm'),
+        h('div', null, h('b', null, tn('allergy.hidden', hidden)), h('div', { class: 'sub' }, t('allergy.avoiding', { list: allergenList(state.avoid) }))),
+        h('button', { class: 'btn sm ghost', onclick: openAllergies }, t('allergy.change'))) : null,
       h('div', { class: 'table-menu' }, items.map(menuRow)));
     renderBar();
   }
@@ -135,12 +159,41 @@ export function renderTable(root, token) {
       h('div', { class: 'info' },
         h('b', null, item.name),
         item.description ? h('small', { dir: 'auto' }, item.description) : null,
+        item.popular || item.tags?.length ? h('div', { class: 'item-tags' },
+          item.popular ? h('span', { class: 'tag t-POPULAR' }, t('pos.popular')) : null,
+          (item.tags || []).map((tag) => h('span', { class: `tag t-${tag}` }, t(`tag.${tag}`)))) : null,
+        item.allergens?.length ? h('small', { class: 'allergen-line', 'data-testid': 'allergen-line' },
+          t('allergen.contains', { list: allergenList(item.allergens) })) : null,
         h('div', { class: 'price' }, money(item.price), item.optionGroups?.length ? h('span', { class: 'faint' }, ` · ${t('table.hasOptions')}`) : null,
           item.needsApproval && state.table.mode !== 'CLASSIC' ? h('span', { class: 'faint' }, ` · ${t('table.needsApproval')}`) : null)),
       h('button', {
         class: ['icon-btn', 'add', inCart ? 'has' : ''], 'aria-label': t('table.add', { name: item.name }), 'data-testid': `add-${item.id}`,
         onclick: () => add(item),
       }, inCart ? h('b', null, inCart) : icon('plus', 'sm')));
+  }
+
+  /** The guest ticks what they cannot eat; dishes containing it leave the menu on this phone. */
+  function openAllergies() {
+    const picker = allergenPicker(state.avoid, { testid: 'avoid', onChange: (codes) => { state.avoid = codes; saveAvoid(); render(); } });
+    openModal({
+      title: t('allergy.title'),
+      size: 'sm',
+      body: [h('p', { class: 'muted' }, t('allergy.text')), picker.element,
+        h('div', { class: 'guest-banner info' }, icon('info', 'sm'), h('div', null, t('allergy.disclaimer')))],
+      footer: (handle) => [h('button', { class: 'btn primary', 'data-testid': 'allergies-done', onclick: handle.close }, icon('check', 'sm'), t('common.done'))],
+    });
+  }
+
+  /** A drink with the food, a dessert after the main: what the cart lacks, the kitchen's popular dishes first. */
+  function suggestions() {
+    const cats = new Set(state.cart.map((line) => line.item.category));
+    const inCart = new Set(state.cart.map((line) => line.item.id));
+    return PAIRINGS.filter(([category, wanted]) => !cats.has(category) && wanted(cats))
+      .flatMap(([category]) => state.menu
+        .filter((item) => item.category === category && item.available && !inCart.has(item.id) && !unsafe(item))
+        .sort((a, b) => Number(b.popular) - Number(a.popular))
+        .slice(0, 2))
+      .slice(0, MAX_SUGGESTIONS);
   }
 
   function renderBar() {
@@ -171,6 +224,7 @@ export function renderTable(root, token) {
     const name = h('input', { class: 'input', id: 'guest-name', maxlength: 40, autocomplete: 'given-name', placeholder: t('table.namePlaceholder') });
     const note = h('textarea', { class: 'textarea', id: 'guest-note', rows: 2, maxlength: 140, placeholder: t('table.notePlaceholder') });
     const lines = h('div', { class: 'cart-lines' });
+    const suggest = h('div', { class: 'suggest' });
     const total = h('b', { class: 'options-total' });
     const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
     const send = h('button', { class: 'btn primary', 'data-testid': 'send-cart' }, icon('flash', 'sm'), t('table.send'));
@@ -184,6 +238,14 @@ export function renderTable(root, token) {
           h('span', null, line.quantity),
           h('button', { 'aria-label': t('pos.increase', { name: line.item.name }), disabled: line.quantity >= MAX_QUANTITY, onclick: () => change(line, 1) }, icon('plus', 'sm')))))));
       total.textContent = money(subtotal());
+      const picks = suggestions();
+      mount(suggest, picks.length ? [h('div', { class: 'label' }, t('suggest.title')),
+        h('div', { class: 'suggest-row' }, picks.map((item) => h('button', {
+          type: 'button', class: 'suggest-item', 'data-testid': 'suggest-item', 'aria-label': t('table.add', { name: item.name }),
+          onclick: async () => { await add(item); renderLines(); },
+        }, h('span', { class: 'emoji', 'aria-hidden': 'true' }, item.icon || '🍽️'),
+        h('span', { class: 'n' }, h('bdi', null, item.name), h('small', { class: 'faint' }, money(item.price))),
+        icon('plus', 'sm'))))] : null);
     };
     const change = (line, delta) => {
       line.quantity += delta;
@@ -198,6 +260,7 @@ export function renderTable(root, token) {
       size: 'sm',
       body: [lines,
         h('div', { class: 'row options-sum' }, h('span', { class: 'muted' }, t('table.subtotal')), total),
+        suggest,
         h('p', { class: 'faint', style: { fontSize: '12px' } }, t(`table.taxNote.${state.table.mode || 'CLASSIC'}`)),
         h('div', { class: 'field' }, h('label', { for: 'guest-name' }, t('table.name')), name),
         h('div', { class: 'field' }, h('label', { for: 'guest-note' }, t('table.note')), note),

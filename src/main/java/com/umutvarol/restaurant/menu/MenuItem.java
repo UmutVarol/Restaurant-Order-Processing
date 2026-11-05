@@ -77,6 +77,12 @@ public class MenuItem {
     @Column(name = "tag", nullable = false, length = 20)
     private Set<DietaryTag> tags = new HashSet<>();
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "menu_item_allergens", joinColumns = @JoinColumn(name = "menu_item_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "allergen", nullable = false, length = 20)
+    private Set<Allergen> allergens = new HashSet<>();
+
     @OneToMany(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sortOrder ASC, id ASC")
     private List<OptionGroup> optionGroups = new ArrayList<>();
@@ -281,6 +287,16 @@ public class MenuItem {
 
     public boolean isArchived() {
         return archived;
+    }
+
+    /** What the dish contains of the allergens a restaurant must declare. */
+    public void declareAllergens(Set<Allergen> contained) {
+        allergens.clear();
+        allergens.addAll(contained);
+    }
+
+    public Set<Allergen> getAllergens() {
+        return Collections.unmodifiableSet(allergens);
     }
 
     public Set<DietaryTag> getTags() {

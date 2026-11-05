@@ -89,6 +89,34 @@ class MenuApiIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void dishesDeclareTheirAllergens() throws Exception {
+        // the seeded dishes come with theirs; guests read them without signing in
+        mvc.perform(get("/api/v1/menu"))
+                .andExpect(jsonPath("$[?(@.name == 'Humus')].allergens[*]").value(hasItem("SESAME")))
+                .andExpect(jsonPath("$[?(@.name == 'Levrek Izgara')].allergens[*]").value(hasItem("FISH")))
+                .andExpect(jsonPath("$[?(@.name == 'Çoban Salata')].allergens[*]", hasSize(0)));
+
+        String created = mvc.perform(json(as(ADMIN, post("/api/v1/menu")), """
+                        {"name": "Peynirli Pide", "category": "MAIN", "price": 320, "allergens": ["MILK", "GLUTEN"]}"""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.allergens", hasSize(2)))
+                .andExpect(jsonPath("$.allergens[0]").value("GLUTEN"))
+                .andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(created, "$.id")).longValue();
+        // an update that leaves them out keeps them; an empty list says the dish has none
+        mvc.perform(json(as(ADMIN, put("/api/v1/menu/{id}", id)), """
+                        {"name": "Peynirli Pide", "category": "MAIN", "price": 340}"""))
+                .andExpect(jsonPath("$.allergens", hasSize(2)));
+        mvc.perform(json(as(ADMIN, put("/api/v1/menu/{id}", id)), """
+                        {"name": "Peynirli Pide", "category": "MAIN", "price": 340, "allergens": []}"""))
+                .andExpect(jsonPath("$.allergens", hasSize(0)));
+        mvc.perform(json(as(ADMIN, put("/api/v1/menu/{id}", id)), """
+                        {"name": "Peynirli Pide", "category": "MAIN", "price": 340, "allergens": ["PEANUT_BUTTER"]}"""))
+                .andExpect(status().isBadRequest());
+        mvc.perform(as(ADMIN, delete("/api/v1/menu/{id}", id))).andExpect(status().is2xxSuccessful());
+    }
+
+    @Test
     void validatesMenuItems() throws Exception {
         mvc.perform(json(as(ADMIN, post("/api/v1/menu")), """
                         {"name": " ", "category": "MAIN", "price": -5, "prepTimeMinutes": 999}"""))

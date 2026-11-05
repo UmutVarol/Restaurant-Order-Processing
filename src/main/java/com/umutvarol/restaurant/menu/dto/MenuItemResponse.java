@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.menu.dto;
 
+import com.umutvarol.restaurant.menu.Allergen;
 import com.umutvarol.restaurant.menu.DietaryTag;
 import com.umutvarol.restaurant.menu.MenuCategory;
 import com.umutvarol.restaurant.menu.MenuItem;
@@ -22,7 +23,8 @@ public record MenuItemResponse(
         List<OptionGroupResponse> optionGroups,
         String stationCode,
         boolean stockOut,
-        boolean needsApproval) {
+        boolean needsApproval,
+        Set<Allergen> allergens) {
 
     public static MenuItemResponse from(MenuItem item) {
         return new MenuItemResponse(
@@ -39,6 +41,7 @@ public record MenuItemResponse(
                 item.getOptionGroups().stream().map(OptionGroupResponse::from).toList(),
                 item.getStationCode(),
                 item.isStockOut(),
-                item.isNeedsStaffApproval());
+                item.isNeedsStaffApproval(),
+                new TreeSet<>(item.getAllergens()));
     }
 }

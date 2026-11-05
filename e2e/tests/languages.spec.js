@@ -63,8 +63,12 @@ test('Russian counts seats with its own plural forms', async ({ page }) => {
   await page.getByRole('button', { name: new RegExp(ACCOUNT) }).click();
   await expect(page.locator('.shell')).toBeVisible();
   await page.goto('/#/floor');
-  // 2 and 4 seats take "места", 6 and 8 take "мест"
-  const seats = page.locator('.table-card .seats');
-  await expect(seats.filter({ hasText: /^4 места$/ }).first()).toBeVisible();
-  await expect(seats.filter({ hasText: /^6 мест$/ }).first()).toBeVisible();
+  // the floor counts seats in Russian; which tables are free depends on the time of day (the demo data follows it)
+  await expect(page.locator('.table-card .seats').filter({ hasText: /^\d+ мест[ао]?$/ }).first()).toBeVisible();
+  // 1 and 21 take "место", 2 to 4 take "места", 5 to 20 take "мест", through the app's own texts
+  const counts = await page.evaluate(async () => {
+    const { tn } = await import('/assets/js/core/i18n.js');
+    return [1, 2, 4, 5, 6, 8, 11, 21].map((n) => tn('floor.seats', n));
+  });
+  expect(counts).toEqual(['1 место', '2 места', '4 места', '5 мест', '6 мест', '8 мест', '11 мест', '21 место']);
 });

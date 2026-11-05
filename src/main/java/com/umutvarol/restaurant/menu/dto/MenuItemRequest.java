@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.menu.dto;
 
+import com.umutvarol.restaurant.menu.Allergen;
 import com.umutvarol.restaurant.menu.DietaryTag;
 import com.umutvarol.restaurant.menu.MenuCategory;
 import jakarta.validation.Valid;
@@ -27,7 +28,8 @@ public record MenuItemRequest(
         Set<DietaryTag> tags,
         @Size(max = 8) List<@Valid @NotNull OptionGroupRequest> optionGroups,
         @Pattern(regexp = "[A-Z][A-Z0-9_]{1,19}") String stationCode,
-        Boolean needsApproval) {
+        Boolean needsApproval,
+        Set<Allergen> allergens) {
 
 
     public int prepTimeMinutesOrDefault() {

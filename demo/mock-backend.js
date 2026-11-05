@@ -139,6 +139,16 @@
     return { code: normalized, coupon };
   }
 
+  // What the seeded dishes contain (as migration V20 declares them); saved demo states from before keep working.
+  const SEED_ALLERGENS = {
+    'Mercimek Çorbası': ['MILK'], 'Sigara Böreği': ['EGGS', 'GLUTEN', 'MILK'], 'Humus': ['MILK', 'NUTS', 'SESAME'],
+    'Paçanga Böreği': ['EGGS', 'GLUTEN', 'MILK'], 'Adana Kebap': ['GLUTEN'], 'İskender': ['GLUTEN', 'MILK'], 'Lahmacun': ['GLUTEN'],
+    'Mantı': ['EGGS', 'GLUTEN', 'MILK'], 'Izgara Tavuk': ['GLUTEN'], 'Köfte Tabağı': ['EGGS', 'GLUTEN'], 'Levrek Izgara': ['FISH'],
+    'Künefe': ['GLUTEN', 'MILK', 'NUTS'], 'Fıstıklı Baklava': ['GLUTEN', 'MILK', 'NUTS'], 'Fırın Sütlaç': ['MILK'],
+    'San Sebastian Cheesecake': ['EGGS', 'GLUTEN', 'MILK'], 'Ayran': ['MILK'],
+  };
+  const ALLERGEN_CODES = ['GLUTEN', 'CRUSTACEANS', 'EGGS', 'FISH', 'PEANUTS', 'SOY', 'MILK', 'NUTS', 'CELERY', 'MUSTARD', 'SESAME', 'SULPHITES', 'LUPIN', 'MOLLUSCS'];
+
   // ------------------------------------------------------------------------------------------- state
   let state = null;
 
@@ -357,6 +367,7 @@
   const menuView = (m) => ({
     id: m.id, name: m.name, description: m.description, category: m.category, price: toLira(m.priceC), icon: m.icon,
     prepTimeMinutes: m.prepTimeMinutes, popular: m.popular, available: m.available && !m.archived && !m.stockOut, tags: [...m.tags].sort(),
+    allergens: [...(m.allergens ?? SEED_ALLERGENS[m.name] ?? [])].sort(),
     stockOut: Boolean(m.stockOut), needsApproval: Boolean(m.needsApproval),
     stationCode: m.stationCode ?? DEFAULT_STATION[m.category],
     optionGroups: (m.optionGroups || []).map((g) => ({ id: g.id, name: g.name, minSelect: g.minSelect, maxSelect: g.maxSelect,
@@ -1268,6 +1279,12 @@
     if (body.stationCode != null) dish.stationCode = body.stationCode;
     else dish.stationCode ??= DEFAULT_STATION[dish.category];
     if (body.needsApproval != null) dish.needsApproval = Boolean(body.needsApproval);
+    if (body.allergens != null) {
+      if (!Array.isArray(body.allergens) || body.allergens.some((code) => !ALLERGEN_CODES.includes(code))) {
+        throw new Problem(400, 'VALIDATION_FAILED', 'Unknown allergen');
+      }
+      dish.allergens = [...new Set(body.allergens)];
+    }
   }
 
   // ------------------------------------------------------------------------------------------- stations

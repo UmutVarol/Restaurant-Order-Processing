@@ -3,6 +3,7 @@ import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { money, number, percent } from '../core/format.js';
+import { allergenList, allergenPicker } from './allergens.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
@@ -62,7 +63,8 @@ export default {
           h('div', null, h('b', null, item.name, item.popular ? h('span', { class: 'pill plain name-pill popular' }, t('pos.popular')) : null,
             item.stockOut ? h('span', { class: 'pill stock-out name-pill', 'data-testid': 'stock-out' }, t('stock.outOfStock')) : null,
             item.needsApproval ? h('span', { class: 'pill plain name-pill', title: t('menu.needsApprovalHint') }, t('menu.needsApprovalShort')) : null),
-            h('small', { dir: 'auto' }, item.description)))),
+            h('small', { dir: 'auto' }, item.description),
+            item.allergens?.length ? h('small', { class: 'allergen-line' }, t('allergen.contains', { list: allergenList(item.allergens) })) : null))),
         h('td', { class: 'hide-sm' }, t(`cat.${item.category}`)),
         h('td', { class: 'hide-sm' }, h('div', { class: 'row', style: { gap: '4px', flexWrap: 'wrap' } },
           item.tags.map((tag) => h('span', { class: `tag t-${tag}` }, t(`tag.${tag}`))))),
@@ -209,8 +211,8 @@ export default {
 
     function editItem(item) {
       const draft = item
-        ? { ...item, tags: [...item.tags] }
-        : { name: '', description: '', category: category === 'ALL' ? 'MAIN' : category, price: '', icon: '🍽️', prepTimeMinutes: 10, popular: false, tags: [] };
+        ? { ...item, tags: [...item.tags], allergens: [...(item.allergens || [])] }
+        : { name: '', description: '', category: category === 'ALL' ? 'MAIN' : category, price: '', icon: '🍽️', prepTimeMinutes: 10, popular: false, tags: [], allergens: [] };
       const inputs = {
         name: h('input', { class: 'input', value: draft.name, maxlength: 80, autofocus: true }),
         description: h('textarea', { class: 'textarea', rows: 2, maxlength: 255 }, draft.description || ''),
@@ -230,6 +232,7 @@ export default {
       const popular = h('input', { type: 'checkbox', checked: draft.popular });
       const needsApproval = h('input', { type: 'checkbox', checked: Boolean(draft.needsApproval), 'data-testid': 'menu-needs-approval' });
       const tags = TAGS.map((tag) => h('label', null, h('input', { type: 'checkbox', value: tag, checked: draft.tags.includes(tag) }), t(`tag.${tag}`)));
+      const allergens = allergenPicker(draft.allergens, { testid: 'menu-allergen' });
       const options = optionGroupsEditor(draft.optionGroups ?? []);
       const errors = {};
       const field = (name, label, control) => {
@@ -249,6 +252,7 @@ export default {
           h('label', { class: 'checkbox' }, popular, t('menu.popular')),
           h('label', { class: 'checkbox', title: t('menu.needsApprovalHint') }, needsApproval, t('menu.needsApproval')),
           h('div', { class: 'field' }, h('label', null, t('menu.tags')), h('div', { class: 'tag-picker' }, tags)),
+          h('div', { class: 'field' }, h('label', null, t('menu.allergens')), h('small', { class: 'faint' }, t('menu.allergensHint')), allergens.element),
           h('div', { class: 'field' }, h('label', null, t('options.title')), h('small', { class: 'faint' }, t('options.editorHint')), options.element),
         ],
         footer: (handle) => {
@@ -267,6 +271,7 @@ export default {
                 optionGroups: options.value(),
                 stationCode: stations.length ? inputs.stationCode.value : null,
                 needsApproval: needsApproval.checked,
+                allergens: allergens.value(),
               };
               save.disabled = true;
               Object.values(errors).forEach((el) => { el.textContent = ''; el.parentElement.classList.remove('invalid'); });

@@ -60,6 +60,9 @@ public class MenuService {
         // Stored explicitly, so the station counts as in use and cannot be removed from under the dish.
         assignStation(item, request.stationCode() != null ? request.stationCode() : Station.defaultCode(item.getCategory()));
         item.requireStaffApproval(Boolean.TRUE.equals(request.needsApproval()));
+        if (request.allergens() != null) {
+            item.declareAllergens(request.allergens());
+        }
         return MenuItemResponse.from(repository.saveAndFlush(item));
     }
 
@@ -75,6 +78,10 @@ public class MenuService {
         }
         if (request.needsApproval() != null) {
             item.requireStaffApproval(request.needsApproval());
+        }
+        // Left out of the request (an older till), the declared allergens stay as they are.
+        if (request.allergens() != null) {
+            item.declareAllergens(request.allergens());
         }
         // Left out of the request, the options stay as they are; an empty list removes them.
         if (request.optionGroups() != null) {

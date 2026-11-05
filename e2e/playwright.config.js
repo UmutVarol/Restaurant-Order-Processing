@@ -21,7 +21,7 @@ module.exports = defineConfig({
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: /mobile\.spec\.js/ },
-    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /(layout|mobile|language-layout|service-screen|guest-pays)\.spec\.js/ },
+    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /(layout|mobile|language-layout|service-screen|guest-pays|guest-menu)\.spec\.js/ },
     // a small Android phone, where long words run out of room first
     { name: 'small-phone', use: { ...devices['Galaxy S9+'], viewport: { width: 360, height: 740 } }, testMatch: /language-layout\.spec\.js/ },
   ],
