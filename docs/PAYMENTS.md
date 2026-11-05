@@ -103,6 +103,28 @@ sequenceDiagram
 - **Everything is audited** in the `payment.audit` log, and suspicious events are counted in
   `sofra.payments.suspicious` for alerting. See [SECURITY.md](../SECURITY.md#payments) for the full threat model.
 
+### Without a waiter: from the table's own code
+
+Since Sprint 3 guests need not wait for a link. The table's QR page shows what the table owes and a **Pay from my
+phone** button, which asks for a payment link for whatever is due on the table's open bill
+(`POST /api/v1/public/table/{token}/bill`) and opens it. Everything above applies to that link too. On the payment
+page the guest chooses:
+
+| Choice | Amount |
+|---|---|
+| Everything | what is due |
+| Split equally | what is due divided by the number of people (2 to 20), rounded up to the kuruş |
+| What I had | the dishes they pick, one by one, at their price on the bill; never more than is due |
+| Another amount | typed in; never more than is due |
+
+then a tip (none, 5, 10 or 15 %), and, if they want one, the details for an **e-Arşiv invoice**
+(`POST /api/v1/public/pay/{token}/invoice`: name or company, VKN or TCKN, address). The invoice covers the whole
+bill and is issued when the bill is paid, like one asked for at the till. Details given once cannot be changed from
+a phone, and the tax number is never sent back; everyone paying on the bill sees whose name it is in.
+
+A phone keeps the link it opened while it can still be paid. One bill takes at most 24 links from its table's code;
+beyond that guests are asked to call the waiter, who can still bring one.
+
 ## End of day
 
 The **Cashier** screen lists every open bill. For managers it adds the **Z report** for any day: sales, tips and
@@ -163,6 +185,9 @@ Stripe can be added as another implementation without touching bills or payments
 | `POST` | `/api/v1/payments/day/close` | Manager, recent sign-in | Close a day with the counted cash |
 | `GET` | `/api/v1/public/pay/{token}` | anyone with the link | What the guest sees |
 | `POST` | `/api/v1/public/pay/{token}/checkout` | anyone with the link | Start paying, returns the provider's page |
+| `GET` `POST` | `/api/v1/public/pay/{token}/invoice` | anyone with the link | Whether an invoice can be asked for and whose name it is in; give the details once |
+| `GET` | `/api/v1/public/table/{token}/bill` | anyone with the table's code | What the table owes, and whether it can be paid from a phone |
+| `POST` | `/api/v1/public/table/{token}/bill` | anyone with the table's code | A payment link for what is due on the table's bill |
 | `POST` | `/api/v1/payments/callback/{provider}` | the provider | Where the guest's browser returns |
 | `POST` | `/api/v1/payments/webhook/{provider}` | the provider | Notification that triggers a check; the body is not trusted |
 

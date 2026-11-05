@@ -7,7 +7,8 @@ Odoo POS), weighed for a small to mid-size restaurant in Türkiye.
 Every sprint uses the same **definition of done**:
 
 - the money and security rules live on the server and are covered by unit and API integration tests;
-- the screens are covered by a Playwright test, in both languages, at desktop and phone widths;
+- the screens are covered by a Playwright test at desktop and phone widths, and pass the layout audit in all six
+  languages (from Sprint 3);
 - the in-browser demo (`demo/mock-backend.js`) behaves like the real API;
 - new endpoints are in Swagger, new settings are in the README, and new controls are in [SECURITY.md](../SECURITY.md);
 - the CI pipeline (build, tests, CodeQL, Trivy, Gitleaks, OWASP ZAP) is green.
@@ -177,6 +178,33 @@ credentials only from the environment or encrypted settings; a separate rate lim
 **Security notes**: integrator credentials and certificates from the environment; no guest tax numbers in logs;
 documents and their audit kept for the legal retention period.
 
+## Sprint 3: the guest orders, the waiter serves (done)
+
+Sprint 3 set out to make an evening take as little effort as possible, for guests and staff alike. Rather than
+removing the waiter, it uses a **mixed model**: guests order and pay from the table's QR code, and the waiter
+carries plates, looks after the table and steps in where a person is needed. Most shifts are worked from a phone,
+so the staff app became phone-first along the way.
+
+| | Feature | What it gives the restaurant | Where |
+|---|---|---|---|
+| S3.1 | **Service mode and cart rules** | Classic (waiters take orders), mixed (guests order; the first cart at an empty table, dishes marked "needs a waiter", carts over a limit and bursts wait for a waiter) or QR first (straight to the kitchen). Each held cart says why. | `guest`, V17 |
+| — | **Phone-first staff app** | Tab bar per role with a More sheet, bottom sheets you drag away, the waiter's ticket as a sheet, orders and menus as cards, haptics, safe areas, motion on transform and opacity only | `app.js`, `core/ui.js`, `app.css` |
+| — | **Numbered tables** | Tables 1 to 12 instead of zone letters; the zone stays its own column | V18 |
+| — | **Six languages** | Turkish, English, German, French, Russian and Arabic (right to left), loaded per language, real plural rules, Western digits for Arabic prices; a test keeps every language complete and a layout audit keeps every screen tidy in each | `core/locales`, `LocaleFilesTest` |
+| S3.2 | **Waiter service screen** | Plates ready to carry (one tap: served), guests waiting for a waiter, tables to clear once paid; a badge on the tab | `views/service.js`, `floor`, V19 |
+| S3.3 | **Guests pay their own bill** | From the table's QR code with no waiter: everything, split equally, only what they had, or another amount; a tip; e-Arşiv invoice details given once and never shown back | `payment`, `fiscal` |
+| S3.4 | **Live order status** | Every order at the table on a four-step bar, about when it will be ready (station targets), each dish held, ready or served; a buzz when it is ready | `guest` |
+| S3.5 | **Allergens and suggestions** | The 14 allergens per dish (EU 1169/2011, Turkish Food Codex), a guest's "I can't eat" filter remembered on their phone, and a drink or dessert suggested with the cart | `menu`, V20 |
+
+**What a live restaurant still needs.**
+
+- **Paying from the phone** needs an iyzico merchant account (API key and secret); the demo uses the simulated
+  provider. Invoices need the e-Arşiv integrator from Sprint 2.
+- **Allergens** are only as good as the recipes: the restaurant declares them per dish, and the seeded values are
+  examples. The guest's screen says so and asks guests with a serious allergy to tell their waiter.
+- **Translations** of German, French, Russian and Arabic were written for the app; a native speaker should review
+  them before a restaurant relies on them, as with any menu text.
+
 ## Later
 
 Smaller items that came up in the research, not yet scheduled:
@@ -198,6 +226,26 @@ yazıcıları ve bunları yöneten Ayarlar ekranı.
 maliyeti, çevrimdışı kasa, Yemeksepeti/Getir/Trendyol siparişleri ve yasal belge (ÖKC fişi, e-Arşiv fatura).
 Platform ve mali entegrasyonlar port + genel JSON adaptör + simülasyon olarak hazır; canlıya bağlamak için
 platformların, ÖKC üreticisinin ve özel entegratörün sözleşme ve erişim bilgileri gerekir.
+
+**Sprint 3 (tamamlandı): misafir sipariş verir, garson servis eder.** Garsonu kaldırmak yerine **karma model**:
+misafir masadaki QR koddan sipariş verir ve öder; garson tabakları taşır, masayla ilgilenir ve insan gereken yerde
+devreye girer. Bu sprintte:
+
+- **Servis modu ve sepet kuralları:** klasik, karma (ilk sepet, "garson onayı gerekir" işaretli yemekler, limit
+  üstü ve art arda gelen sepetler garsonu bekler) ve önce QR; bekleyen sepet nedenini söyler.
+- **Önce telefon:** role göre alt sekme çubuğu ve "Daha fazla" paneli, sürüklenerek kapanan alt paneller, garsonun
+  adisyonu alt panelde, kart görünümleri, titreşim geri bildirimi.
+- **Masa numaraları** 1'den 12'ye; **altı dil** (Arapça sağdan sola) ve her dilde taşma denetimi.
+- **Garsonun servis ekranı:** taşınacak hazır tabaklar, garson bekleyen misafirler, temizlenecek masalar.
+- **Misafir hesabını kendisi öder:** hepsi, eşit bölüşüm, yalnızca yedikleri ya da başka tutar; bahşiş ve bir kez
+  verilen e-Arşiv fatura bilgisi.
+- **Canlı sipariş takibi:** dört adımlı çubuk, yaklaşık hazır olma süresi, yemek yemek durum; hazır olunca titreşim.
+- **Alerjenler ve öneriler:** yemek başına 14 alerjen, misafirin "yiyemediklerim" filtresi, sepete uygun içecek ve
+  tatlı önerisi.
+
+Canlıya almak için: telefondan ödeme için iyzico üye işyeri hesabı, fatura için e-Arşiv entegratörü; alerjenleri
+restoran kendi tariflerine göre girmeli; Almanca, Fransızca, Rusça ve Arapça metinler ana dili bu diller olan biri
+tarafından gözden geçirilmeli.
 
 **Sprint 2 (plan), sırasıyla:**
 

@@ -41,7 +41,8 @@ the floor plan tracks every open check, and the manager watches it all on a live
 |---|---|
 | **Point of sale** | Menu grouped by category, with search and dietary filters. Dine-in, takeaway or delivery, a table picker with live occupancy, **product options** (spice level, extras, sugar) with their extra prices, per-line kitchen notes and coupons. The server prices the ticket live, and <kbd>Ctrl</kbd>+<kbd>Enter</kbd> sends it. |
 | **Table service** | **Void** or **comp** (on the house) single units of a line, a **manual discount**, **move** a seating to another table or **merge** two tables onto one bill. A waiter needs a manager to approve with their PIN at the till; every change is repriced, audited and refused once the bill has been paid beyond it. |
-| **Ordering from the table** | Each table's **QR code** opens its menu on the guest's phone: build a cart with options, **call the waiter** or **ask for the bill**. Carts wait in the staff inbox (live, with a chime) until a waiter accepts them. |
+| **Ordering from the table** | Each table's **QR code** opens its menu on the guest's phone: build a cart with options, **call the waiter** or **ask for the bill**. A **service mode** decides who takes the order: the waiter (classic), the guest with a waiter confirming the first cart and anything unusual (mixed), or the guest straight to the kitchen (QR first). Guests **follow their orders live** (being prepared, ready, served, about when), see each dish's **allergens** and hide what they cannot eat, get **pairing suggestions** in the cart, and **pay their own bill** from the table: everything, split equally, only what they had, or another amount, with a tip and an e-Arşiv invoice. |
+| **Waiter service screen** | Waiters open on what needs them now: plates the kitchen has ready (one tap marks them served), guests waiting for a waiter, and tables whose guests have paid and left, waiting to be cleared. |
 | **Staff PINs** | On a till a manager registered, staff switch users by tapping their name and typing a PIN; the till locks itself when idle. A PIN never authorises refunds or closing the day. |
 | **Courses and stations** | Dishes are made at **stations** (cold kitchen, grill, desserts, bar, or your own). A waiter can **hold later courses** and **fire** them when the table is ready; held dishes neither print nor show in the kitchen until then, and a voided dish that was already fired prints a VOID slip. |
 | **Kitchen and bar printers** | Orders print on network (ESC/POS) printers by station, with Turkish characters, big type for table and dishes, retries, failure alerts, reprints and a ticket preview. |
@@ -54,9 +55,9 @@ the floor plan tracks every open check, and the manager watches it all on a live
 | **Orders** | Paginated history with full-text search (order #, guest, phone, table, address) and status, type and date filters kept in the URL. A detail drawer shows the audit timeline, cancellation with a reason and a printable receipt. |
 | **Payments** | One bill per table seating or order: split it equally or by item, take cash (with change) or card (with the terminal's approval code), add tips, or show a **QR code** so guests pay their share from their phone through **iyzico** with 3-D Secure. Orders complete only when paid; cancelled orders are refunded. A cashier screen with the end-of-day Z report and cash count. Details in [docs/PAYMENTS.md](docs/PAYMENTS.md). |
 | **Dashboard** | Revenue, orders, average ticket and kitchen time against the previous period, with daily revenue, busiest hours, category mix, best sellers, channels and payment methods. |
-| **Menu management** | Create, edit and archive dishes, toggle sold-out, and set popularity and dietary tags. Deletes are soft, so history stays intact. |
+| **Menu management** | Create, edit and archive dishes, toggle sold-out, and set popularity, dietary tags and the **14 allergens** a restaurant must declare. Deletes are soft, so history stays intact. |
 | **Security** | Stateless JWT with three roles (**Manager**, **Waiter**, **Kitchen**) enforced on every endpoint, **two-step sign-in (TOTP)** for managers, account lockout, rate limiting, token revocation on sign-out, a same-origin-only CSP with **Trusted Types** and violation reports, step-up sign-in for refunds, an audited and tamper-checked payment flow, and CodeQL, Trivy, OWASP ZAP, Gitleaks and Dependabot in CI. Details and the payment threat model in [SECURITY.md](SECURITY.md). |
-| **Interface** | A documented design language ([DESIGN.md](DESIGN.md)), light and dark themes, English and Turkish, phone layouts, keyboard shortcuts and accessible markup, covered by Playwright browser tests. |
+| **Interface** | A documented design language ([DESIGN.md](DESIGN.md)), light and dark themes, **six languages** (Turkish, English, German, French, Russian and **Arabic, right to left**), a **phone-first** shell (tab bar, bottom sheets you drag away, haptics), keyboard shortcuts and accessible markup, covered by Playwright browser tests and a layout audit in every language. |
 
 ## Screenshots
 
@@ -201,7 +202,9 @@ order states.
 - **Motion with a job.** Button press feedback, a one-time arrival animation for new kitchen tickets, and
   toasts and dialogs that fade out instead of vanishing.
 - **Accessible by default.** A skip link, labelled controls, inert background behind dialogs, keyboard access
-  to every row, and real plurals in both languages.
+  to every row, and real plurals in every language (Russian and Arabic have several).
+- **Checked in every language.** A layout audit runs every screen in all six languages at 360, 390 and 412 px and
+  on a desktop, and fails on text that spills, is cut off without an ellipsis, overlaps or leaves its card.
 
 ## Engineering decisions
 
@@ -270,7 +273,10 @@ All endpoints live under `/api/v1` and are documented in Swagger UI. Responses a
 | `PUT` | `/orders/{id}/discount` | Waiter (with a manager's PIN), Manager | Set or remove a manual discount |
 | `POST` | `/tables/{id}/move`, `/tables/{id}/merge` | Waiter, Manager | Move a seating, merge two tables' bills |
 | `POST` | `/tables/{id}/qr` | Manager | A new QR code for a table (shown once) |
-| `GET` `POST` | `/public/table/{token}/**` | anyone with the table's code | Menu page, carts, calls, request status |
+| `GET` `POST` | `/public/table/{token}/**` | anyone with the table's code | Menu page, carts, calls, request status, the table's orders as the kitchen works on them (`/orders`), and its bill to pay from the phone (`/bill`) |
+| `GET` `POST` | `/public/pay/{token}/invoice` | anyone with the link | Invoice details (VKN/TCKN) for the bill, given once |
+| `GET` `PUT` | `/service-settings` | read: staff, write: Manager | Service mode and the rules for guest carts |
+| `POST` | `/floor/tables/{id}/cleared` | Waiter, Manager | A table whose guests have left is laid again |
 | `GET` `POST` | `/guest-requests/**` | Waiter, Manager | The inbox: accept, reject, done |
 | `GET` `POST` `PUT` `DELETE` | `/printers/**`, `/print-jobs` | Manager | Printers, test page, ticket preview |
 | `POST` | `/orders/{id}/reprint` | Waiter, Manager | Print an order's tickets again |
@@ -303,7 +309,7 @@ curl -s -X POST localhost:8080/api/v1/orders -H "Authorization: Bearer $TOKEN" -
 ./mvnw verify      # all tests + JaCoCo coverage gate (≥ 80 % lines)
 ```
 
-**231 tests, ~92 % line coverage**, in four layers:
+**250 tests, ~92 % line coverage**, in four layers:
 
 | Layer | Examples |
 |---|---|
@@ -322,8 +328,11 @@ They cover the waiter-to-kitchen loop over Server-Sent Events, splitting a bill 
 guest paying their share by QR code while the till updates live, the POS rules (server-side pricing, coupons,
 the 50-per-line limit, clear and undo, the kitchen note), product options, PIN switching on a registered till,
 voids, comps and discounts with a manager's PIN, moving tables, a guest ordering from the table's QR code while
-the inbox updates live, printer setup, filters kept in the URL, keyboard access to dialogs, and a check that
-no screen scrolls sideways at 390px, in either theme.
+the inbox updates live, the service modes, the waiter's service screen, guests following their orders, paying their
+own bill by items with an invoice, hiding dishes by allergen, the phone shell (tab bar, More sheet, dragging a
+sheet away), six languages with Arabic right to left, printer setup, filters kept in the URL, keyboard access to
+dialogs, and a layout audit that fails on anything spilling, cut off or overlapping, in German, Russian and Arabic,
+on a desktop and on 360 and 412 px phones.
 
 CI runs the Maven build, then the browser tests against the packaged jar, then builds the Docker image and
 smoke-tests the running container.
@@ -381,7 +390,9 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 - **Ödeme altyapısı:** her masa oturumu için tek hesap; eşit ya da ürüne göre bölme, nakit (para üstü), kart (POS onay kodu), bahşiş ve **QR kodla telefondan iyzico (3D Secure) ödemesi**. Ödenmeyen sipariş kapanmaz, iptal edilen sipariş iade edilir; Kasa ekranında gün sonu Z raporu ve kasa sayımı. Ayrıntılar: [docs/PAYMENTS.md](docs/PAYMENTS.md).
 - **Ürün seçenekleri:** acılık, ekstra, şeker gibi seçenekler ve ek fiyatları; mutfak fişinde ve hesapta görünür.
 - **Masa işlemleri:** adet bazında iptal ve ikram, manuel indirim, masa taşıma ve birleştirme; garson için yönetici PIN onayı, her değişiklik denetim kaydında, ödenmiş hesap sessizce ucuzlatılamaz.
-- **Masadan QR sipariş:** misafir masadaki kodu okutup menüden sepet oluşturur, garson çağırır ya da hesap ister; sepet garson onaylayınca mutfağa gider.
+- **Masadan QR sipariş:** misafir masadaki kodu okutup menüden sepet oluşturur, garson çağırır ya da hesap ister. **Servis modu** kimin sipariş alacağını belirler: klasik (garson), karma (misafir sipariş verir, ilk sepet ve sıra dışı durumlar garson onayından geçer) ya da önce QR (doğrudan mutfağa).
+- **Misafir deneyimi:** siparişini canlı takip eder (hazırlanıyor, hazır, servis edildi, yaklaşık süre), her yemeğin **alerjenlerini** görür ve yiyemediklerini gizler, sepette **yanına iyi gidecek** öneriler alır, hesabını **masadan kendisi öder**: hepsi, eşit bölüşüm, yalnızca yedikleri ya da başka tutar; bahşiş ve e-Arşiv fatura bilgisiyle.
+- **Garsonun servis ekranı:** mutfağın hazır dediği tabaklar (tek dokunuşla servis edildi), garson bekleyen misafirler ve hesabı ödeyip kalkan, temizlenecek masalar.
 - **Personel PIN'i:** yöneticinin kaydettiği kasada adını seçip PIN ile hızlı geçiş, boşta kalınca otomatik kilit; PIN ile iade ve gün kapama yapılamaz.
 - **Mutfak/bar yazıcıları:** istasyona göre ESC/POS ağ yazıcılarına Türkçe karakterli fiş, yeniden deneme, arıza uyarısı, tekrar baskı ve önizleme.
 - **Yöneticiler için iki adımlı giriş (TOTP):** QR ile kurulum, tek kullanımlık kurtarma kodları, şifreli saklanan anahtar; iade ve gün kapamada şifre + kod.
@@ -392,9 +403,9 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 - **Yasal belge:** ödenen her hesaba tek belge — ÖKC fişi ya da (online ödeme veya VKN/TCKN ile istenirse) e-Arşiv fatura; kesilene kadar yeniden denenir, ÖKC Z raporuyla mutabakat yapılır.
 - **Güvenlik:** yalnızca kendi kaynağına izin veren CSP + Trusted Types (XSS/kart hırsızı script'lere karşı tarayıcı düzeyinde engel), iade ve gün kapamada yeniden şifre, sahte ödeme bildirimlerine karşı sunucudan sunucuya doğrulama, ödeme denetim kaydı; CI'da CodeQL, Trivy, OWASP ZAP ve Gitleaks.
 - JWT ile rol bazlı yetkilendirme (Yönetici / Garson / Mutfak), Flyway, PostgreSQL, Docker, OpenAPI, Prometheus metrikleri.
-- 231 test (birim, entegrasyon, mimari, Testcontainers) ve ~%92 kod kapsamı; 40 Playwright tarayıcı testi.
-- [DESIGN.md](DESIGN.md) ile belgelenmiş sıcak lokanta tasarımı: açık/koyu tema, Türkçe/İngilizce arayüz, mobil uyumlu düzen.
-- Playwright tarayıcı testleri: garsondan mutfağa canlı akış, POS kuralları ve 390px genişlikte taşma kontrolü.
+- 250 test (birim, entegrasyon, mimari, Testcontainers) ve ~%92 kod kapsamı; 65 Playwright tarayıcı testi.
+- [DESIGN.md](DESIGN.md) ile belgelenmiş sıcak lokanta tasarımı: açık/koyu tema, **altı dil** (Türkçe, İngilizce, Almanca, Fransızca, Rusça ve sağdan sola **Arapça**), önce telefon için tasarlanmış arayüz (alt sekme çubuğu, sürüklenerek kapanan alt paneller, titreşim geri bildirimi).
+- Playwright tarayıcı testleri: garsondan mutfağa canlı akış, POS kuralları, misafirin kendi ödemesi ve her dilde 360/412 px telefonda taşma, kesilme ve çakışma denetimi.
 
 Çalıştırmak için: `./mvnw spring-boot:run` → **http://localhost:8080** (demo hesaplar yukarıdaki tabloda).
 

@@ -217,6 +217,9 @@
     } else if (data?.type === 'table') {
       state.clearing = data.clearing;
       publish(data.event, 'table');
+    } else if (data?.type === 'fiscal') {
+      state.fiscal = data.fiscal;
+      if (data.event) publish(data.event, 'fiscal');
     } else if (data?.type === 'menu') {
       state.menu = data.menu;
       state.nextMenuId = Math.max(state.nextMenuId, data.nextMenuId);
@@ -1154,7 +1157,9 @@
       reference: `SIM-${doc.kind === 'RECEIPT' ? 'OKC' : 'EARSIV'}-${sequence}`,
       number: doc.kind === 'RECEIPT' ? `F${String(sequence).padStart(6, '0')}` : `SIM${new Date().getFullYear()}${String(sequence).padStart(9, '0')}`,
     });
-    publish({ documentId: doc.id, billId: bill.id, status: doc.status, occurredAt: iso(Date.now()) }, 'fiscal');
+    const event = { documentId: doc.id, billId: bill.id, status: doc.status, occurredAt: iso(Date.now()) };
+    publish(event, 'fiscal');
+    channel?.postMessage({ type: 'fiscal', fiscal: state.fiscal, event });
   }
 
   const dayRange = (day) => {
@@ -2298,6 +2303,7 @@
       Object.assign(doc, { kind: 'E_ARSIV', buyerName: String(body.name).trim(), buyerTaxId: taxId, buyerAddress: clean(body.address) });
       if (bill.status === 'CLOSED') issueFiscal(bill);
       save();
+      channel?.postMessage({ type: 'fiscal', fiscal: state.fiscal });
       return fiscalView(doc);
     }],
     // A guest paying from their phone gives their invoice details there; once per bill.
@@ -2321,6 +2327,7 @@
       }
       Object.assign(doc, { kind: 'E_ARSIV', buyerName: String(body.name).trim(), buyerTaxId: taxId, buyerAddress: clean(body.address) });
       save();
+      channel?.postMessage({ type: 'fiscal', fiscal: state.fiscal });
       return guestInvoice(bill.id);
     }],
     ['POST', /^fiscal\/documents\/(\d+)\/retry$/, 'till', ({ params }) => {
