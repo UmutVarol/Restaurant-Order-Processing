@@ -113,6 +113,46 @@ class GuestOrderingApiIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void guestsFollowTheirTablesOrdersAsTheKitchenWorksOnThem() throws Exception {
+        String table = newTable();
+        String token = issueQr(table);
+        mvc.perform(get("/api/v1/public/table/{token}/orders", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        // a waiter types the order in: the guests still see it
+        String placed = mvc.perform(json(as(WAITER, post("/api/v1/orders")), """
+                        {"type": "DINE_IN", "tableId": %d, "customerName": "Secret Name", "paymentMethod": "CARD",
+                         "items": [{"menuItemId": %d, "quantity": 2}]}""".formatted(tableId(table), menuItemId("Ayran"))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long orderId = ((Number) JsonPath.read(placed, "$.id")).longValue();
+        String seen = mvc.perform(get("/api/v1/public/table/{token}/orders", token))
+                .andExpect(jsonPath("$[0].number").value(orderId))
+                .andExpect(jsonPath("$[0].status").value("PENDING"))
+                .andExpect(jsonPath("$[0].readyBy").isNotEmpty())
+                .andExpect(jsonPath("$[0].lines[0].name").value("Ayran"))
+                .andExpect(jsonPath("$[0].lines[0].quantity").value(2))
+                .andExpect(jsonPath("$[0].lines[0].state").value("WAITING"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(seen).doesNotContain("Secret Name").doesNotContain("waiter").doesNotContain("price");
+
+        List<String> states = List.of("COOKING", "READY", "SERVED");
+        for (String state : states) {
+            mvc.perform(as(WAITER, post("/api/v1/orders/{id}/advance", orderId))).andExpect(status().isOk());
+            mvc.perform(get("/api/v1/public/table/{token}/orders", token))
+                    .andExpect(jsonPath("$[0].lines[0].state").value(state));
+        }
+        mvc.perform(get("/api/v1/public/table/{token}/orders", token))
+                .andExpect(jsonPath("$[0].status").value("SERVED"))
+                .andExpect(jsonPath("$[0].readyBy").doesNotExist());
+
+        // another table's code shows only its own orders
+        mvc.perform(get("/api/v1/public/table/{token}/orders", issueQr(newTable())))
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
     void aReplacedOrMadeUpCodeOpensNothing() throws Exception {
         String old = issueQr("2");
         issueQr("2");

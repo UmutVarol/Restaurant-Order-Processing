@@ -6,12 +6,18 @@ import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.common.error.TooManyRequestsException;
 import com.umutvarol.restaurant.guest.dto.GuestOrderRequest;
+import com.umutvarol.restaurant.guest.dto.GuestOrderView;
+import com.umutvarol.restaurant.guest.dto.GuestOrderView.LineState;
 import com.umutvarol.restaurant.guest.dto.GuestRequestResponse;
 import com.umutvarol.restaurant.guest.dto.GuestRequestView;
 import com.umutvarol.restaurant.guest.dto.PublicTableResponse;
 import com.umutvarol.restaurant.guest.dto.TableQrResponse;
 import com.umutvarol.restaurant.menu.MenuItem;
 import com.umutvarol.restaurant.menu.MenuItemRepository;
+import com.umutvarol.restaurant.menu.StationService;
+import com.umutvarol.restaurant.order.Order;
+import com.umutvarol.restaurant.order.OrderLine;
+import com.umutvarol.restaurant.order.OrderStatus;
 import com.umutvarol.restaurant.order.OrderService;
 import com.umutvarol.restaurant.order.OrderType;
 import com.umutvarol.restaurant.order.PaymentMethod;
@@ -26,7 +32,10 @@ import com.umutvarol.restaurant.table.DiningTableRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -48,6 +57,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class GuestService {
 
+    /** For a dish whose station is gone: about the time a kitchen station aims for. */
+    private static final int DEFAULT_TARGET_MINUTES = 15;
+
     static final int MAX_OPEN_PER_TABLE = 5;
     /** Long enough to stop a double tap, short enough for friends at one table to order from their own phones. */
     static final Duration ORDER_PAUSE = Duration.ofSeconds(5);
@@ -62,18 +74,20 @@ public class GuestService {
     private final OrderService orders;
     private final MenuItemRepository menuItems;
     private final ServiceSettingsService serviceSettings;
+    private final StationService stations;
     private final RestaurantProperties restaurant;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public GuestService(GuestRequestRepository requests, DiningTableRepository tables, OrderService orders,
-                        MenuItemRepository menuItems, ServiceSettingsService serviceSettings,
+                        MenuItemRepository menuItems, ServiceSettingsService serviceSettings, StationService stations,
                         RestaurantProperties restaurant, ApplicationEventPublisher events, Clock clock) {
         this.requests = requests;
         this.tables = tables;
         this.orders = orders;
         this.menuItems = menuItems;
         this.serviceSettings = serviceSettings;
+        this.stations = stations;
         this.restaurant = restaurant;
         this.events = events;
         this.clock = clock;
@@ -152,6 +166,50 @@ public class GuestService {
         audit.info("guest.{} table={} request={} client={}", kind.name().toLowerCase(), table.getCode(), request.getId(), client);
         events.publishEvent(GuestRequestChangedEvent.of(request, now));
         return GuestRequestView.from(request);
+    }
+
+    /**
+     * The orders in progress at the table, as its guests follow them: every order at the table, also the ones a
+     * waiter typed in, since the guests share the table.
+     */
+    @Transactional(readOnly = true)
+    public List<GuestOrderView> orders(String token) {
+        DiningTable table = tableFor(token);
+        Map<String, Integer> targets = stations.targetMinutes();
+        return orders.activeAt(table.getId()).stream().map(order -> view(order, targets)).toList();
+    }
+
+    private static GuestOrderView view(Order order, Map<String, Integer> targets) {
+        Instant readyBy = null;
+        List<GuestOrderView.Line> lines = new ArrayList<>();
+        for (OrderLine line : order.getLines()) {
+            if (line.activeQuantity() <= 0) {
+                continue;
+            }
+            LineState state = stateOf(order.getStatus(), line);
+            if (state == LineState.WAITING || state == LineState.COOKING) {
+                Instant due = Objects.requireNonNull(line.getFiredAt())
+                        .plus(Duration.ofMinutes(targets.getOrDefault(line.getStationCode(), DEFAULT_TARGET_MINUTES)));
+                readyBy = readyBy == null || due.isAfter(readyBy) ? due : readyBy;
+            }
+            lines.add(new GuestOrderView.Line(line.getItemName(), line.getItemIcon(), line.activeQuantity(),
+                    line.optionSummary(), line.getCourse(), state));
+        }
+        return new GuestOrderView(order.getId(), order.getStatus(), order.getCreatedAt(), order.statusSince(), readyBy,
+                List.copyOf(lines));
+    }
+
+    private static LineState stateOf(OrderStatus status, OrderLine line) {
+        if (status == OrderStatus.SERVED) {
+            return LineState.SERVED;
+        }
+        if (!line.isFired()) {
+            return LineState.LATER;
+        }
+        if (line.getReadyAt() != null || status == OrderStatus.READY) {
+            return LineState.READY;
+        }
+        return status == OrderStatus.PENDING ? LineState.WAITING : LineState.COOKING;
     }
 
     /** A guest's phone checking on its own request; the table's token must match too. */

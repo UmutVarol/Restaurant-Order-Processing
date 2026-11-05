@@ -29,6 +29,12 @@ public class StationService {
         return stations.findAllByOrderBySortOrderAscIdAsc().stream().map(StationResponse::from).toList();
     }
 
+    /** How long each station aims to take for a dish, in minutes, by station code. */
+    @Transactional(readOnly = true)
+    public Map<String, Integer> targetMinutes() {
+        return stations.findAll().stream().collect(Collectors.toMap(Station::getCode, Station::getTargetMinutes));
+    }
+
     @Transactional(readOnly = true)
     public Set<String> codes() {
         return stations.findAll().stream().map(Station::getCode).collect(Collectors.toSet());

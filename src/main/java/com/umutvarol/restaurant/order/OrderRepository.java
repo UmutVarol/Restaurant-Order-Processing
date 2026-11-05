@@ -21,4 +21,6 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     long countByStatusIn(Collection<OrderStatus> statuses);
 
     boolean existsByTableIdAndStatusIn(Long tableId, Collection<OrderStatus> statuses);
+
+    List<Order> findByTableIdAndStatusInOrderByCreatedAtAsc(Long tableId, Collection<OrderStatus> statuses);
 }

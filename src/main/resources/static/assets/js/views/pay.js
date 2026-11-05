@@ -229,7 +229,7 @@ function payPage(root, token) {
     };
     return h('div', { class: ['pay-item', count ? 'picked' : ''], 'data-testid': 'pay-item' },
       h('span', { class: 'emoji' }, line.icon || '🍽️'),
-      h('span', { class: 'n' }, h('span', { dir: 'auto' }, line.name), line.options ? h('small', { class: 'opts' }, line.options) : null,
+      h('span', { class: 'n' }, h('span', null, h('bdi', null, line.name)), line.options ? h('small', { class: 'opts' }, h('bdi', null, line.options)) : null,
         h('small', { class: 'faint' }, `${money(lira(Math.round(cents(line.lineTotal) / line.quantity)))} · ${count}/${line.quantity}`)),
       h('div', { class: 'stepper lg' },
         h('button', { type: 'button', 'aria-label': t('pos.decrease', { name: line.name }), disabled: count <= 0, onclick: () => set(count - 1) }, icon('minus', 'sm')),

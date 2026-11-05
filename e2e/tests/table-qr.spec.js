@@ -13,6 +13,8 @@ async function api(page, method, path, body) {
 }
 
 test('a guest orders from the table QR code and a waiter accepts it', async ({ page, context }) => {
+  // the guest follows the order to the table, through the page's slower look once everything is served
+  test.setTimeout(90_000);
   await signIn(page, 'admin');
   const tables = await api(page, 'GET', '/floor/tables');
   const table = tables.find((x) => !x.occupied);
@@ -60,11 +62,28 @@ test('a guest orders from the table QR code and a waiter accepts it', async ({ p
   const call = page.locator('.drawer [data-testid="inbox-CALL_WAITER"]', { hasText: `Table ${table.code} ·` });
   await call.getByTestId('inbox-done').click();
 
-  // the guest sees it went through
-  await expect(guest.getByTestId('sent-status')).toContainText('Your order is with the kitchen', { timeout: 15_000 });
+  // the guest sees it went through, and follows it as the kitchen works on it
+  const track = guest.getByTestId('order-track');
+  await expect(track.getByTestId('track-status')).toHaveText('Received by the kitchen', { timeout: 15_000 });
+  await expect(track).toContainText('1 × Lahmacun');
+  await expect(track.getByTestId('track-eta')).toContainText(/Ready in about \d+ min|Any minute now/);
+  await expect(guest.getByTestId('sent-status')).toHaveCount(0);
   await expect(guest.getByTestId('call-CALL_WAITER')).toHaveText('Call the waiter', { timeout: 15_000 });
-
-  // leave the table free for the tests that need one
   const placed = (await api(page, 'GET', '/orders/active')).find((o) => o.customerName === name);
-  await api(page, 'POST', `/orders/${placed.id}/cancel`, { reason: 'E2E clean-up' });
+  await api(page, 'POST', `/orders/${placed.id}/advance`);
+  await expect(track.getByTestId('track-status')).toHaveText('Being prepared', { timeout: 15_000 });
+  await api(page, 'POST', `/orders/${placed.id}/advance`);
+  await expect(track.getByTestId('track-status')).toHaveText('Ready — on its way to you', { timeout: 15_000 });
+  await expect(guest.locator('.toast', { hasText: 'Your order is ready and on its way' })).toBeVisible();
+  await expect(track.getByTestId('track-eta')).toHaveCount(0);
+
+  // served and paid at the till, so the table is free for the tests that need one
+  await api(page, 'POST', `/orders/${placed.id}/advance`);
+  await expect(track.getByTestId('track-status')).toHaveText('Served — enjoy your meal!', { timeout: 15_000 });
+  const bill = await api(page, 'GET', `/bills/by-order/${placed.id}`);
+  await api(page, 'POST', `/bills/${bill.id}/payments`, { method: 'CASH', amount: bill.balance });
+  await api(page, 'POST', `/orders/${placed.id}/advance`);
+  // once everything is served the page looks less often (20 s): the guests share the restaurant's Wi-Fi address
+  await expect(track).toHaveCount(0, { timeout: 45_000 });
+  await api(page, 'POST', `/floor/tables/${table.id}/cleared`);
 });

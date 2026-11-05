@@ -44,8 +44,9 @@ test('in QR-first mode a guest cart goes straight to the kitchen', async ({ page
     await guest.getByTestId('open-cart').click();
     await expect(guest.locator('.modal')).toContainText('Your order goes straight to the kitchen.');
     await guest.getByTestId('send-cart').click();
-    await expect(guest.getByTestId('sent-status')).toContainText('Sent straight to the kitchen');
-    await expect(guest.getByTestId('sent-wait')).toHaveCount(0);
+    await expect(guest.locator('.toast', { hasText: 'Sent straight to the kitchen' })).toBeVisible();
+    await expect(guest.getByTestId('sent-status')).toHaveCount(0);
+    await expect(guest.getByTestId('order-track').getByTestId('track-status')).toHaveText('Received by the kitchen');
 
     // nobody had to accept it: the order is already in progress at the table
     const placed = (await api(page, 'GET', '/orders/active')).filter((o) => o.table?.code === table.code);

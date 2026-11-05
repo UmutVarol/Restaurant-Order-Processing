@@ -272,6 +272,7 @@ export const api = {
   publicTable: (token) => request('GET', `/public/table/${encodeURIComponent(token)}`, undefined, { auth: false }),
   guestOrder: (token, cart) => request('POST', `/public/table/${encodeURIComponent(token)}/orders`, cart, { auth: false }),
   guestCall: (token, call) => request('POST', `/public/table/${encodeURIComponent(token)}/calls`, call, { auth: false }),
+  guestOrders: (token) => request('GET', `/public/table/${encodeURIComponent(token)}/orders`, undefined, { auth: false }),
   guestRequest: (token, id) => request('GET', `/public/table/${encodeURIComponent(token)}/requests/${encodeURIComponent(id)}`, undefined, { auth: false }),
   // Staff inbox and table codes.
   guestRequests: () => request('GET', '/guest-requests'),

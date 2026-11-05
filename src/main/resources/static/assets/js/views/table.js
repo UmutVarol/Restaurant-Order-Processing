@@ -4,9 +4,9 @@
 import { h, mount } from '../core/dom.js';
 import { icon, logoMark } from '../core/icons.js';
 import { t } from '../core/i18n.js';
-import { money } from '../core/format.js';
+import { money, time } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
-import { haptic, langButton, openModal, themeButton } from '../core/ui.js';
+import { haptic, langButton, openModal, themeButton, toast } from '../core/ui.js';
 import { chooseOptions, chosen, defaultOptionIds, optionKey, optionsPrice } from './options.js';
 import { rememberTable } from './pay.js';
 
@@ -16,12 +16,14 @@ const POLL_MS = 5000;
 const BILL_POLL_MS = 20000;
 const MAX_LINES = 20;
 const MAX_QUANTITY = 20;
+/** The four steps of an order the guest sees; READY lights the third. */
+const STEPS = ['PENDING', 'PREPARING', 'READY', 'SERVED'];
 
 /** Renders the table page into {@code root}. Returns a cleanup function. */
 export function renderTable(root, token) {
   const sentKey = `sofra.table.${token.slice(0, 12)}`;
   const payKey = `sofra.table.pay.${token.slice(0, 12)}`;
-  const state = { table: null, menu: null, error: null, category: 'ALL', cart: [], sent: readSent(), calls: new Set(), busy: false, bill: null };
+  const state = { table: null, menu: null, error: null, category: 'ALL', cart: [], sent: readSent(), calls: new Set(), busy: false, bill: null, orders: [] };
   let timer = null;
   let stopped = false;
 
@@ -63,7 +65,10 @@ export function renderTable(root, token) {
           h('button', { class: 'btn primary lg block', 'data-testid': 'pay-bill', disabled: state.busy, onclick: payBill },
             icon('card', 'sm'), t('table.payBill', { amount: money(state.bill.due) })),
           h('small', { class: 'faint' }, t('table.payHint'))) : null),
-      state.sent.map(sentCard),
+      state.orders.length ? h('section', { class: 'track', 'aria-live': 'polite' },
+        h('h2', { class: 'track-title' }, t('track.title')), state.orders.map(orderCard)) : null,
+      // a cart the kitchen took shows up as an order above; only carts still waiting or turned down stay here
+      state.sent.filter((sent) => sent.view.status !== 'ACCEPTED').map(sentCard),
       h('div', { class: 'chips table-cats', role: 'tablist' }, ['ALL', ...CATEGORIES].map((category) => h('button', {
         class: ['chip', state.category === category ? 'active' : ''], role: 'tab', 'aria-selected': String(state.category === category),
         onclick: () => { state.category = category; render(); },
@@ -90,6 +95,37 @@ export function renderTable(root, token) {
         h('div', { class: 'sub' }, r.status === 'REJECTED' && r.reason ? r.reason
           : `${r.lines.map((line) => `${line.quantity} × ${line.name}`).join(', ')} · ${money(r.total)}`),
         r.status === 'OPEN' && r.waitingFor ? h('div', { class: 'sub', 'data-testid': 'sent-wait' }, t(`table.wait.${r.waitingFor}`)) : null));
+  }
+
+  /** An order at the table as the kitchen works on it: a four-step bar, when it should be ready, and each dish. */
+  function orderCard(order) {
+    const step = STEPS.indexOf(order.status);
+    const minutes = order.readyBy ? Math.ceil((new Date(order.readyBy).getTime() - Date.now()) / 60_000) : null;
+    return h('article', { class: ['card', 'track-card', `is-${order.status.toLowerCase()}`], 'data-testid': 'order-track' },
+      h('div', { class: 'track-head' },
+        h('div', { class: 'track-status' },
+          h('b', { 'data-testid': 'track-status' }, t(`track.status.${order.status}`)),
+          h('small', { class: 'faint' }, t('track.placed', { number: order.number, time: time(order.placedAt) }))),
+        h('span', { class: 'track-icon', 'aria-hidden': 'true' }, icon(order.status === 'SERVED' ? 'check' : order.status === 'READY' ? 'bell' : 'flame', 'sm'))),
+      h('div', { class: 'track-bar', role: 'img', 'aria-label': t('track.step', { step: step + 1, status: t(`track.status.${order.status}`) }) },
+        STEPS.map((_, i) => h('span', { class: i < step ? 'done' : i === step ? 'now' : '' }))),
+      minutes != null ? h('div', { class: 'track-eta', 'data-testid': 'track-eta' }, icon('clock', 'sm'),
+        minutes > 1 ? t('track.eta', { minutes }) : t('track.soon')) : null,
+      h('ul', { class: 'track-lines' }, order.lines.map((line) => h('li', { class: `is-${line.state.toLowerCase()}` },
+        h('span', { class: 'emoji', 'aria-hidden': 'true' }, line.icon || '🍽️'),
+        // the name keeps its own direction (bdi) while the line lines up with the page, in Arabic too
+        h('span', { class: 'n' }, h('span', null, `${line.quantity} × `, h('bdi', null, line.name)), line.options ? h('small', { class: 'faint' }, h('bdi', null, line.options)) : null),
+        ['LATER', 'READY', 'SERVED'].includes(line.state) && order.status !== 'SERVED'
+          ? h('span', { class: `pill track-pill ${line.state.toLowerCase()}` }, t(`track.line.${line.state}`)) : null))));
+  }
+
+  /** Tells the table when the kitchen has an order ready: a buzz and a note, once per order. */
+  function announceReady(before, after) {
+    const was = new Map(before.map((order) => [order.number, order.status]));
+    const ready = after.filter((order) => order.status === 'READY' && was.has(order.number) && was.get(order.number) !== 'READY');
+    if (!ready.length) return;
+    haptic('success');
+    toast({ title: t('track.readyToast') });
   }
 
   function menuRow(item) {
@@ -182,6 +218,8 @@ export function renderTable(root, token) {
         state.cart = [];
         haptic('success');
         modal.close();
+        // a cart the service rules sent straight on shows up as an order; say so, as there is no card for it
+        if (view.status === 'ACCEPTED') toast({ title: t('table.status.AUTO') });
         render();
         poll();
       } catch (error) {
@@ -246,15 +284,19 @@ export function renderTable(root, token) {
       try { sent.view = await api.guestRequest(token, sent.id); } catch { /* try again next time */ }
     }
     try {
-      const [table, bill] = await Promise.all([api.publicTable(token), api.tableBill(token).catch(() => state.bill)]);
+      const [table, bill, orders] = await Promise.all([api.publicTable(token), api.tableBill(token).catch(() => state.bill),
+        api.guestOrders(token).catch(() => state.orders)]);
+      announceReady(state.orders, orders);
       state.table = table;
       state.bill = bill;
+      state.orders = orders;
       state.calls = new Set(table.openCalls);
     } catch { /* keep what we have */ }
     saveSent();
     if (stopped) return;
     render();
-    const waiting = state.sent.some((sent) => sent.view.status === 'OPEN') || state.calls.size;
+    const waiting = state.sent.some((sent) => sent.view.status === 'OPEN') || state.calls.size
+      || state.orders.some((order) => order.status !== 'SERVED');
     timer = setTimeout(poll, waiting ? POLL_MS : BILL_POLL_MS);
   }
 
@@ -272,7 +314,11 @@ export function renderTable(root, token) {
     if (!state.error) poll();
   }
 
+  // a phone coming back to the page (from the camera, another app) looks again at once
+  const onVisible = () => { if (document.visibilityState === 'visible' && state.table) poll(); };
+  document.addEventListener('visibilitychange', onVisible);
+
   render();
   load();
-  return () => { stopped = true; clearTimeout(timer); };
+  return () => { stopped = true; clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); };
 }

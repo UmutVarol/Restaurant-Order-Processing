@@ -2092,6 +2092,27 @@
       const base = `${location.origin}${location.pathname}${location.search}`;
       return [201, { token: link.token, url: `${base}#/pay/${link.token}`, amount: null, expiresAt: iso(link.expiresAt) }];
     }],
+    // The table's orders as its guests follow them: no prices, no names.
+    ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})\/orders$/, 'public', ({ params }) => {
+      const table = tableForToken(params[0]);
+      const targets = new Map(stations().map((station) => [station.code, station.targetMinutes]));
+      return state.orders.filter((o) => o.table && o.table.id === table.id && ACTIVE.includes(o.status))
+        .sort((a, b) => a.createdAt - b.createdAt).map((order) => {
+          let readyBy = null;
+          const lines = order.lines.filter((l) => l.quantity - (l.voided || 0) > 0).map((l) => {
+            const fired = l.firedAt !== null;
+            const state = order.status === 'SERVED' ? 'SERVED' : !fired ? 'LATER'
+              : l.readyAt || order.status === 'READY' ? 'READY' : order.status === 'PENDING' ? 'WAITING' : 'COOKING';
+            if (state === 'WAITING' || state === 'COOKING') {
+              const due = (l.firedAt ?? order.createdAt) + (targets.get(l.station ?? DEFAULT_STATION[l.category]) ?? 15) * MINUTE;
+              readyBy = Math.max(readyBy ?? 0, due);
+            }
+            return { name: l.name, icon: l.icon, quantity: l.quantity - (l.voided || 0), options: optionText(l) || null, course: l.course ?? 1, state };
+          });
+          return { number: order.id, status: order.status, placedAt: iso(order.createdAt), statusSince: iso(order.history[order.history.length - 1].at),
+            readyBy: readyBy == null ? null : iso(readyBy), lines };
+        });
+    }],
     ['POST', /^public\/table\/([A-Za-z0-9_-]{20,100})\/orders$/, 'public', ({ params }, body) => {
       const table = tableForToken(params[0]);
       requireFields({ items: !(body.items || []).length || body.items.length > 20 ? 'size must be between 1 and 20' : null });

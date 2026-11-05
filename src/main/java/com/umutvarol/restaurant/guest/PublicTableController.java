@@ -2,6 +2,7 @@ package com.umutvarol.restaurant.guest;
 
 import com.umutvarol.restaurant.guest.dto.GuestCallRequest;
 import com.umutvarol.restaurant.guest.dto.GuestOrderRequest;
+import com.umutvarol.restaurant.guest.dto.GuestOrderView;
 import com.umutvarol.restaurant.guest.dto.GuestRequestView;
 import com.umutvarol.restaurant.guest.dto.PublicTableResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,6 +55,12 @@ class PublicTableController {
     GuestRequestView call(@PathVariable @Pattern(regexp = "[A-Za-z0-9_-]{20,100}") String token,
                           @Valid @RequestBody GuestCallRequest call, HttpServletRequest http) {
         return guests.call(token, call.kind(), http.getRemoteAddr());
+    }
+
+    @Operation(summary = "The table's orders as the kitchen works on them", description = "No prices, no names.")
+    @GetMapping("/orders")
+    List<GuestOrderView> orders(@PathVariable @Pattern(regexp = "[A-Za-z0-9_-]{20,100}") String token) {
+        return guests.orders(token);
     }
 
     @Operation(summary = "How a request is getting on")

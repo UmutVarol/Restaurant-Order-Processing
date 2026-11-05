@@ -184,6 +184,12 @@ public class OrderService {
         return orders.existsByTableIdAndStatusIn(tableId, OrderStatus.activeStatuses());
     }
 
+    /** The orders still in progress at a table, oldest first. Call within a transaction to read their lines. */
+    @Transactional(readOnly = true)
+    public List<Order> activeAt(Long tableId) {
+        return orders.findByTableIdAndStatusInOrderByCreatedAtAsc(tableId, OrderStatus.activeStatuses());
+    }
+
     @Transactional(readOnly = true)
     public List<OrderResponse> activeOrders() {
         return orders.findByStatusInOrderByCreatedAtAsc(OrderStatus.activeStatuses()).stream()
