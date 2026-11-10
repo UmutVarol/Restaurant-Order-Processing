@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| **Dosyalar** | [`video/out/sofra-tr-9x16.mp4`](video/out/sofra-tr-9x16.mp4) (Reels, Hikâye, LinkedIn dikey) · [`video/out/sofra-tr-4x5.mp4`](video/out/sofra-tr-4x5.mp4) (LinkedIn ve Instagram akışı) |
-| **Kapak** | [`video/out/sofra-cover-9x16.png`](video/out/sofra-cover-9x16.png) · [`video/out/sofra-cover-4x5.png`](video/out/sofra-cover-4x5.png) |
+| **Dosyalar** | [`video/final/sofra-tr-9x16.mp4`](video/final/sofra-tr-9x16.mp4) (Reels, Hikâye, LinkedIn dikey) · [`video/final/sofra-tr-4x5.mp4`](video/final/sofra-tr-4x5.mp4) (LinkedIn ve Instagram akışı) |
+| **Kapak** | [`video/final/sofra-cover-9x16.png`](video/final/sofra-cover-9x16.png) · [`video/final/sofra-cover-4x5.png`](video/final/sofra-cover-4x5.png) |
 | **Süre** | 30,2 sn, 30 fps |
 | **Dil** | Türkçe (yazılar videonun içinde; ses gerekmez) |
 | **Kaynak** | [`video/`](video): tek bir HTML sahnesi, kare kare işlenir. Yeniden üretim: [`video/README.md`](video/README.md) |

@@ -5,9 +5,9 @@ A 30-second animated introduction to Sofra for LinkedIn and Instagram. The plan,
 
 | File | What it is |
 |---|---|
-| `out/sofra-tr-9x16.mp4` | 1080×1920: Instagram Reels and Stories, LinkedIn vertical video |
-| `out/sofra-tr-4x5.mp4` | 1080×1350: LinkedIn and Instagram feeds (the same frames, cropped) |
-| `out/sofra-cover-*.png` | Cover images (the logo scene) |
+| `final/sofra-tr-9x16.mp4` | 1080×1920: Instagram Reels and Stories, LinkedIn vertical video |
+| `final/sofra-tr-4x5.mp4` | 1080×1350: LinkedIn and Instagram feeds (the same frames, cropped) |
+| `final/sofra-cover-*.png` | Cover images (the logo scene) |
 | `video.html` | The film: one page whose every frame is a function of time |
 | `shots/tr/` | Real screens of the app, captured by `capture.js` |
 | `capture.js` | Plays one evening at one table in a running Sofra and screenshots it |
@@ -29,7 +29,7 @@ Needs Node with Playwright (the `e2e/` folder has it) and `ffmpeg` with libx264.
 
 ```bash
 cd e2e
-NODE_PATH=$PWD/node_modules node ../marketing/video/render.js ../marketing/video/out/sofra-tr        # both formats, ~2 min
+NODE_PATH=$PWD/node_modules node ../marketing/video/render.js ../marketing/video/final/sofra-tr        # both formats, ~2 min
 NODE_PATH=$PWD/node_modules node ../marketing/video/render.js --stills /tmp/stills 7.2,14.9,29.8    # single frames
 ```
 

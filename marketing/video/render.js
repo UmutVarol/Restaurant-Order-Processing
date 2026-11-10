@@ -7,7 +7,7 @@
 //   node render.js --stills <dir> 1.2,4.5 [lang]   single frames, to check a scene
 //
 // 30 fps, H.264 high profile, BT.709, a silent AAC track (some uploaders refuse a file with no audio stream).
-// Run from e2e/ (which has Playwright):  NODE_PATH=$PWD/node_modules node ../marketing/video/render.js out/sofra-tr
+// Run from e2e/ (which has Playwright):  NODE_PATH=$PWD/node_modules node ../marketing/video/render.js ../marketing/video/final/sofra-tr
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const fs = require('fs');
