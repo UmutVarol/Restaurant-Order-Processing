@@ -1,0 +1,8 @@
+# capture.js takes a few more screens than the film uses; only the ones video.html shows are kept
+shots/*/menu-top-*.png
+shots/*/menu-cart-2.png
+shots/*/floor.png
+shots/*/pay-1.png
+shots/*/track-*.png
+shots/*/service-0.png
+shots/*/scene.json

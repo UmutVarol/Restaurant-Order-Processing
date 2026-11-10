@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Sofra · tanıtım videosu</title>
+<!--
+  The promo video as one page: a 1080×1920 stage whose every pixel is a pure function of time. render.js asks for
+  window.seek(t) frame by frame and encodes the screenshots; opening the page in a browser plays it in real time
+  (space pauses, ← → step, ?t=12 jumps). The screens are real captures of the app (capture.js); everything else is
+  drawn here in Sofra's own palette and type (DESIGN.md).
+
+  Composition: everything that matters sits between y=250 and y=1480, the part Instagram Reels leaves uncovered.
+  The 4:5 feed version is the same master cropped to y=190…1540.
+-->
+<style>
+@font-face { font-family: "Inter"; font-weight: 100 900; src: url("../../src/main/resources/static/assets/fonts/inter-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Inter"; font-weight: 100 900; src: url("../../src/main/resources/static/assets/fonts/inter-latin-ext-wght-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1E00-1E9F,U+20A0-20AB,U+20AD-20C0,U+2113; }
+@font-face { font-family: "Fraunces"; font-weight: 100 900; src: url("../../src/main/resources/static/assets/fonts/fraunces-latin-opsz-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Fraunces"; font-weight: 100 900; src: url("../../src/main/resources/static/assets/fonts/fraunces-latin-ext-opsz-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1E00-1E9F,U+20A0-20AB,U+20AD-20C0,U+2113; }
+@font-face { font-family: "Fraunces"; font-style: italic; font-weight: 100 900; src: url("../../src/main/resources/static/assets/fonts/fraunces-latin-opsz-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Fraunces"; font-style: italic; font-weight: 100 900; src: url("../../src/main/resources/static/assets/fonts/fraunces-latin-ext-opsz-italic.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1E00-1E9F,U+20A0-20AB,U+20AD-20C0,U+2113; }
+
+:root {
+  --cream: #f6f2ec; --surface: #fff; --ink: #1f1a17; --ink-2: #4a423c; --muted: #7a7068; --faint: #a59c93; --line: #ebe4da;
+  --brand: #e4572e; --brand-strong: #c9441d; --brand-soft: #fdebe4; --saffron: #f2a541; --green: #2f9e6b; --green-soft: #e3f4ec;
+  --espresso: #1f1a17; --espresso-2: #2b2420; --on-dark: #f6f2ec;
+  --display: "Fraunces", Georgia, serif; --sans: "Inter", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { background: #0d0b0a; overflow: hidden; }
+#stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--cream); font-family: var(--sans); color: var(--ink);
+  -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; transform-origin: 0 0; }
+#stage * { will-change: auto; }
+.layer { position: absolute; inset: 0; }
+.abs { position: absolute; }
+
+/* the app's own warm background, with two slow glows for life */
+.glow { position: absolute; border-radius: 50%; filter: blur(90px); }
+#g1 { width: 1100px; height: 900px; left: 420px; top: -260px; background: rgba(228, 87, 46, .13); }
+#g2 { width: 1000px; height: 900px; left: -420px; top: 1240px; background: rgba(242, 165, 65, .16); }
+
+/* ---------------------------------------------------------------- the problem (espresso) */
+#dark { background: radial-gradient(900px 700px at 85% 8%, rgba(228, 87, 46, .22), transparent 60%),
+                    radial-gradient(900px 800px at 0% 100%, rgba(242, 165, 65, .12), transparent 60%), var(--espresso); color: var(--on-dark); }
+.wait { position: absolute; left: 96px; right: 96px; height: 200px; }
+.wait .wl { font-size: 40px; font-weight: 500; color: rgba(246, 242, 236, .62); letter-spacing: -.005em; }
+.wait .ww { position: absolute; left: 0; top: 46px; font-family: var(--display); font-size: 136px; font-weight: 600; letter-spacing: -.035em; line-height: 1.05; }
+.wait .word { position: relative; display: inline-block; }
+.wait .strike { position: absolute; left: -10px; top: 56%; height: 12px; width: 0; border-radius: 6px; background: var(--brand); }
+.wait .timer { position: absolute; right: 0; top: 88px; display: flex; align-items: center; gap: 14px; padding: 14px 24px 14px 18px; border-radius: 99px;
+  border: 2px solid rgba(246, 242, 236, .2); font-size: 42px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--saffron); }
+.wait .timer svg { width: 44px; height: 44px; }
+#ask { position: absolute; left: 96px; right: 96px; top: 1140px; font-family: var(--display); font-style: italic; font-weight: 500; font-size: 92px;
+  line-height: 1.08; letter-spacing: -.03em; color: var(--on-dark); }
+#ask b { font-weight: 500; color: var(--saffron); }
+#wipe { position: absolute; width: 2900px; height: 2900px; left: -910px; top: -250px; border-radius: 50%; background: var(--brand); }
+
+/* ---------------------------------------------------------------- the logo */
+#logo .mark { position: absolute; left: 430px; top: 560px; width: 220px; height: 220px; filter: drop-shadow(0 30px 50px rgba(228, 87, 46, .35)); }
+#logo .name { position: absolute; left: 0; right: 0; top: 800px; text-align: center; font-family: var(--display); font-weight: 600; font-size: 188px; letter-spacing: -.04em; line-height: 1.1; }
+#logo .name span { display: inline-block; }
+#logo .tag { position: absolute; left: 80px; right: 80px; top: 1040px; text-align: center; font-family: var(--display); font-style: italic; font-size: 54px; line-height: 1.25;
+  color: var(--ink-2); letter-spacing: -.015em; }
+#logo .tag b { font-weight: 500; color: var(--brand); }
+#logo .kind { position: absolute; left: 0; right: 0; top: 1230px; text-align: center; font-size: 26px; font-weight: 650; letter-spacing: .2em; text-transform: uppercase; color: var(--faint); }
+
+/* ---------------------------------------------------------------- chapters: the app's own four-step bar */
+#chapters { position: absolute; left: 84px; top: 262px; width: 912px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.ch b { display: block; margin-bottom: 12px; font-size: 24px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.ch.on b { color: var(--brand); }
+.ch.done b { color: var(--ink-2); }
+.ch .seg { height: 10px; border-radius: 99px; background: #e9e0d4; overflow: hidden; }
+.ch .seg i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--brand); }
+.cap { position: absolute; left: 84px; top: 356px; width: 912px; }
+.cap h2 { font-family: var(--display); font-weight: 600; font-size: 80px; line-height: 1.04; letter-spacing: -.035em; }
+.cap h2 em { font-style: italic; font-weight: 500; color: var(--brand); }
+.cap p { margin-top: 20px; font-size: 36px; line-height: 1.32; font-weight: 450; color: var(--muted); letter-spacing: -.01em; }
+
+/* ---------------------------------------------------------------- devices */
+.phone { position: absolute; left: 186px; top: 650px; width: 708px; padding: 14px; border-radius: 88px; background: linear-gradient(160deg, #3a302a, #17120f 55%);
+  box-shadow: 0 0 0 2px #0f0c0a, 0 60px 120px rgba(60, 30, 10, .30), 0 18px 40px rgba(60, 30, 10, .18), inset 0 0 0 2px rgba(255, 255, 255, .08); }
+.phone .screen { position: relative; border-radius: 74px; overflow: hidden; background: #f5ede6; }
+.phone .status { height: 68px; display: flex; align-items: center; justify-content: space-between; padding: 14px 54px 0 62px; font-size: 27px; font-weight: 650; color: var(--ink); background: #f5ede6; }
+.phone .status .island { position: absolute; left: 50%; top: 20px; width: 168px; height: 44px; margin-left: -84px; border-radius: 22px; background: #0f0c0a; }
+.phone .status svg { height: 26px; }
+.shots { position: relative; width: 680px; aspect-ratio: 390 / 844; }
+.shots img { position: absolute; left: 0; top: 0; width: 100%; display: block; }
+.tap { position: absolute; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; background: rgba(31, 26, 23, .22); border: 4px solid rgba(255, 255, 255, .9);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .25); }
+.tablet { position: absolute; left: 70px; top: 660px; width: 1389px; padding: 16px; border-radius: 46px; background: linear-gradient(160deg, #3a302a, #17120f 55%);
+  box-shadow: 0 60px 120px rgba(60, 30, 10, .28), 0 18px 40px rgba(60, 30, 10, .16), inset 0 0 0 2px rgba(255, 255, 255, .08); }
+.tablet .screen { position: relative; border-radius: 32px; overflow: hidden; width: 1357px; aspect-ratio: 936 / 760; background: #f5ede6; }
+.tablet img { position: absolute; left: 0; top: 0; width: 100%; }
+.tablet .ring { position: absolute; left: 52px; top: 296px; width: 340px; height: 470px; border-radius: 30px; border: 8px solid var(--brand); }
+#tracker { position: absolute; left: 120px; top: 930px; width: 840px; border-radius: 48px; overflow: hidden; background: #fff;
+  box-shadow: 0 0 0 2px rgba(31, 26, 23, .06), 0 50px 110px rgba(60, 30, 10, .34), 0 14px 30px rgba(60, 30, 10, .18); }
+#tracker .stack { position: relative; width: 840px; height: 610px; }
+#tracker img { position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
+#tracker-tag, .tag-chip { position: absolute; display: flex; align-items: center; gap: 12px; padding: 14px 26px 14px 20px; border-radius: 99px; background: var(--espresso); color: var(--on-dark);
+  font-size: 30px; font-weight: 650; box-shadow: 0 16px 34px rgba(31, 26, 23, .3); white-space: nowrap; }
+#tracker-tag { left: 150px; top: 880px; }
+.tag-chip svg, #tracker-tag svg { width: 34px; height: 34px; }
+.toast { position: absolute; left: 216px; top: 1250px; width: 648px; display: flex; align-items: center; gap: 22px; padding: 26px 30px; border-radius: 34px; background: var(--espresso);
+  color: #fff; font-size: 34px; font-weight: 650; box-shadow: 0 30px 60px rgba(31, 26, 23, .4); }
+.toast i { flex: none; width: 56px; height: 56px; border-radius: 16px; background: var(--green); display: grid; place-items: center; }
+.toast i svg { width: 34px; height: 34px; }
+.paid { position: absolute; left: 764px; top: 1040px; width: 190px; height: 190px; border-radius: 50%; background: var(--green); display: grid; place-items: center;
+  box-shadow: 0 0 0 14px rgba(47, 158, 107, .18), 0 30px 60px rgba(47, 158, 107, .4); }
+.paid svg { width: 110px; height: 110px; }
+
+/* the card on the table, with its QR code */
+#tent { position: absolute; left: 270px; top: 720px; width: 540px; padding: 44px 44px 40px; border-radius: 52px; background: var(--surface); border: 2px solid var(--line);
+  box-shadow: 0 50px 100px rgba(60, 30, 10, .2), 0 14px 30px rgba(60, 30, 10, .1); text-align: center; }
+#tent .brand { display: flex; align-items: center; justify-content: center; gap: 14px; font-family: var(--display); font-weight: 600; font-size: 40px; letter-spacing: -.02em; }
+#tent .brand svg { width: 52px; height: 52px; }
+#tent .code { position: relative; width: 380px; height: 380px; margin: 30px auto 26px; }
+#tent .code > svg { width: 100%; height: 100%; display: block; }
+#tent .corner { position: absolute; width: 70px; height: 70px; border: 10px solid var(--brand); }
+#tent .corner.a { left: -18px; top: -18px; border-right: 0; border-bottom: 0; border-radius: 26px 0 0 0; }
+#tent .corner.b { right: -18px; top: -18px; border-left: 0; border-bottom: 0; border-radius: 0 26px 0 0; }
+#tent .corner.c { left: -18px; bottom: -18px; border-right: 0; border-top: 0; border-radius: 0 0 0 26px; }
+#tent .corner.d { right: -18px; bottom: -18px; border-left: 0; border-top: 0; border-radius: 0 0 26px 0; }
+#tent .beam { position: absolute; left: -10px; right: -10px; top: 0; height: 10px; border-radius: 5px; background: var(--brand); box-shadow: 0 0 40px 12px rgba(228, 87, 46, .45); }
+#tent h3 { font-family: var(--display); font-weight: 600; font-size: 64px; letter-spacing: -.03em; line-height: 1.1; }
+#tent p { margin-top: 6px; font-size: 30px; font-weight: 500; color: var(--muted); }
+
+/* ---------------------------------------------------------------- the business */
+.pills { position: absolute; left: 84px; top: 664px; width: 912px; display: flex; flex-wrap: wrap; gap: 16px; }
+.pill { flex: 1 1 auto; display: flex; align-items: center; gap: 16px; height: 92px; padding: 0 26px 0 18px; border-radius: 28px; background: var(--surface); border: 2px solid var(--line);
+  font-size: 27px; font-weight: 650; letter-spacing: -.01em; color: var(--ink); box-shadow: 0 12px 30px rgba(60, 30, 10, .07); white-space: nowrap; }
+.pill i { flex: none; width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
+.pill i svg { width: 32px; height: 32px; }
+#ph5 { top: 1040px; }
+
+/* ---------------------------------------------------------------- the close (espresso) */
+#outro { background: radial-gradient(1000px 800px at 50% 20%, rgba(228, 87, 46, .26), transparent 62%),
+                     radial-gradient(900px 800px at 100% 100%, rgba(242, 165, 65, .10), transparent 60%), var(--espresso); color: var(--on-dark); }
+#outro .mark { position: absolute; left: 445px; top: 390px; width: 190px; height: 190px; filter: drop-shadow(0 30px 60px rgba(228, 87, 46, .5)); }
+#outro .name { position: absolute; left: 0; right: 0; top: 590px; text-align: center; font-family: var(--display); font-weight: 600; font-size: 170px; letter-spacing: -.04em; line-height: 1.1; }
+#outro .line { position: absolute; left: 70px; right: 70px; top: 806px; text-align: center; font-family: var(--display); font-style: italic; font-weight: 400; font-size: 58px; line-height: 1.22; letter-spacing: -.02em; }
+#outro .line span { display: block; }
+#outro .line b { font-weight: 500; color: var(--saffron); }
+#outro .rule { position: absolute; left: 440px; top: 1062px; width: 200px; height: 4px; border-radius: 2px; background: rgba(246, 242, 236, .22); }
+#outro .stack-line { position: absolute; left: 0; right: 0; top: 1096px; text-align: center; font-size: 30px; font-weight: 600; letter-spacing: .02em; color: rgba(246, 242, 236, .68); }
+#outro .cta { position: absolute; left: 110px; right: 110px; top: 1176px; display: flex; align-items: center; gap: 34px; padding: 24px 34px 24px 24px; border-radius: 44px;
+  background: rgba(246, 242, 236, .08); border: 2px solid rgba(246, 242, 236, .16); }
+#outro .cta .code { flex: none; width: 196px; height: 196px; padding: 14px; border-radius: 26px; background: #fff; }
+#outro .cta .code svg { width: 100%; height: 100%; display: block; }
+#outro .cta small { display: flex; align-items: center; gap: 12px; font-size: 25px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--saffron); }
+#outro .cta small svg { width: 34px; height: 34px; }
+#outro .cta b { display: block; margin-top: 12px; font-size: 35px; font-weight: 650; line-height: 1.28; letter-spacing: -.01em; }
+#outro .by { position: absolute; left: 0; right: 0; top: 1452px; text-align: center; font-size: 26px; font-weight: 500; color: rgba(246, 242, 236, .5); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="layer" id="bg"><div class="glow" id="g1"></div><div class="glow" id="g2"></div></div>
+
+  <!-- chapters 1–4 and the business share the cream stage -->
+  <div class="layer" id="story">
+    <div id="chapters"></div>
+    <div class="cap" id="cap1"><h2 data-t="c1.title"></h2><p data-t="c1.sub"></p></div>
+    <div class="cap" id="cap2"><h2 data-t="c2.title"></h2><p data-t="c2.sub"></p></div>
+    <div class="cap" id="cap3"><h2 data-t="c3.title"></h2><p data-t="c3.sub"></p></div>
+    <div class="cap" id="cap4"><h2 data-t="c4.title"></h2><p data-t="c4.sub"></p></div>
+    <div class="cap" id="cap5"><h2 data-t="c5.title"></h2><p data-t="c5.sub"></p></div>
+
+    <div id="tent">
+      <div class="brand"><svg viewBox="0 0 48 48"><rect width="48" height="48" rx="14" fill="url(#lg1)"/><path d="M10 23h28a14 14 0 0 1-28 0Z" fill="#fff"/><rect x="16" y="37.5" width="16" height="2.6" rx="1.3" fill="#fff" opacity=".85"/>
+        <path d="M19 18c0-2.2 2.2-2.2 2.2-4.4S19 11.4 19 9.2M26.5 18c0-2.2 2.2-2.2 2.2-4.4s-2.2-2.2-2.2-4.4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>Sofra Bistro</div>
+      <div class="code"><svg data-qr></svg><i class="corner a"></i><i class="corner b"></i><i class="corner c"></i><i class="corner d"></i><i class="beam" id="beam"></i></div>
+      <h3 data-t="tent.table"></h3><p data-t="tent.hint"></p>
+    </div>
+    <div class="phone" id="ph1" data-time="20:47" data-shots="menu-top menu-mains menu-cart-1 cart"></div>
+
+    <div class="tablet" id="tab"><div class="screen"><img data-shot="kitchen-0"><img data-shot="kitchen-1" id="k1"><div class="ring" id="ring"></div></div></div>
+    <div id="tracker"><div class="stack"><img data-shot="card-track-1" id="tr1"><img data-shot="card-track-2" id="tr2"><img data-shot="card-track-3" id="tr3"></div></div>
+    <div id="tracker-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><span data-t="c2.tag"></span></div>
+
+    <div class="phone" id="ph3" data-time="20:49" data-shots="service-1 service-2"></div>
+    <div class="toast" id="toast3"><i><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></i><span data-t="c3.toast"></span></div>
+
+    <div class="phone" id="ph4" data-time="21:26" data-shots="table-pay pay-all pay-split pay-items pay-done"></div>
+    <div class="paid" id="paid"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" id="paid-check"/></svg></div>
+
+    <div class="pills" id="pills"></div>
+    <div class="phone" id="ph5" data-time="23:10" data-shots="dashboard"></div>
+  </div>
+
+  <div class="layer" id="logo">
+    <svg class="mark" viewBox="0 0 48 48"><defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F6A54A"/><stop offset=".55" stop-color="#E4572E"/><stop offset="1" stop-color="#B8381A"/></linearGradient></defs>
+      <rect width="48" height="48" rx="14" fill="url(#lg1)"/><path d="M10 23h28a14 14 0 0 1-28 0Z" fill="#fff"/><rect x="16" y="37.5" width="16" height="2.6" rx="1.3" fill="#fff" opacity=".85"/>
+      <path class="steam" d="M19 18c0-2.2 2.2-2.2 2.2-4.4S19 11.4 19 9.2" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      <path class="steam" d="M26.5 18c0-2.2 2.2-2.2 2.2-4.4s-2.2-2.2-2.2-4.4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>
+    <div class="name" id="logo-name"></div>
+    <div class="tag" data-t="logo.tag"></div>
+    <div class="kind" data-t="logo.kind"></div>
+  </div>
+
+  <div class="layer" id="dark">
+    <div class="wait" id="w1" style="top: 380px"><div class="wl" data-t="hook.1"></div><div class="ww"><span class="word"><span data-t="hook.wait"></span><i class="strike"></i></span></div><div class="timer"></div></div>
+    <div class="wait" id="w2" style="top: 618px"><div class="wl" data-t="hook.2"></div><div class="ww"><span class="word"><span data-t="hook.wait"></span><i class="strike"></i></span></div><div class="timer"></div></div>
+    <div class="wait" id="w3" style="top: 856px"><div class="wl" data-t="hook.3"></div><div class="ww"><span class="word"><span data-t="hook.wait"></span><i class="strike"></i></span></div><div class="timer"></div></div>
+    <div id="ask" data-t="hook.ask"></div>
+  </div>
+  <div id="wipe"></div>
+
+  <div class="layer" id="outro">
+    <svg class="mark" viewBox="0 0 48 48"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F6A54A"/><stop offset=".55" stop-color="#E4572E"/><stop offset="1" stop-color="#B8381A"/></linearGradient></defs>
+      <rect width="48" height="48" rx="14" fill="url(#lg2)"/><path d="M10 23h28a14 14 0 0 1-28 0Z" fill="#fff"/><rect x="16" y="37.5" width="16" height="2.6" rx="1.3" fill="#fff" opacity=".85"/>
+      <path class="steam" d="M19 18c0-2.2 2.2-2.2 2.2-4.4S19 11.4 19 9.2" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      <path class="steam" d="M26.5 18c0-2.2 2.2-2.2 2.2-4.4s-2.2-2.2-2.2-4.4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>
+    <div class="name">Sofra</div>
+    <div class="line"><span data-t="outro.1"></span><span data-t="outro.2"></span><span data-t="outro.3"></span></div>
+    <div class="rule"></div>
+    <div class="stack-line" data-t="outro.stack"></div>
+    <div class="cta"><div class="code"><svg data-qr></svg></div><div><small><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg><span data-t="outro.cta"></span></small><b data-t="outro.url"></b></div></div>
+    <div class="by" data-t="outro.by"></div>
+  </div>
+</div>
+
+<script src="qr-data.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const LANG = params.get('lang') || 'tr';
+const TEXT = {
+  tr: {
+    'hook.1': 'Sipariş vermek için', 'hook.2': 'Hesabı istemek için', 'hook.3': 'Ödemek için', 'hook.wait': 'bekle.',
+    'hook.ask': 'Ya kimse<br><b>beklemeseydi?</b>',
+    'logo.tag': 'Misafir sipariş verir.<br><b>Garson servis eder.</b>', 'logo.kind': 'Restoran işletim sistemi',
+    chapters: ['Sipariş', 'Mutfak', 'Servis', 'Ödeme'],
+    'tent.table': 'Masa 4', 'tent.hint': 'Menü ve sipariş için okutun',
+    'c1.title': 'QR’ı okut,<br><em>siparişini ver.</em>', 'c1.sub': 'Uygulama indirmek yok. Menü, alerjenler ve öneriler telefonda.',
+    'c2.title': 'Sipariş <em>anında</em><br>mutfakta.', 'c2.sub': 'Kâğıt fiş yok, bağırmak yok. Misafir de yemeğini canlı izler.', 'c2.tag': 'Misafirin telefonu',
+    'c3.title': 'Garson sipariş almaz,<br><em>servis eder.</em>', 'c3.sub': 'Hazır tabaklar, bekleyen misafirler, temizlenecek masalar: hepsi önünde.', 'c3.toast': 'Masa 4: servis edildi',
+    'c4.title': 'Hesap <em>masadan</em><br>ödenir.', 'c4.sub': 'Bölüş, yalnızca yediğini öde, bahşiş bırak, faturanı al.',
+    'c5.title': 'İşletme de<br><em>tek ekranda.</em>', 'c5.sub': 'Ciro, salon ve mutfak canlı. Gerisi de hazır:',
+    pills: [['stock', 'Stok ve reçete maliyeti'], ['offline', 'Çevrimdışı da çalışır'], ['delivery', 'Yemeksepeti · Getir · Trendyol'], ['globe', '6 dilde arayüz'], ['receipt', 'ÖKC fişi · e-Arşiv fatura'], ['lock', 'İki adımlı giriş']],
+    'outro.1': 'Misafir sipariş verir,', 'outro.2': 'garson servis eder,', 'outro.3': '<b>mutfak hiç beklemez.</b>',
+    'outro.stack': 'Açık kaynak · Spring Boot 4 · Java 21', 'outro.cta': 'Kaynak kod ve kurulum', 'outro.url': 'github.com/UmutVarol/<br>Restaurant-Order-Processing', 'outro.by': 'Geliştiren: Muhammed Umut Varol',
+  },
+  en: {
+    'hook.1': 'To order,', 'hook.2': 'To ask for the bill,', 'hook.3': 'To pay,', 'hook.wait': 'wait.',
+    'hook.ask': 'What if<br><b>nobody waited?</b>',
+    'logo.tag': 'Guests order.<br><b>Waiters serve.</b>', 'logo.kind': 'Restaurant operating system',
+    chapters: ['Order', 'Kitchen', 'Service', 'Payment'],
+    'tent.table': 'Table 4', 'tent.hint': 'Scan for the menu and to order',
+    'c1.title': 'Scan the QR,<br><em>order.</em>', 'c1.sub': 'No app to install. Menu, allergens and suggestions on the phone.',
+    'c2.title': 'In the kitchen<br><em>at once.</em>', 'c2.sub': 'No paper slips, no shouting. Guests follow their food live.', 'c2.tag': 'The guest’s phone',
+    'c3.title': 'Waiters don’t take orders,<br><em>they serve.</em>', 'c3.sub': 'Ready plates, waiting guests and tables to clear on one screen.', 'c3.toast': 'Table 4: served',
+    'c4.title': 'The bill is paid<br><em>at the table.</em>', 'c4.sub': 'Split it, pay for what you had, tip, get your invoice.',
+    'c5.title': 'The business,<br><em>on one screen.</em>', 'c5.sub': 'Revenue, floor and kitchen, live. And the rest is ready:',
+    pills: [['stock', 'Stock and recipe costing'], ['offline', 'Works offline too'], ['delivery', 'Yemeksepeti · Getir · Trendyol'], ['globe', '6 languages'], ['receipt', 'Fiscal receipts · e-invoices'], ['lock', 'Two-step sign-in']],
+    'outro.1': 'Guests order,', 'outro.2': 'waiters serve,', 'outro.3': '<b>the kitchen never waits.</b>',
+    'outro.stack': 'Open source · Spring Boot 4 · Java 21', 'outro.cta': 'Source code and setup', 'outro.url': 'github.com/UmutVarol/<br>Restaurant-Order-Processing', 'outro.by': 'Built by Muhammed Umut Varol',
+  },
+}[LANG];
+const ICONS = {
+  stock: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z"/><path d="M4 8.5 12 13l8-4.5M12 13v7"/>',
+  offline: '<path d="M5 12.5a10 10 0 0 1 14 0M8 15.5a6 6 0 0 1 8 0"/><circle cx="12" cy="19" r="1"/><path d="M4 4l16 16"/>',
+  delivery: '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>',
+  receipt: '<path d="M6 3h12v18l-2.5-1.6L13 21l-2.5-1.6L8 21l-2-1.3V3Z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+};
+const svg = (body) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+
+// ---------------------------------------------------------------- build the page
+document.documentElement.lang = LANG;
+for (const el of document.querySelectorAll('[data-t]')) el.innerHTML = TEXT[el.dataset.t];
+document.getElementById('chapters').innerHTML = TEXT.chapters.map((name, i) => `<div class="ch" id="ch${i + 1}"><b>${name}</b><div class="seg"><i></i></div></div>`).join('');
+document.getElementById('pills').innerHTML = TEXT.pills.map(([icon, label]) => `<div class="pill"><i>${svg(ICONS[icon])}</i><span>${label}</span></div>`).join('');
+document.getElementById('logo-name').innerHTML = [...'Sofra'].map((c) => `<span>${c}</span>`).join('');
+for (const timer of document.querySelectorAll('.wait .timer')) timer.innerHTML = `${svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')}<b></b>`;
+for (const phone of document.querySelectorAll('.phone')) {
+  phone.innerHTML = `<div class="screen"><div class="status"><span>${phone.dataset.time}</span><i class="island"></i>
+    <svg viewBox="0 0 78 26" fill="#1f1a17"><rect x="0" y="16" width="5" height="8" rx="1.5"/><rect x="8" y="12" width="5" height="12" rx="1.5"/><rect x="16" y="7" width="5" height="17" rx="1.5"/><rect x="24" y="2" width="5" height="22" rx="1.5"/>
+      <rect x="42" y="5" width="32" height="17" rx="5" fill="none" stroke="#1f1a17" stroke-width="2" opacity=".45"/><rect x="45" y="8" width="22" height="11" rx="2.5"/><rect x="75.5" y="10.5" width="2.5" height="6" rx="1.2" opacity=".45"/></svg></div>
+    <div class="shots">${phone.dataset.shots.split(' ').map((name) => `<img data-shot="${name}" data-name="${name}">`).join('')}</div></div>`;
+}
+for (const code of document.querySelectorAll('svg[data-qr]')) {
+  code.setAttribute('viewBox', `0 0 ${QR.size} ${QR.size}`);
+  code.setAttribute('shape-rendering', 'crispEdges');
+  code.innerHTML = `<path d="${QR.d}" fill="#1f1a17"/>`;
+}
+for (const img of document.querySelectorAll('img[data-shot]')) img.src = `shots/${LANG}/${img.dataset.shot}.png`;
+for (const path of document.querySelectorAll('.steam, #paid-check')) { const length = path.getTotalLength(); path.style.strokeDasharray = length; path.dataset.length = length; }
+
+// ---------------------------------------------------------------- a tiny timeline: every value is a function of t
+const EASE = {
+  linear: (p) => p, in: (p) => p * p * p, out: (p) => 1 - Math.pow(1 - p, 3), inOut: (p) => (p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2),
+  expo: (p) => (p === 1 ? 1 : 1 - Math.pow(2, -10 * p)), back: (p) => 1 + 2.70158 * Math.pow(p - 1, 3) + 1.70158 * Math.pow(p - 1, 2),
+  soft: (p) => 1 + 2.2 * Math.pow(p - 1, 3) + 1.2 * Math.pow(p - 1, 2),
+};
+const tracks = [];
+const all = (target) => (typeof target === 'string' ? [...document.querySelectorAll(target)] : [target].flat());
+/** Animates props ({ opacity: [0, 1], y: [40, 0], x, scale, rot, w }) of the matched elements from `start` for `dur` seconds. */
+function tw(target, start, dur, props, ease = 'out') { for (const el of all(target)) tracks.push({ el, start, dur, props, ease }); }
+/** Calls f(progress 0…1, t) every frame; for counters and drawn strokes. */
+function fn(start, dur, f) { tracks.push({ start, dur, f }); }
+const rise = (target, t, dy = 50, dur = .7) => { tw(target, t, dur * .55, { opacity: [0, 1] }); tw(target, t, dur, { y: [dy, 0] }, 'expo'); };
+const leave = (target, t, dy = -40, dur = .35) => { tw(target, t, dur, { opacity: [1, 0] }, 'in'); tw(target, t, dur, { y: [0, dy] }, 'in'); };
+const shotOf = (phone, name) => document.querySelector(`${phone} img[data-name="${name}"]`);
+/**
+ * Brings a screen in over the one before it. The same screen in a new state (a badge, a chosen tile) cross-fades;
+ * another screen (dy) pushes up over the old one, quickly enough that the two are never read together.
+ */
+function show(phone, name, t, dy = 0) {
+  const img = shotOf(phone, name);
+  tw(img, t, dy ? .1 : .22, { opacity: [0, 1] });
+  if (dy) tw(img, t, .5, { y: [dy, 0] }, 'expo');
+}
+/** A finger tap at (x, y) of the 390×844 screen. */
+function tap(phone, x, y, t) {
+  const dot = document.createElement('div');
+  dot.className = 'tap';
+  dot.style.left = `${(x / 390) * 100}%`;
+  dot.style.top = `${(y / 844) * 100}%`;
+  document.querySelector(`${phone} .shots`).append(dot);
+  tw(dot, t - .22, .2, { opacity: [0, 1], scale: [1.5, 1] });
+  tw(dot, t, .12, { scale: [1, .78] });
+  tw(dot, t + .12, .3, { opacity: [1, 0], scale: [.78, 1.25] });
+}
+
+// ---------------------------------------------------------------- the film
+const T = { hook: 0, wipe: 3.5, logo: 3.9, c1: 6.0, c2: 10.9, c3: 15.4, c4: 18.7, c5: 23.55, outro: 26.7, end: 30.2 };
+window.DURATION = T.end;
+
+// the background glows drift the whole time
+fn(0, T.end, (p) => {
+  document.getElementById('g1').style.transform = `translate(${-140 * p}px, ${120 * Math.sin(p * Math.PI)}px)`;
+  document.getElementById('g2').style.transform = `translate(${160 * p}px, ${-120 * p}px)`;
+});
+
+// --- the problem: three waits, timers running
+[['#w1', -.3, 222], ['#w2', .5, 498], ['#w3', 1.1, 731]].forEach(([row, t, seconds], i) => {
+  rise(`${row} .wl`, t, 30, .5);
+  tw(`${row} .ww`, t + .08, .3, { opacity: [0, 1] });
+  tw(`${row} .ww`, t + .08, .55, { y: [60, 0] }, 'expo');
+  tw(`${row} .timer`, t + .25, .35, { opacity: [0, 1], scale: [.8, 1] }, 'back');
+  const label = document.querySelector(`${row} .timer b`);
+  fn(0, T.wipe, (p, now) => {
+    const total = seconds + Math.max(0, Math.min(now, 2.1 + i * .14) - t) * 46;
+    label.textContent = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
+  });
+  tw(`${row} .strike`, 2.1 + i * .14, .3, { w: [0, 104] }, 'inOut');
+  tw(row, 2.3 + i * .14, .4, { opacity: [1, .32] });
+});
+tw('#ask', 2.55, .3, { opacity: [0, 1] });
+tw('#ask', 2.55, .7, { y: [70, 0] }, 'expo');
+tw('#wipe', T.wipe, .5, { scale: [0, 1] }, 'in');
+tw('#dark', T.wipe + .46, .04, { opacity: [1, 0] }, 'linear');
+tw('#wipe', T.logo + .05, .4, { opacity: [1, 0] }, 'out');
+
+// --- the answer: the logo
+tw('#logo', T.logo, .01, { opacity: [0, 1] }, 'linear');
+tw('#logo .mark', T.logo + .05, .7, { scale: [.3, 1], rot: [-18, 0] }, 'back');
+tw('#logo .mark', T.logo + .05, .25, { opacity: [0, 1] });
+for (const [i, path] of [...document.querySelectorAll('#logo .steam')].entries()) {
+  fn(T.logo + .45 + i * .12, .5, (p) => { path.style.strokeDashoffset = path.dataset.length * (1 - EASE.out(p)); });
+}
+[...document.querySelectorAll('#logo-name span')].forEach((letter, i) => {
+  tw(letter, T.logo + .3 + i * .05, .25, { opacity: [0, 1] });
+  tw(letter, T.logo + .3 + i * .05, .6, { y: [70, 0] }, 'soft');
+});
+rise('#logo .tag', T.logo + .85, 34, .7);
+rise('#logo .kind', T.logo + 1.15, 20, .6);
+leave('#logo', T.c1 - .3, -60, .3);
+
+// --- chapters
+tw('#story', T.c1 - .05, .01, { opacity: [0, 1] }, 'linear');
+rise('#chapters', T.c1 - .05, 24, .6);
+const chapterAt = [T.c1, T.c2, T.c3, T.c4, T.c5];
+[1, 2, 3, 4].forEach((n) => {
+  const el = document.getElementById(`ch${n}`);
+  tw(`#ch${n} .seg i`, chapterAt[n - 1], chapterAt[n] - chapterAt[n - 1], { w: [0, 100] }, 'linear');
+  fn(0, T.end, (p, now) => { el.classList.toggle('on', now >= chapterAt[n - 1] && now < chapterAt[n]); el.classList.toggle('done', now >= chapterAt[n]); });
+});
+[1, 2, 3, 4, 5].forEach((n) => {
+  const start = chapterAt[n - 1];
+  const end = n < 5 ? chapterAt[n] : T.outro;
+  rise(`#cap${n} h2`, start + .05, 46, .7);
+  rise(`#cap${n} p`, start + .2, 30, .7);
+  leave(`#cap${n}`, end - .32, -30, .3);
+});
+// devices come up from below the frame and leave the same way, always opaque: nothing shows through a screen
+const enter = (device, t) => { tw(device, t, .01, { opacity: [0, 1] }, 'linear'); tw(device, t, .9, { y: [1400, 0] }, 'expo'); };
+const exit = (device, t) => { tw(device, t, .36, { y: [0, 1400] }, 'in'); tw(device, t + .36, .01, { opacity: [1, 0] }, 'linear'); };
+
+// 1 · the guest orders
+rise('#tent', T.c1 + .12, 80, .6);
+tw('#tent .corner', T.c1 + .4, .35, { opacity: [0, 1], scale: [1.5, 1] }, 'back');
+tw('#beam', T.c1 + .45, .1, { opacity: [0, 1] });
+tw('#beam', T.c1 + .45, .55, { y: [0, 370] }, 'inOut');
+tw('#beam', T.c1 + .95, .1, { opacity: [1, 0] });
+tw('#tent', T.c1 + 1.0, .3, { opacity: [1, 0], scale: [1, .92] }, 'in');
+enter('#ph1', T.c1 + .9);
+show('#ph1', 'menu-mains', T.c1 + 1.95, 140);
+tap('#ph1', 339, 300, T.c1 + 2.6);
+show('#ph1', 'menu-cart-1', T.c1 + 2.75);
+tap('#ph1', 196, 803, T.c1 + 3.4);
+show('#ph1', 'cart', T.c1 + 3.55, 260);
+exit('#ph1', T.c2 - .36);
+
+// 2 · the kitchen, and the guest watching
+tw('#tab', T.c2 + .2, .3, { opacity: [0, 1] });
+tw('#tab', T.c2 + .2, .9, { x: [560, 0] }, 'expo');
+tw('#k1', T.c2 + .95, .2, { opacity: [0, 1] });
+tw('#ring', T.c2 + .95, .2, { opacity: [0, 1] });
+tw('#ring', T.c2 + .95, .5, { scale: [1.12, 1] }, 'back');
+tw('#ring', T.c2 + 1.5, .45, { opacity: [1, 0], scale: [1, 1.06] });
+tw('#tab', T.c2 + 1.7, .5, { scale: [1, .97] }, 'inOut');
+tw('#tracker', T.c2 + 1.75, .01, { opacity: [0, 1] }, 'linear');
+tw('#tracker', T.c2 + 1.75, .75, { y: [1100, 0] }, 'expo');
+tw('#tracker-tag', T.c2 + 2.05, .3, { opacity: [0, 1], scale: [.8, 1] }, 'back');
+tw('#tr2', T.c2 + 2.8, .2, { opacity: [0, 1] });
+tw('#tr3', T.c2 + 3.5, .2, { opacity: [0, 1] });
+// the card is as tall as the state it shows: the ready card has no "ready in about" line
+const stack = document.querySelector('#tracker .stack');
+const tall = (id) => { const img = document.getElementById(id); return (840 * img.naturalHeight) / img.naturalWidth; };
+fn(T.c2 + 3.5, .3, (p) => { stack.style.height = `${tall('tr2') + (tall('tr3') - tall('tr2')) * EASE.inOut(p)}px`; });
+tw('#tracker', T.c2 + 3.5, .18, { scale: [1, 1.035] }, 'out');
+tw('#tracker', T.c2 + 3.68, .4, { scale: [1.035, 1] }, 'inOut');
+exit('#tracker', T.c3 - .36);
+tw('#tracker-tag', T.c3 - .36, .2, { opacity: [1, 0] });
+tw('#tab', T.c3 - .36, .32, { opacity: [1, 0], x: [0, -160] }, 'in');
+
+// 3 · the waiter serves
+enter('#ph3', T.c3 + .2);
+tap('#ph3', 196, 356, T.c3 + 1.65);
+show('#ph3', 'service-2', T.c3 + 1.8);
+tw('#toast3', T.c3 + 1.85, .25, { opacity: [0, 1] });
+tw('#toast3', T.c3 + 1.85, .55, { y: [60, 0], scale: [.92, 1] }, 'back');
+tw('#toast3', T.c4 - .5, .25, { opacity: [1, 0], y: [0, 30] }, 'in');
+exit('#ph3', T.c4 - .36);
+
+// 4 · the guest pays
+enter('#ph4', T.c4 + .2);
+tap('#ph4', 196, 253, T.c4 + 1.15);
+show('#ph4', 'pay-all', T.c4 + 1.3, 200);
+tap('#ph4', 275, 273, T.c4 + 2.05);
+show('#ph4', 'pay-split', T.c4 + 2.18);
+tap('#ph4', 115, 333, T.c4 + 3.0);
+show('#ph4', 'pay-items', T.c4 + 3.13, 120);
+show('#ph4', 'pay-done', T.c4 + 3.95, 200);
+tw('#paid', T.c4 + 4.0, .2, { opacity: [0, 1] });
+tw('#paid', T.c4 + 4.0, .55, { scale: [.3, 1] }, 'back');
+const check = document.getElementById('paid-check');
+fn(T.c4 + 4.15, .35, (p) => { check.style.strokeDashoffset = check.dataset.length * (1 - EASE.out(p)); });
+tw('#paid', T.c5 - .45, .25, { opacity: [1, 0], scale: [1, .8] }, 'in');
+exit('#ph4', T.c5 - .36);
+
+// 5 · the business
+tw('#chapters', T.c5 + .1, .4, { opacity: [1, .0] });
+[...document.querySelectorAll('.pill')].forEach((pill, i) => {
+  tw(pill, T.c5 + .55 + i * .09, .25, { opacity: [0, 1] });
+  tw(pill, T.c5 + .55 + i * .09, .55, { y: [40, 0], scale: [.92, 1] }, 'back');
+});
+enter('#ph5', T.c5 + .45);
+tw('#story', T.outro + .45, .05, { opacity: [1, 0] }, 'linear');
+
+// --- the close
+tw('#outro', T.outro, .55, { y: [1920, 0] }, 'inOut');
+tw('#outro .mark', T.outro + .4, .7, { scale: [.3, 1], rot: [-18, 0] }, 'back');
+tw('#outro .mark', T.outro + .4, .25, { opacity: [0, 1] });
+for (const [i, path] of [...document.querySelectorAll('#outro .steam')].entries()) {
+  fn(T.outro + .8 + i * .12, .5, (p) => { path.style.strokeDashoffset = path.dataset.length * (1 - EASE.out(p)); });
+}
+rise('#outro .name', T.outro + .5, 60, .7);
+[...document.querySelectorAll('#outro .line span')].forEach((line, i) => rise(line, T.outro + .75 + i * .16, 34, .7));
+tw('#outro .rule', T.outro + 1.25, .5, { opacity: [0, 1], scale: [.2, 1] });
+rise('#outro .stack-line', T.outro + 1.3, 20, .6);
+rise('#outro .cta', T.outro + 1.45, 40, .7);
+rise('#outro .by', T.outro + 1.65, 16, .6);
+
+// ---------------------------------------------------------------- seek
+tracks.sort((a, b) => a.start - b.start);
+window.seek = (t) => {
+  const state = new Map();
+  for (const track of tracks) {
+    const p = Math.max(0, Math.min(1, (t - track.start) / track.dur));
+    if (track.f) { track.f(p, t); continue; }
+    let values = state.get(track.el);
+    if (!values) state.set(track.el, values = {});
+    for (const [prop, [from, to]] of Object.entries(track.props)) {
+      if (t < track.start) { if (!(prop in values)) values[prop] = from; } else values[prop] = from + (to - from) * EASE[track.ease](p);
+    }
+  }
+  for (const [el, v] of state) {
+    if ('opacity' in v) { el.style.opacity = v.opacity; el.style.visibility = v.opacity <= .001 ? 'hidden' : 'visible'; }
+    if ('w' in v) el.style.width = `${v.w}%`;
+    if ('x' in v || 'y' in v || 'scale' in v || 'rot' in v) {
+      el.style.transform = `translate(${v.x || 0}px, ${v.y || 0}px) scale(${v.scale ?? 1}) rotate(${v.rot || 0}deg)`;
+    }
+  }
+};
+
+// ---------------------------------------------------------------- ready, and a player for the browser
+const images = [...document.images].map((img) => img.decode().catch(() => { throw new Error(`missing ${img.src}`); }));
+const fonts = ['600 80px Fraunces', 'italic 500 80px Fraunces', 'italic 400 58px Fraunces', '450 36px Inter', '650 30px Inter', '700 24px Inter'].map((f) => document.fonts.load(f, 'Şğıİöüç’₺'));
+window.ready = Promise.all([...images, ...fonts, document.fonts.ready]).then(() => { window.seek(Number(params.get('t') || 0)); return true; });
+if (!params.has('render')) {
+  const stage = document.getElementById('stage');
+  const fit = () => { stage.style.transform = `scale(${Math.min(innerWidth / 1080, innerHeight / 1920)})`; };
+  addEventListener('resize', fit); fit();
+  let now = Number(params.get('t') || 0), playing = !params.has('t'), last = performance.now();
+  addEventListener('keydown', (e) => {
+    if (e.key === ' ') playing = !playing;
+    if (e.key === 'ArrowRight') now = Math.min(T.end, now + 1 / 30);
+    if (e.key === 'ArrowLeft') now = Math.max(0, now - 1 / 30);
+    window.seek(now);
+  });
+  window.ready.then(function loop(stamp) {
+    stamp = typeof stamp === 'number' ? stamp : performance.now();
+    if (playing) { now = (now + (stamp - last) / 1000) % (T.end + .8); window.seek(Math.min(now, T.end)); }
+    last = stamp;
+    requestAnimationFrame(loop);
+  });
+}
+</script>
+</body>
+</html>
