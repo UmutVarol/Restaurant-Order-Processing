@@ -3,7 +3,7 @@
 // hold guest names, phone numbers and bills. Orders taken offline wait in the till's own queue (core/offline.js).
 'use strict';
 
-const CACHE = 'sofra-shell-v5';
+const CACHE = 'sofra-shell-v6';
 
 // Every file of the app shell. A build test checks that each static asset is listed here.
 const SHELL = [
@@ -54,6 +54,7 @@ const SHELL = [
   'assets/js/views/pay.js',
   'assets/js/views/pos.js',
   'assets/js/views/qr.js',
+  'assets/js/views/reservations.js',
   'assets/js/views/reauth.js',
   'assets/js/views/service.js',
   'assets/js/views/allergens.js',

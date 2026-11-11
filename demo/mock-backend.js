@@ -655,6 +655,88 @@
     return state.bills.filter((b) => b.status === 'OPEN' && b.table && b.table.id === tableId && hasActive(b)).pop() || null;
   }
 
+
+  // ---------------------------------------------------------------- reservations
+  // A few bookings for tonight and two parties on the waitlist, relative to when the demo was opened.
+  const reservations = () => (state.reservations ??= seedReservations());
+  function seedReservations() {
+    const at = (hours, minutes = 0) => { const d = new Date(); d.setHours(hours, minutes, 0, 0); return d.getTime(); };
+    const evening = Math.max(at(19), Date.now() + 60 * MINUTE);
+    const list = [
+      ['Ayşe Demir', '0532 410 22 10', 4, evening, 5, 'Doğum günü'],
+      ['Mert Kaya', null, 2, evening + 30 * MINUTE, 2, null],
+      ['Selin & Can', '0544 120 33 40', 6, evening + 60 * MINUTE, null, 'Mama sandalyesi'],
+    ].map(([guestName, phone, partySize, startsAt, tableId, note], i) => ({
+      id: i + 1, kind: 'BOOKING', status: 'BOOKED', guestName, phone, partySize, startsAt, durationMinutes: 90, quotedMinutes: null,
+      tableId, note, createdAt: Date.now() - (i + 2) * 60 * MINUTE, createdBy: 'admin', seatedAt: null, closedAt: null,
+    }));
+    list.push({ id: 4, kind: 'WALK_IN', status: 'WAITING', guestName: 'Emre', phone: null, partySize: 3, startsAt: Date.now() - 12 * MINUTE, durationMinutes: 90, quotedMinutes: 15, tableId: null, note: null, createdAt: Date.now() - 12 * MINUTE, createdBy: 'waiter', seatedAt: null, closedAt: null });
+    list.push({ id: 5, kind: 'WALK_IN', status: 'WAITING', guestName: 'Zeynep', phone: null, partySize: 2, startsAt: Date.now() - 4 * MINUTE, durationMinutes: 90, quotedMinutes: 10, tableId: null, note: null, createdAt: Date.now() - 4 * MINUTE, createdBy: 'waiter', seatedAt: null, closedAt: null });
+    return { nextId: 6, list };
+  }
+  const resvEnds = (r) => Math.max(r.startsAt, r.seatedAt || 0) + r.durationMinutes * MINUTE;
+  function resvView(r) {
+    const table = r.tableId ? TABLES.find((t) => t.id === r.tableId) : null;
+    return { ...r, startsAt: iso(r.startsAt), endsAt: iso(resvEnds(r)), createdAt: iso(r.createdAt), seatedAt: r.seatedAt ? iso(r.seatedAt) : null,
+      closedAt: r.closedAt ? iso(r.closedAt) : null, tableCode: table ? table.code : null };
+  }
+  function resvConflicts(tableId, from, to, self) {
+    return reservations().list.filter((r) => r.tableId === tableId && r.id !== self && ['BOOKED', 'SEATED'].includes(r.status)
+      && r.startsAt < to && resvEnds(r) > from).sort((a, b) => a.startsAt - b.startsAt);
+  }
+  const hhmm = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  function tableBusyNow(tableId, self) {
+    return state.orders.some((o) => o.type === 'DINE_IN' && o.table && o.table.id === tableId && ACTIVE.includes(o.status))
+      || reservations().list.some((r) => r.tableId === tableId && r.status === 'SEATED' && r.id !== self);
+  }
+  function findResv(id) {
+    const r = reservations().list.find((x) => x.id === Number(id));
+    if (!r) throw new Problem(404, 'RESERVATION_NOT_FOUND', `Reservation ${id} was not found`);
+    return r;
+  }
+  function resvInput(body) {
+    const phone = body.phone ? String(body.phone).trim() : null;
+    requireFields({
+      guestName: blankText(body.guestName) ? 'must not be blank' : null,
+      partySize: !(Number(body.partySize) >= 1 && Number(body.partySize) <= 30) ? 'must be between 1 and 30' : null,
+      phone: phone && !/^\+?[0-9][0-9 ()-]{5,18}$/.test(phone) ? 'must be a phone number' : null,
+    });
+    return { guestName: String(body.guestName).trim().slice(0, 60), phone, partySize: Number(body.partySize), note: body.note ? String(body.note).slice(0, 140) : null };
+  }
+  const blankText = (v) => v == null || String(v).trim() === '';
+  function checkTableFor(tableId, partySize, from, minutes, self) {
+    const table = tableById(tableId);
+    if (partySize > table.seats) throw new Problem(422, 'TABLE_TOO_SMALL', `Table ${table.code} seats ${table.seats}`, { parameters: { table: table.code, seats: table.seats, party: partySize } });
+    const other = resvConflicts(table.id, from, from + minutes * MINUTE, self)[0];
+    if (other) throw new Problem(409, 'TABLE_ALREADY_BOOKED', `Table ${table.code} is already taken`, { parameters: { table: table.code, guest: other.guestName, time: hhmm(other.startsAt) } });
+    return table.id;
+  }
+  function resvChanged(r) {
+    save();
+    publish({ reservationId: r.id, status: r.status, tableId: r.tableId, occurredAt: iso(Date.now()) }, 'reservation');
+    return resvView(r);
+  }
+  /** A seated party whose orders at the table have all been paid has left, as on the server. */
+  function settleSeated() {
+    reservations().list.filter((r) => r.status === 'SEATED').forEach((r) => {
+      const atTable = state.orders.filter((o) => o.type === 'DINE_IN' && o.table && o.table.id === r.tableId && o.createdAt >= r.seatedAt);
+      if (atTable.length && atTable.every((o) => o.status === 'COMPLETED' || o.status === 'CANCELLED') && atTable.some((o) => o.status === 'COMPLETED')) {
+        Object.assign(r, { status: 'FINISHED', closedAt: Date.now() });
+      }
+    });
+  }
+
+  function floorParties(tableId) {
+    const list = reservations().list;
+    const seated = list.find((r) => r.tableId === tableId && r.status === 'SEATED');
+    const next = list.filter((r) => r.tableId === tableId && r.status === 'BOOKED' && r.startsAt > Date.now() - 60 * MINUTE && r.startsAt < Date.now() + 180 * MINUTE)
+      .sort((a, b) => a.startsAt - b.startsAt)[0];
+    return {
+      seatedParty: seated ? { reservationId: seated.id, guestName: seated.guestName, partySize: seated.partySize, at: iso(seated.seatedAt) } : null,
+      nextBooking: next ? { reservationId: next.id, guestName: next.guestName, partySize: next.partySize, at: iso(next.startsAt) } : null,
+    };
+  }
+
   function tableById(id) {
     const table = TABLES.find((x) => x.id === Number(id));
     if (!table) throw new Problem(404, 'NOT_FOUND', `Table ${id} was not found`);
@@ -2258,12 +2340,81 @@
       save();
       return [202, targets.map((p) => ({ printerId: p.id, printer: p.name, orderId: order.id, kind: 'REPRINT', status: 'PRINTED' }))];
     }],
-    ['GET', /^floor\/tables$/, 'staff', () => TABLES.map((table) => {
+    ['GET', /^reservations$/, 'till', ({ query }) => {
+      settleSeated();
+      const [from, to] = dayRange(query.get('date') || todayIso());
+      return reservations().list.filter((r) => (r.kind === 'BOOKING' && r.startsAt >= from && r.startsAt < to) || ['WAITING', 'SEATED'].includes(r.status))
+        .sort((a, b) => a.startsAt - b.startsAt).map(resvView);
+    }],
+    ['POST', /^reservations$/, 'till', ({ user }, body) => {
+      const input = resvInput(body);
+      const startsAt = Date.parse(body.startsAt);
+      if (!Number.isFinite(startsAt) || startsAt < Date.now() - 15 * MINUTE) throw new Problem(422, 'RESERVATION_IN_PAST', 'A booking cannot start in the past');
+      const minutes = Number(body.durationMinutes) || 90;
+      const tableId = body.tableId ? checkTableFor(body.tableId, input.partySize, startsAt, minutes, null) : null;
+      const data = reservations();
+      const r = { id: data.nextId++, kind: 'BOOKING', status: 'BOOKED', ...input, startsAt, durationMinutes: minutes, quotedMinutes: null, tableId,
+        createdAt: Date.now(), createdBy: user.username, seatedAt: null, closedAt: null };
+      data.list.push(r);
+      return [201, resvChanged(r)];
+    }],
+    ['PUT', /^reservations\/(\d+)$/, 'till', ({ params }, body) => {
+      const r = findResv(params[0]);
+      if (!['BOOKED', 'WAITING'].includes(r.status)) throw new Problem(409, `RESERVATION_${r.status}`, 'This reservation can no longer be changed');
+      const input = resvInput(body);
+      const minutes = Number(body.durationMinutes) || 90;
+      if (r.status === 'BOOKED') {
+        const startsAt = Date.parse(body.startsAt);
+        r.tableId = body.tableId ? checkTableFor(body.tableId, input.partySize, startsAt, minutes, r.id) : null;
+        r.startsAt = startsAt;
+      }
+      Object.assign(r, input, { durationMinutes: minutes });
+      return resvChanged(r);
+    }],
+    ['POST', /^reservations\/walk-ins$/, 'till', ({ user }, body) => {
+      const input = resvInput(body);
+      const data = reservations();
+      const r = { id: data.nextId++, kind: 'WALK_IN', status: 'WAITING', ...input, startsAt: Date.now(), durationMinutes: 90,
+        quotedMinutes: body.quotedMinutes == null ? null : Number(body.quotedMinutes), tableId: null, createdAt: Date.now(), createdBy: user.username, seatedAt: null, closedAt: null };
+      data.list.push(r);
+      return [201, resvChanged(r)];
+    }],
+    ['GET', /^reservations\/free-tables$/, 'till', ({ query }) => {
+      const from = Date.parse(query.get('startsAt'));
+      const party = Number(query.get('partySize'));
+      const to = from + (Number(query.get('durationMinutes')) || 90) * MINUTE;
+      const self = Number(query.get('except')) || null;
+      const soon = from < Date.now() + 30 * MINUTE;
+      return TABLES.filter((t) => t.seats >= party && !resvConflicts(t.id, from, to, self).length && (!soon || !tableBusyNow(t.id, self)))
+        .map((t) => ({ id: t.id, code: t.code, seats: t.seats, zone: t.zone }));
+    }],
+    ['POST', /^reservations\/(\d+)\/seat$/, 'till', ({ params }, body) => {
+      const r = findResv(params[0]);
+      if (!['BOOKED', 'WAITING'].includes(r.status)) throw new Problem(409, `RESERVATION_${r.status}`, 'This party cannot be seated');
+      const table = tableById(body.tableId);
+      if (r.partySize > table.seats) throw new Problem(422, 'TABLE_TOO_SMALL', `Table ${table.code} seats ${table.seats}`, { parameters: { table: table.code, seats: table.seats, party: r.partySize } });
+      if (tableBusyNow(table.id, r.id)) throw new Problem(409, 'TABLE_OCCUPIED', `Table ${table.code} is in use`, { parameters: { table: table.code } });
+      const now = Date.now();
+      const booked = resvConflicts(table.id, now, now + r.durationMinutes * MINUTE, r.id).find((o) => o.status === 'BOOKED');
+      if (booked && !body.overrideBooking) throw new Problem(409, 'TABLE_BOOKED_SOON', `Table ${table.code} is booked`, { parameters: { table: table.code, guest: booked.guestName, time: hhmm(booked.startsAt) } });
+      Object.assign(r, { status: 'SEATED', tableId: table.id, seatedAt: now }, r.kind === 'WALK_IN' ? { startsAt: now } : {});
+      delete clearing()[table.id];
+      return resvChanged(r);
+    }],
+    ['POST', /^reservations\/(\d+)\/(cancel|no-show|finish)$/, 'till', ({ params }) => {
+      const r = findResv(params[0]);
+      const [to, allowed] = { cancel: ['CANCELLED', ['BOOKED', 'WAITING']], 'no-show': ['NO_SHOW', ['BOOKED']], finish: ['FINISHED', ['SEATED']] }[params[1]];
+      if (!allowed.includes(r.status)) throw new Problem(409, `RESERVATION_${r.status}`, 'Not possible in this state');
+      Object.assign(r, { status: to, closedAt: Date.now() });
+      return resvChanged(r);
+    }],
+    ['GET', /^floor\/tables$/, 'staff', () => settleSeated() || TABLES.map((table) => {
       const open = state.orders.filter((o) => o.type === 'DINE_IN' && o.table && o.table.id === table.id && ACTIVE.includes(o.status))
         .sort((a, b) => a.createdAt - b.createdAt);
       return {
         ...table, qrIssuedAt: qr().issued[table.id] ? iso(qr().issued[table.id]) : null, occupied: open.length > 0, occupiedSince: open.length ? iso(open[0].createdAt) : null,
         needsClearingSince: !open.length && clearing()[table.id] ? iso(clearing()[table.id]) : null,
+        ...floorParties(table.id),
         openTotal: toLira(open.reduce((sum, o) => sum + o.pricing.total, 0)),
         openOrders: open.map((o) => ({ id: o.id, status: o.status, customerName: o.customerName, itemCount: o.lines.reduce((n, l) => n + l.quantity - (l.voided || 0), 0), total: toLira(o.pricing.total), createdAt: iso(o.createdAt) })),
       };

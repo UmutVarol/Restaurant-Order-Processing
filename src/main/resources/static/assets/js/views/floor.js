@@ -2,7 +2,7 @@
 import { debounce, h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t, tn } from '../core/i18n.js';
-import { elapsed, money, percent } from '../core/format.js';
+import { elapsed, money, percent, time } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { openModal, toast } from '../core/ui.js';
@@ -49,7 +49,7 @@ export default {
       const order = table.openOrders[0];
       const served = table.occupied && table.openOrders.every((o) => o.status === 'SERVED');
       const card = h('button', {
-        class: ['table-card', table.occupied ? 'occupied' : '', served ? 'attention' : ''], 'data-testid': `table-${table.code}`,
+        class: ['table-card', table.occupied ? 'occupied' : '', table.seatedParty && !table.occupied ? 'seated' : '', served ? 'attention' : ''], 'data-testid': `table-${table.code}`,
         onclick: () => {
           if (order) openOrderDrawer(order.id, user);
           else if (canTakeOrders(user)) navigate('pos', { table: table.id });
@@ -66,10 +66,14 @@ export default {
             h('span', { class: 'since-who', dir: 'auto' }, `· ${order.customerName}`)),
         ]
         : [
-          table.needsClearingSince ? h('div', { class: 't-dirty' }, t('service.dirty')) : h('div', { class: 't-free' }, t('floor.available')),
+          table.seatedParty
+            ? h('div', { class: 't-seated', dir: 'auto' }, t('floor.seatedParty', { name: table.seatedParty.guestName, n: table.seatedParty.partySize }))
+            : table.needsClearingSince ? h('div', { class: 't-dirty' }, t('service.dirty')) : h('div', { class: 't-free' }, t('floor.available')),
           h('div', { class: 'seats' }, tn('floor.seats', table.seats)),
-          canTakeOrders(user) ? h('span', { class: 'btn sm', style: { marginTop: '4px' } }, icon('plus', 'sm'), t('floor.seat')) : null,
-        ]));
+          canTakeOrders(user) ? h('span', { class: 'btn sm', style: { marginTop: '4px' } }, icon('plus', 'sm'), t(table.seatedParty ? 'floor.takeOrder' : 'floor.seat')) : null,
+        ],
+      table.nextBooking ? h('div', { class: 't-booking', dir: 'auto', 'data-testid': `booking-${table.code}` }, icon('calendar', 'sm'),
+        t('floor.nextBooking', { time: time(table.nextBooking.at), name: table.nextBooking.guestName, n: table.nextBooking.partySize })) : null));
       if (!table.occupied && table.needsClearingSince && canTakeOrders(user)) {
         return h('div', { class: 'table-slot' }, card, h('div', { class: 'table-actions' },
           h('button', { class: 'btn sm ghost', 'data-testid': `clear-${table.code}`, onclick: () => clearTable(table) },
@@ -154,6 +158,7 @@ export default {
     const reload = debounce(load, 200);
     const offOrder = bus.on('order', reload);
     const offTable = bus.on('table', reload);
+    const offReservation = bus.on('reservation', reload);
     const timer = setInterval(() => {
       zones.querySelectorAll('[data-since]').forEach((el) => { el.textContent = elapsed(el.dataset.since); });
     }, 15_000);
@@ -164,6 +169,7 @@ export default {
       destroy() {
         offOrder();
         offTable();
+        offReservation();
         reload.cancel();
         clearInterval(timer);
       },

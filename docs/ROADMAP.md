@@ -215,7 +215,7 @@ finished in code.
 | Order | | Item | Why first | Status |
 |---|---|---|---|---|
 | 1 | S4.1 | **Operations: backups, restore, silent failures** | Losing a day's bills or not noticing that receipts stopped being issued is the costliest failure; it must exist before the first real evening | done |
-| 2 | S4.2 | **Reservations and a waitlist** | The first thing an owner asks for; the floor plan only knows "now" | planned |
+| 2 | S4.2 | **Reservations and a waitlist** | The first thing an owner asks for; the floor plan only knows "now" | done |
 | 3 | S4.3 | **Staff shifts, time clock and tip pooling** | Payroll and tips are a weekly argument without them; PINs and tip data already exist | planned |
 | 4 | S4.4 | **First-run setup** | Today a new restaurant enters menu, tables and staff by hand through several screens | planned |
 | 5 | S4.5 | **Load test of a busy evening** | 40 tables, 12 phones and 3 kitchen screens at once have never been measured | planned |
@@ -232,6 +232,18 @@ finished in code.
 - Prometheus alert rules for them, plus errors and the app going away, checked with `promtool`.
 - An operations runbook: what each alert means and what to do ([OPERATIONS.md](OPERATIONS.md)).
 - A `backup` service in `docker-compose.yml` (profile `backup`) that runs the backup nightly.
+
+### S4.2 Reservations and a waitlist
+
+- Bookings for a time (table chosen ahead or on arrival) and a walk-in waitlist with the quoted wait, in one model:
+  a party that will sit at a table.
+- No double booking: every change that touches a table locks its row, then checks the other parties for the whole
+  visit. Seating a party at a table that is booked soon is refused unless the host overrides it.
+- The floor plan shows the seated party and each table's next booking (names and sizes only, never phone numbers).
+- Late bookings become no-shows after 20 minutes; a seated party finishes when the last order at its table is paid.
+- Phone numbers are erased 30 days after the visit (`restaurant.reservations.keep-contact-for`); the kitchen cannot
+  see reservations at all.
+- A Reservations screen in six languages, in the demo too, with browser tests.
 
 ## Later
 

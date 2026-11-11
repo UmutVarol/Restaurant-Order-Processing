@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-/** A table together with the orders currently open on it. */
+/** A table together with the orders currently open on it, the party seated there and its next booking. */
 public record TableStatusResponse(
         Long id,
         String code,
@@ -17,9 +17,15 @@ public record TableStatusResponse(
         BigDecimal openTotal,
         List<OpenOrder> openOrders,
         Instant qrIssuedAt,
-        Instant needsClearingSince) {
+        Instant needsClearingSince,
+        Party seatedParty,
+        Party nextBooking) {
 
     public record OpenOrder(Long id, OrderStatus status, String customerName, int itemCount, BigDecimal total,
                             Instant createdAt) {
+    }
+
+    /** A party from the reservations: seated here (since {@code at}) or booked for {@code at}. */
+    public record Party(Long reservationId, String guestName, int partySize, Instant at) {
     }
 }

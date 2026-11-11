@@ -168,6 +168,9 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders/*/reprint")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/service-settings").hasRole(Role.ADMIN.name())
+                        // guests' names and phone numbers: floor staff and managers, not the kitchen
+                        .requestMatchers("/api/v1/reservations", "/api/v1/reservations/**")
+                                .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers("/api/v1/guest-requests", "/api/v1/guest-requests/**")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers("/api/v1/**").authenticated()

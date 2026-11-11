@@ -165,6 +165,9 @@ can be scraped by Prometheus at `/actuator/prometheus` (admin only).
 - **The container** runs as a non-root user and exits on out-of-memory errors. `docker-compose.yml` adds a
   read-only root filesystem, drops all Linux capabilities, sets `no-new-privileges`, and caps memory, CPU and
   process counts. The database is not published to the host.
+- **Guests' personal data** (KVKK): a reservation's phone number is kept only for the visit and erased 30 days
+  later; names and phone numbers are visible to waiters and managers, not to the kitchen, and are never written
+  to the audit log, the floor plan or the live event stream.
 
 ## Running in production
 

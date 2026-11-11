@@ -1810,3 +1810,35 @@ body.sheet-locked { overflow: hidden; }
 .service-empty { display: flex; align-items: center; gap: 8px; padding: 12px 4px; }
 .service-list .inbox-item { background: var(--surface); }
 .t-dirty { color: var(--violet); font-weight: 700; font-size: 13px; }
+
+/* ---------------------------------------------------------------- reservations */
+.table-card.seated { border-color: color-mix(in srgb, var(--teal) 40%, var(--border)); }
+.table-card.seated .table-viz .top { background: var(--teal-soft); border-color: var(--teal); color: var(--teal); }
+.t-seated { color: var(--teal); font-weight: 700; font-size: 13px; overflow-wrap: anywhere; }
+.t-booking { display: flex; align-items: center; gap: 4px; margin-top: 6px; color: var(--amber); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.resv-day { min-width: 92px; text-align: center; font-weight: 650; font-size: 14px; }
+.resv-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); align-items: start; }
+.resv-list { display: flex; flex-direction: column; gap: 2px; }
+.resv-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+.resv-row:first-child { border-top: 0; }
+.resv-row.closed { opacity: .62; }
+.resv-time { display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
+.resv-time strong { font-size: 15px; }
+.resv-time small { font-size: 12px; }
+.resv-over { color: var(--red); font-weight: 650; }
+.resv-name { font-weight: 650; overflow-wrap: anywhere; }
+.resv-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12.5px; }
+.resv-meta > * { display: inline-flex; align-items: center; gap: 4px; }
+.resv-phone { color: inherit; }
+.resv-note { font-size: 12.5px; margin-top: 2px; overflow-wrap: anywhere; }
+.resv-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.resv-empty { padding: 12px 0; }
+.pill.r-LATE { background: var(--amber-soft); color: var(--amber); }
+.pill.r-FINISHED { background: var(--slate-soft); color: var(--slate); }
+.pill.r-CANCELLED, .pill.r-NO_SHOW { background: var(--red-soft); color: var(--red); }
+@media (max-width: 560px) {
+  .resv-row { grid-template-columns: 52px minmax(0, 1fr); }
+  .resv-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}
+.resv-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+.resv-days, .resv-adds { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
