@@ -205,6 +205,34 @@ so the staff app became phone-first along the way.
 - **Translations** of German, French, Russian and Arabic were written for the app; a native speaker should review
   them before a restaurant relies on them, as with any menu text.
 
+## Sprint 4: ready for a real restaurant (in progress)
+
+An assessment after Sprint 3 scored Sofra 6.5 out of 10 as a restaurant system: the table-side flow is strong,
+but a restaurant could not run on it alone. This sprint takes the gaps in order of urgency, the ones that hurt
+first in a live restaurant at the top. Work that needs a partner's contract or keys is listed, but cannot be
+finished in code.
+
+| Order | | Item | Why first | Status |
+|---|---|---|---|---|
+| 1 | S4.1 | **Operations: backups, restore, silent failures** | Losing a day's bills or not noticing that receipts stopped being issued is the costliest failure; it must exist before the first real evening | done |
+| 2 | S4.2 | **Reservations and a waitlist** | The first thing an owner asks for; the floor plan only knows "now" | planned |
+| 3 | S4.3 | **Staff shifts, time clock and tip pooling** | Payroll and tips are a weekly argument without them; PINs and tip data already exist | planned |
+| 4 | S4.4 | **First-run setup** | Today a new restaurant enters menu, tables and staff by hand through several screens | planned |
+| 5 | S4.5 | **Load test of a busy evening** | 40 tables, 12 phones and 3 kitchen screens at once have never been measured | planned |
+| 6 | S4.6 | **Multi-branch foundation (design)** | Every table assumes one restaurant; the change is cheap now and expensive later. Decision record first, code after | planned |
+| — | — | **Live partners** (iyzico merchant, e-Arşiv integrator, ÖKC bridge, delivery platforms) | Needs contracts and credentials from the owner; adapters and simulations already exist | waiting on the owner |
+
+### S4.1 Operations
+
+- Nightly PostgreSQL backups with retention, a checksum and a check that each one can be read; a restore script
+  that refuses to overwrite a live database by accident; both tested against a real PostgreSQL.
+- Gauges for what fails without anyone seeing it: legal documents not issued, print jobs failed, online payments
+  left unfinished, each with the age of the oldest.
+- A health contributor that reports those as `DEGRADED` to managers, without taking the readiness probe down.
+- Prometheus alert rules for them, plus errors and the app going away, checked with `promtool`.
+- An operations runbook: what each alert means and what to do ([OPERATIONS.md](OPERATIONS.md)).
+- A `backup` service in `docker-compose.yml` (profile `backup`) that runs the backup nightly.
+
 ## Later
 
 Smaller items that came up in the research, not yet scheduled:

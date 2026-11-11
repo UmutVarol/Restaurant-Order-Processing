@@ -32,6 +32,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 - [Testing](#testing)
 - [Configuration](#configuration)
 - [Roadmap](docs/ROADMAP.md)
+- [Operations: monitoring, alerts, backups](docs/OPERATIONS.md)
 - [Project history](#project-history)
 - [Türkçe özet](#türkçe-özet)
 
@@ -119,6 +120,8 @@ docker compose up --build       # app + PostgreSQL 16 → http://localhost:8080
 | OpenAPI spec | http://localhost:8080/v3/api-docs |
 | Health | http://localhost:8080/actuator/health |
 | Prometheus metrics (Manager) | http://localhost:8080/actuator/prometheus |
+
+Alert rules, nightly backups and restore: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Architecture
 

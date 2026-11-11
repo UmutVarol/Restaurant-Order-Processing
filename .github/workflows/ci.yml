@@ -113,6 +113,21 @@ jobs:
             zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
             git /repo --config /repo/.gitleaks.toml --redact --no-banner
 
+  operations:
+    name: Operations (alert rules, backup scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The alert rules must parse and their unit tests must pass (ops/prometheus/alerts.test.yml).
+      - name: Check and test the Prometheus alert rules
+        run: |
+          docker run --rm -v "$PWD/ops/prometheus:/rules:ro" --workdir /rules --entrypoint promtool \
+            prom/prometheus:v3.5.0 check rules alerts.yml
+          docker run --rm -v "$PWD/ops/prometheus:/rules:ro" --workdir /rules --entrypoint promtool \
+            prom/prometheus:v3.5.0 test rules alerts.test.yml
+      - name: Lint the backup scripts
+        run: shellcheck ops/backup.sh ops/restore.sh ops/backup-loop.sh
+
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request'

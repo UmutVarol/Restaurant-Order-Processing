@@ -16,4 +16,8 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, Long> {
 
     @EntityGraph(attributePaths = "printer")
     List<PrintJob> findTop30ByOrderByIdDesc();
+
+    long countByStatusAndCreatedAtAfter(PrintJob.Status status, Instant after);
+
+    java.util.Optional<PrintJob> findFirstByStatusOrderByCreatedAtAsc(PrintJob.Status status);
 }

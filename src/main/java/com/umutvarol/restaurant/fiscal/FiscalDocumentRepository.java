@@ -10,6 +10,10 @@ interface FiscalDocumentRepository extends JpaRepository<FiscalDocument, Long> {
 
     Optional<FiscalDocument> findByBillId(Long billId);
 
+    long countByStatusIn(Collection<FiscalDocument.Status> statuses);
+
+    Optional<FiscalDocument> findFirstByStatusInOrderByCreatedAtAsc(Collection<FiscalDocument.Status> statuses);
+
     List<FiscalDocument> findByStatusInAndNextAttemptAtLessThanEqualOrderByNextAttemptAtAsc(
             Collection<FiscalDocument.Status> statuses, Instant due);
 

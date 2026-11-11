@@ -1,0 +1,73 @@
+# Unit tests for alerts.yml:  promtool test rules alerts.test.yml
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  - name: a receipt left unissued pages after its grace period, not before
+    interval: 1m
+    input_series:
+      - series: 'sofra_fiscal_unissued_oldest_seconds{job="sofra"}'
+        values: '0 0 0 1000+60x20'
+      - series: 'sofra_fiscal_unissued{job="sofra"}'
+        values: '0 0 0 1x20'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: SofraLegalDocumentsNotIssued
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: SofraLegalDocumentsNotIssued
+        exp_alerts:
+          - exp_labels: { severity: critical, job: sofra }
+            exp_annotations:
+              summary: "1 legal documents not issued; the oldest has waited 23m 20s"
+              runbook: "docs/OPERATIONS.md#sofralegaldocumentsnotissued"
+
+  - name: one failed ticket is enough
+    interval: 1m
+    input_series:
+      - series: 'sofra_print_failed{job="sofra"}'
+        values: '0 0 1 1 1'
+      - series: 'sofra_print_queued_oldest_seconds{job="sofra"}'
+        values: '0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: SofraTicketsNotPrinting
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: SofraTicketsNotPrinting
+        exp_alerts:
+          - exp_labels: { severity: critical, job: sofra }
+            exp_annotations:
+              summary: "Kitchen or bar tickets are not printing"
+              runbook: "docs/OPERATIONS.md#sofraticketsnotprinting"
+
+  - name: the app going away
+    interval: 1m
+    input_series:
+      - series: 'up{job="sofra", instance="app:8080"}'
+        values: '1 1 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SofraDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: sofra, instance: "app:8080" }
+            exp_annotations:
+              summary: "Sofra is not answering"
+              runbook: "docs/OPERATIONS.md#sofradown"
+
+  - name: a day without a backup
+    interval: 1h
+    input_series:
+      - series: 'sofra_backup_last_success_timestamp_seconds'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 20h
+        alertname: SofraBackupMissing
+        exp_alerts: []
+      - eval_time: 27h
+        alertname: SofraBackupMissing
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: "No verified database backup for 1d 3h 0m 0s"
+              runbook: "docs/OPERATIONS.md#sofrabackupmissing"

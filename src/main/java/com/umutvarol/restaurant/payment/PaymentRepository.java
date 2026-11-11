@@ -12,6 +12,10 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByProviderToken(String providerToken);
 
+    long countByStatus(PaymentStatus status);
+
+    Optional<Payment> findFirstByStatusOrderByCreatedAtAsc(PaymentStatus status);
+
     List<Payment> findByStatusAndCreatedAtBefore(PaymentStatus status, Instant before);
 
     List<Payment> findByLinkIdAndStatus(Long linkId, PaymentStatus status);

@@ -56,5 +56,38 @@ services:
     cpus: 2
     pids_limit: 512
 
+  # Nightly backups (docs/OPERATIONS.md): docker compose --profile backup up -d
+  # Dumps go to the "backups" volume; copy them off this machine as well (a backup on the same disk is not one).
+  backup:
+    image: postgres:16-alpine
+    profiles: ["backup"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: sofra
+      PGPASSWORD: ${POSTGRES_PASSWORD:-sofra}
+      PGDATABASE: sofra
+      KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_DIR: /backups
+      # hour of day (UTC) to run, after the restaurant has closed its day
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+    volumes:
+      - ./ops/backup.sh:/usr/local/bin/sofra-backup:ro
+      - ./ops/backup-loop.sh:/usr/local/bin/sofra-backup-loop:ro
+      - backups:/backups
+    entrypoint: ["bash", "/usr/local/bin/sofra-backup-loop"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+
 volumes:
   pgdata:
+  backups:

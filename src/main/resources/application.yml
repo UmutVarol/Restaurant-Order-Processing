@@ -67,6 +67,12 @@ management:
         enabled: true
       show-details: when-authorized
       roles: ADMIN
+      # DEGRADED: a backlog that fails silently (legal documents, print jobs, online payments; docs/OPERATIONS.md).
+      # Worse than UP, answered with 200, and never part of the readiness probe: the till keeps working.
+      status:
+        order: down, out-of-service, degraded, up, unknown
+        http-mapping:
+          degraded: 200
   info:
     build:
       enabled: true

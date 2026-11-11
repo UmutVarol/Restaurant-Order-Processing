@@ -2,6 +2,7 @@ package com.umutvarol.restaurant.payment;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,8 +23,17 @@ public class PaymentAuditLog {
 
     private final MeterRegistry meters;
 
+    /**
+     * Every reason {@link #suspicious} is called with. Their counters exist from start-up at zero: a counter that
+     * first appears at 1 is invisible to Prometheus's {@code increase()}, so the first forged callback after a
+     * restart would not count towards the alert (ops/prometheus/alerts.yml).
+     */
+    static final List<String> SUSPICIOUS_REASONS = List.of("amount_mismatch", "checkout_in_progress", "table_links_exhausted",
+            "unknown_checkout", "unknown_notification", "unverified_provider_answer");
+
     public PaymentAuditLog(MeterRegistry meters) {
         this.meters = meters;
+        SUSPICIOUS_REASONS.forEach(reason -> meters.counter("sofra.payments.suspicious", "reason", reason));
     }
 
     void paymentTaken(Payment payment, String actor) {

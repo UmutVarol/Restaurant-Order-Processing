@@ -1,0 +1,72 @@
+# Alert rules for Sofra. Each alert names what a manager or the person on call should do: see docs/OPERATIONS.md.
+# The metrics come from /actuator/prometheus (scraped with a manager's token, see the README there).
+# Checked in CI with: promtool check rules alerts.yml && promtool test rules alerts.test.yml
+groups:
+  - name: sofra-availability
+    rules:
+      - alert: SofraDown
+        expr: up{job="sofra"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Sofra is not answering"
+          runbook: "docs/OPERATIONS.md#sofradown"
+
+      - alert: SofraServerErrors
+        # more than 2% of API requests failing with a server error over ten minutes
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="sofra", status=~"5.."}[10m]))
+            / sum(rate(http_server_requests_seconds_count{job="sofra"}[10m])) > 0.02
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of requests fail with a server error"
+          runbook: "docs/OPERATIONS.md#sofraservererrors"
+
+  - name: sofra-silent-failures
+    rules:
+      - alert: SofraLegalDocumentsNotIssued
+        # a paid bill without its ÖKC receipt or e-Arşiv invoice for more than fifteen minutes
+        expr: sofra_fiscal_unissued_oldest_seconds{job="sofra"} > 900
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ with query \"sofra_fiscal_unissued{job='sofra'}\" }}{{ . | first | value }}{{ end }} legal documents not issued; the oldest has waited {{ $value | humanizeDuration }}"
+          runbook: "docs/OPERATIONS.md#sofralegaldocumentsnotissued"
+
+      - alert: SofraTicketsNotPrinting
+        # a kitchen or bar ticket failed for good, or the queue has stood still for two minutes
+        expr: sofra_print_failed{job="sofra"} > 0 or sofra_print_queued_oldest_seconds{job="sofra"} > 120
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Kitchen or bar tickets are not printing"
+          runbook: "docs/OPERATIONS.md#sofraticketsnotprinting"
+
+      - alert: SofraOnlinePaymentsStuck
+        # unfinished online payments are given up after 30 minutes; one older than 40 means reconciliation is not running
+        expr: sofra_payments_pending_oldest_seconds{job="sofra"} > 2400
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "An online payment has been unfinished for {{ $value | humanizeDuration }}"
+          runbook: "docs/OPERATIONS.md#sofraonlinepaymentsstuck"
+
+      - alert: SofraSuspiciousPayments
+        # forged callbacks, unverified provider answers, link spinning: the payment audit counts them
+        expr: sum(increase(sofra_payments_suspicious_total{job="sofra"}[15m])) > 5
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} suspicious payment events in fifteen minutes"
+          runbook: "docs/OPERATIONS.md#sofrasuspiciouspayments"
+
+  - name: sofra-backups
+    rules:
+      - alert: SofraBackupMissing
+        # written by ops/backup.sh into the node exporter's textfile directory after each verified backup
+        expr: time() - sofra_backup_last_success_timestamp_seconds > 26 * 3600
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "No verified database backup for {{ $value | humanizeDuration }}"
+          runbook: "docs/OPERATIONS.md#sofrabackupmissing"
