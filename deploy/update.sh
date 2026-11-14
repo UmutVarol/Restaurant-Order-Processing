@@ -17,8 +17,10 @@ fi
 echo "1/3 Backup before the update…"
 docker compose run --rm --no-deps --entrypoint sofra-backup backup
 
-# shellcheck disable=SC1091
-set -a; source ./.env; set +a
+set -a
+# shellcheck source=/dev/null
+source ./.env
+set +a
 echo "2/3 New version…"
 if [[ -n "${SOFRA_IMAGE:-}" ]]; then
   # a registry image is pulled; one loaded onto this computer by hand (docker load) is used as it is

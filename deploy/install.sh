@@ -58,8 +58,10 @@ ask() { # ask VAR "question" default
 if [[ -f .env ]]; then
   say "Mevcut kurulum bulundu (.env). Gizli anahtarlar ve veriler korunuyor."
   say "Existing installation found (.env): secrets and data are kept."
-  # shellcheck disable=SC1091
-  set -a; source ./.env; set +a
+  set -a
+  # shellcheck source=/dev/null
+  source ./.env
+  set +a
   name="${name:-${RESTAURANT_NAME:-}}"
   [[ -z "$domain" && -z "$local_address" ]] && { if [[ "${SOFRA_MODE:-}" == local ]]; then local_address="$SOFRA_DOMAIN"; else domain="${SOFRA_DOMAIN:-}"; fi; }
   email="${email:-${ACME_EMAIL:-}}"
@@ -99,9 +101,7 @@ secret() { openssl rand -base64 "$1" | tr -d '\n=' | tr '+/' '-_'; }
 # (finite input to every pipe stage: with pipefail, cutting off an endless /dev/urandom would abort the script)
 readable() { openssl rand -base64 192 | LC_ALL=C tr -dc 'abcdefghjkmnpqrstuvwxyz23456789' | cut -c1-12 | sed 's/\(....\)\(....\)\(....\)/\1-\2-\3/'; }
 
-first_install=false
 if [[ ! -f .env ]]; then
-  first_install=true
   admin_password="$(readable)"
   umask 077
   cat > .env <<ENV
