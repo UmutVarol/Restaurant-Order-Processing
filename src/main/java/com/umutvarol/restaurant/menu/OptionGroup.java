@@ -14,6 +14,7 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.Collections;
+import org.hibernate.annotations.TenantId;
 import java.util.List;
 
 /**
@@ -27,6 +28,11 @@ public class OptionGroup {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "menu_item_id")

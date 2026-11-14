@@ -39,11 +39,13 @@ class PrintingOperations implements HealthIndicator {
     }
 
     private long failedLastHour() {
-        return jobs.countByStatusAndCreatedAtAfter(PrintJob.Status.FAILED, clock.instant().minus(Duration.ofHours(1)));
+        // monitoring watches the whole installation, every business at once
+        return com.umutvarol.restaurant.business.BusinessContext.acrossAll(() -> jobs.countByStatusAndCreatedAtAfter(PrintJob.Status.FAILED, clock.instant().minus(Duration.ofHours(1))));
     }
 
     private Duration oldestQueued() {
-        return Degraded.age(jobs.findFirstByStatusOrderByCreatedAtAsc(PrintJob.Status.QUEUED).map(PrintJob::getCreatedAt), clock);
+        // monitoring watches the whole installation, every business at once
+        return com.umutvarol.restaurant.business.BusinessContext.acrossAll(() -> Degraded.age(jobs.findFirstByStatusOrderByCreatedAtAsc(PrintJob.Status.QUEUED).map(PrintJob::getCreatedAt), clock));
     }
 
     @Override

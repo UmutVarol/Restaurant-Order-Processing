@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -24,6 +25,11 @@ public class PaymentLink {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "bill_id")
@@ -71,6 +77,10 @@ public class PaymentLink {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getBusinessId() {
+        return businessId;
     }
 
     public Bill getBill() {

@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Locale;
+import org.hibernate.annotations.TenantId;
 import java.util.Map;
 
 /** A promotional code that grants a discount on the order subtotal. */
@@ -23,6 +24,11 @@ public class Coupon {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Column(nullable = false, unique = true, length = 32)
     private String code;

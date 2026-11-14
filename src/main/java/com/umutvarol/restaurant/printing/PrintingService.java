@@ -28,7 +28,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -177,7 +176,6 @@ public class PrintingService {
 
     // ------------------------------------------------------------------------------------------- the worker
 
-    @Scheduled(fixedDelayString = "${restaurant.printing.poll-interval:PT2S}", initialDelayString = "PT5S")
     @Transactional(propagation = Propagation.NEVER)
     public void printDue() {
         if (!properties.enabled()) {

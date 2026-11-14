@@ -119,6 +119,18 @@ public class StaffService {
         return toResponse(user);
     }
 
+    /**
+     * The first account of a new business: its owner, a manager, with the password they chose at sign-up (so nothing
+     * to change at the first sign-in). Returns a token, so they arrive signed in.
+     */
+    public TokenResponse createOwner(String username, String displayName, String password) {
+        PasswordPolicy.check(username, password);
+        AppUser owner = new AppUser(username, encoder.encode(password), displayName.strip(), Role.ADMIN);
+        users.save(owner);
+        audit.staffChanged("created", username, "role=ADMIN owner", "signup");
+        return tokens.issue(owner);
+    }
+
     /** The owner chooses a new password; their other sessions end and this one gets a fresh token. */
     public TokenResponse changeOwnPassword(String username, String current, String next, String client) {
         AppUser user = confirmation.confirm(username, current, client);

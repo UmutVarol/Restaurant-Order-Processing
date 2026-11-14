@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /** An order a platform sent, kept once per platform order id, with what became of it. */
@@ -31,6 +32,11 @@ public class ChannelOrder {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

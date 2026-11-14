@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.util.Locale;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -21,6 +22,11 @@ public class RecipeLine {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Column(name = "menu_item_id", nullable = false)
     private Long menuItemId;

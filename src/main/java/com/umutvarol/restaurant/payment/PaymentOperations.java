@@ -40,11 +40,13 @@ class PaymentOperations implements HealthIndicator {
     }
 
     private long pending() {
-        return payments.countByStatus(PaymentStatus.PENDING);
+        // monitoring watches the whole installation, every business at once
+        return com.umutvarol.restaurant.business.BusinessContext.acrossAll(() -> payments.countByStatus(PaymentStatus.PENDING));
     }
 
     private Duration oldest() {
-        return Degraded.age(payments.findFirstByStatusOrderByCreatedAtAsc(PaymentStatus.PENDING).map(Payment::getCreatedAt), clock);
+        // monitoring watches the whole installation, every business at once
+        return com.umutvarol.restaurant.business.BusinessContext.acrossAll(() -> Degraded.age(payments.findFirstByStatusOrderByCreatedAtAsc(PaymentStatus.PENDING).map(Payment::getCreatedAt), clock));
     }
 
     @Override

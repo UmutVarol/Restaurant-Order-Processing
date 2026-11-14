@@ -15,6 +15,7 @@ import jakarta.persistence.Version;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /** Time actually worked: from clocking in to clocking out. A manager can correct it, with a reason. */
@@ -25,6 +26,11 @@ public class TimeEntry {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id")

@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import org.hibernate.annotations.TenantId;
 import jakarta.persistence.Table;
 
 /** Which of our dishes a platform's menu item is. Nothing is guessed: an item without one stops its order. */
@@ -17,6 +18,11 @@ public class ChannelItemMapping {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

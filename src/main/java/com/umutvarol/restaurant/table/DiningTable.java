@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /** A physical table in the dining room that dine-in orders are served to. */
@@ -19,6 +20,11 @@ public class DiningTable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Column(nullable = false, unique = true, length = 10)
     private String code;
@@ -55,6 +61,10 @@ public class DiningTable {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getBusinessId() {
+        return businessId;
     }
 
     public String getCode() {

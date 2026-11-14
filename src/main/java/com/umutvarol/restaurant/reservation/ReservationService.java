@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
@@ -231,7 +230,6 @@ public class ReservationService {
     }
 
     /** Bookings that have not arrived some time after their start free their table. */
-    @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
     public void markNoShows() {
         Instant now = clock.instant();
         reservations.findByStatusAndStartsAtBefore(ReservationStatus.BOOKED, now.minus(noShowAfter)).forEach(booking -> {
@@ -242,7 +240,6 @@ public class ReservationService {
     }
 
     /** Phone numbers are needed only around the visit (KVKK: kept no longer than the purpose needs). */
-    @Scheduled(fixedDelayString = "PT1H", initialDelayString = "PT5M")
     public int eraseOldContacts() {
         Instant before = clock.instant().minus(keepContactFor);
         Set<ReservationStatus> closed = Set.of(ReservationStatus.FINISHED, ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW);

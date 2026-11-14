@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -35,6 +36,11 @@ public class Payment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "bill_id")
@@ -228,6 +234,10 @@ public class Payment {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getBusinessId() {
+        return businessId;
     }
 
     public Bill getBill() {

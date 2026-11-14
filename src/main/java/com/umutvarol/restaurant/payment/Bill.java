@@ -31,7 +31,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -54,6 +57,11 @@ public class Bill {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private BillStatus status;
@@ -66,7 +74,9 @@ public class Bill {
     @JoinTable(name = "bill_orders", joinColumns = @JoinColumn(name = "bill_id"),
             inverseJoinColumns = @JoinColumn(name = "order_id"))
     @OrderBy("id ASC")
-    private List<Order> orders = new ArrayList<>();
+    // a set, not a list: Hibernate then adds and removes single rows of bill_orders instead of rewriting the whole
+    // collection, which it refuses to do while the business filter is on (docs/adr/0001-multi-business.md)
+    private Set<Order> orders = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "bill", cascade = CascadeType.ALL)
     @OrderBy("id ASC")
@@ -333,7 +343,7 @@ public class Bill {
     }
 
     public List<Order> getOrders() {
-        return Collections.unmodifiableList(orders);
+        return List.copyOf(orders);
     }
 
     public List<Payment> getPayments() {

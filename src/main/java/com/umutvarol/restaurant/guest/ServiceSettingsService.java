@@ -31,7 +31,8 @@ public class ServiceSettingsService {
     }
 
     public ServiceSettingsResponse update(ServiceSettingsRequest request, String actor) {
-        ServiceSettings current = current();
+        long business = business();
+        ServiceSettings current = settings.findById(business).orElseGet(() -> settings.save(ServiceSettings.defaults(business)));
         BigDecimal limit = request.autoAcceptLimit() == null ? null
                 : request.autoAcceptLimit().setScale(2, RoundingMode.HALF_UP);
         current.change(request.mode(), limit, request.firstCartNeedsStaff(), clock.instant(), actor);
@@ -40,8 +41,13 @@ public class ServiceSettingsService {
         return ServiceSettingsResponse.from(current);
     }
 
+    /** This business's settings; a business that never changed them works with the defaults (not stored until changed). */
     ServiceSettings current() {
-        return settings.findById(ServiceSettings.ID)
-                .orElseThrow(() -> new IllegalStateException("The service settings row is missing"));
+        long business = business();
+        return settings.findById(business).orElseGet(() -> ServiceSettings.defaults(business));
+    }
+
+    private static long business() {
+        return java.util.Optional.ofNullable(com.umutvarol.restaurant.business.BusinessContext.current()).orElse(1L);
     }
 }

@@ -4,8 +4,10 @@ import jakarta.servlet.DispatcherType;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.List;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -38,6 +40,9 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import com.umutvarol.restaurant.business.BusinessFilter;
+import com.umutvarol.restaurant.business.BusinessLocator;
+import com.umutvarol.restaurant.business.BusinessRepository;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
@@ -118,9 +123,13 @@ class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ProblemDetailsSecurityHandler problemHandler,
-                                            JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
+                                            JwtAuthenticationConverter jwtAuthenticationConverter,
+                                            BusinessRepository businesses, List<BusinessLocator> locators,
+                                            @Value("${restaurant.cloud.base-domain:}") String baseDomain) throws Exception {
+        BusinessFilter business = new BusinessFilter(businesses, locators, baseDomain);
         http
-                .addFilterAfter(new PasswordChangeRequiredFilter(problemHandler), BearerTokenAuthenticationFilter.class)
+                .addFilterAfter(business, BearerTokenAuthenticationFilter.class)
+                .addFilterAfter(new PasswordChangeRequiredFilter(problemHandler), BusinessFilter.class)
                 // Bearer tokens are sent explicitly in a header, never automatically by the browser,
                 // so cross-site request forgery is not possible and CSRF tokens are unnecessary.
                 .csrf(AbstractHttpConfigurer::disable)

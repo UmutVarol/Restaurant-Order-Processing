@@ -37,8 +37,12 @@ public class OrderEventBroadcaster {
 
     private static final Duration RETRY_AFTER_LIMIT = Duration.ofSeconds(30);
 
-    /** Open streams and the user each belongs to. */
-    private final Map<SseEmitter, String> emitters = new ConcurrentHashMap<>();
+    /** Who holds a stream: an event goes only to streams of its own business (docs/adr/0001-multi-business.md). */
+    private record Subscriber(String user, long business) {
+    }
+
+    /** Open streams and who each belongs to. */
+    private final Map<SseEmitter, Subscriber> emitters = new ConcurrentHashMap<>();
     private final AtomicLong sequence = new AtomicLong();
     private final RealtimeProperties limits;
 
@@ -58,12 +62,13 @@ public class OrderEventBroadcaster {
                 throw new TooManyRequestsException("TOO_MANY_STREAMS",
                         "The server has reached its limit of live connections. Try again shortly.", RETRY_AFTER_LIMIT);
             }
-            long mine = emitters.values().stream().filter(user::equals).count();
+            Subscriber subscriber = new Subscriber(user, currentBusiness());
+            long mine = emitters.values().stream().filter(subscriber::equals).count();
             if (mine >= limits.maxSubscribersPerUser()) {
                 throw new TooManyRequestsException("TOO_MANY_STREAMS",
                         "Too many live connections for this account. Close another screen or tab.", RETRY_AFTER_LIMIT);
             }
-            emitters.put(emitter, user);
+            emitters.put(emitter, subscriber);
         }
         emitter.onCompletion(() -> emitters.remove(emitter));
         emitter.onTimeout(() -> {
@@ -127,7 +132,7 @@ public class OrderEventBroadcaster {
     /** Keeps idle connections alive through proxies and lets us detect clients that went away. */
     @Scheduled(fixedRate = 20_000, initialDelay = 20_000)
     void heartbeat() {
-        broadcast(() -> SseEmitter.event().comment("heartbeat"));
+        broadcastToAll(() -> SseEmitter.event().comment("heartbeat"));
     }
 
     public int subscriberCount() {
@@ -147,10 +152,25 @@ public class OrderEventBroadcaster {
     }
 
     /** Builders are single-use, so a fresh one is created for every subscriber. */
+    /** To the screens of the business the event happened in, and no other. */
     private void broadcast(Supplier<SseEmitter.SseEventBuilder> event) {
+        long business = currentBusiness();
+        emitters.forEach((emitter, subscriber) -> {
+            if (subscriber.business() == business) {
+                send(emitter, event.get());
+            }
+        });
+    }
+
+    private void broadcastToAll(Supplier<SseEmitter.SseEventBuilder> event) {
         for (SseEmitter emitter : emitters.keySet()) {
             send(emitter, event.get());
         }
+    }
+
+    private static long currentBusiness() {
+        Long business = com.umutvarol.restaurant.business.BusinessContext.current();
+        return business == null ? 1L : business;
     }
 
     private void send(SseEmitter emitter, SseEmitter.SseEventBuilder event) {

@@ -76,6 +76,7 @@ public class JwtTokenService {
                 .claim(MFA_SETUP_CLAIM, TwoFactorService.setupRequired(totp, user))
                 .claim(PASSWORD_CHANGE_CLAIM, user.isMustChangePassword())
                 .claim(SESSION_VERSION_CLAIM, user.getSessionVersion())
+                .claim(com.umutvarol.restaurant.business.BusinessFilter.CLAIM, user.getBusinessId())
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type(TOKEN_TYPE).build();
         String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();

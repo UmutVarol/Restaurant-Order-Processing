@@ -9,17 +9,21 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
-/** The restaurant's one row of service settings: the mode and the rules for carts sent from tables. */
+/** A business's service settings: the mode and the rules for carts sent from tables. One row per business, keyed by it. */
 @Entity
 @Table(name = "service_settings")
 public class ServiceSettings {
 
-    static final short ID = 1;
-
     @Id
-    private Short id;
+    private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -42,6 +46,16 @@ public class ServiceSettings {
 
     protected ServiceSettings() {
         // for JPA
+    }
+
+    /** What a new business starts with: guests order, a waiter checks the first cart and large ones. */
+    static ServiceSettings defaults(long businessId) {
+        ServiceSettings settings = new ServiceSettings();
+        settings.id = businessId;
+        settings.mode = ServiceMode.MIXED;
+        settings.autoAcceptLimit = new BigDecimal("1500.00");
+        settings.firstCartNeedsStaff = true;
+        return settings;
     }
 
     void change(ServiceMode mode, @Nullable BigDecimal autoAcceptLimit, boolean firstCartNeedsStaff, Instant at,

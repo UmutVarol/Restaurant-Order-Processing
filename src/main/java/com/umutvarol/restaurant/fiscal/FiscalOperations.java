@@ -42,11 +42,13 @@ class FiscalOperations implements HealthIndicator {
     }
 
     private long unissued() {
-        return documents.countByStatusIn(UNISSUED);
+        // monitoring watches the whole installation, every business at once
+        return com.umutvarol.restaurant.business.BusinessContext.acrossAll(() -> documents.countByStatusIn(UNISSUED));
     }
 
     private Duration oldest() {
-        return Degraded.age(documents.findFirstByStatusInOrderByCreatedAtAsc(UNISSUED).map(FiscalDocument::getCreatedAt), clock);
+        // monitoring watches the whole installation, every business at once
+        return com.umutvarol.restaurant.business.BusinessContext.acrossAll(() -> Degraded.age(documents.findFirstByStatusInOrderByCreatedAtAsc(UNISSUED).map(FiscalDocument::getCreatedAt), clock));
     }
 
     @Override

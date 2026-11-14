@@ -12,6 +12,7 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -38,6 +39,11 @@ public class FiscalDocument {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Column(name = "bill_id", nullable = false, unique = true)
     private Long billId;

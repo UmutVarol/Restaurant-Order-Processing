@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /** The end-of-day close (Z report): what the cash drawer should hold, what was counted, and the difference. */
@@ -20,6 +21,11 @@ public class DayClosing {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Column(name = "business_date", nullable = false)
     private LocalDate businessDate;

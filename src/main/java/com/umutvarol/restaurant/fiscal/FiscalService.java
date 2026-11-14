@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -144,7 +143,6 @@ public class FiscalService {
     }
 
     /** Documents whose pause is over are tried again, oldest first. */
-    @Scheduled(fixedDelayString = "${restaurant.fiscal.retry-interval:60s}", initialDelayString = "${restaurant.fiscal.retry-interval:60s}")
     void retryDue() {
         tx.execute(status -> documents.findByStatusInAndNextAttemptAtLessThanEqualOrderByNextAttemptAtAsc(RETRIED, clock.instant()))
                 .forEach(document -> attempt(document.getId()));

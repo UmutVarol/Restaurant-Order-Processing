@@ -76,12 +76,15 @@ public class GuestService {
     private final ServiceSettingsService serviceSettings;
     private final StationService stations;
     private final RestaurantProperties restaurant;
+    private final com.umutvarol.restaurant.business.BusinessProfile profile;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public GuestService(GuestRequestRepository requests, DiningTableRepository tables, OrderService orders,
                         MenuItemRepository menuItems, ServiceSettingsService serviceSettings, StationService stations,
-                        RestaurantProperties restaurant, ApplicationEventPublisher events, Clock clock) {
+                        RestaurantProperties restaurant, ApplicationEventPublisher events, Clock clock,
+                        com.umutvarol.restaurant.business.BusinessProfile profile) {
+        this.profile = profile;
         this.requests = requests;
         this.tables = tables;
         this.orders = orders;
@@ -101,7 +104,7 @@ public class GuestService {
         List<GuestRequestKind> openCalls = List.of(GuestRequestKind.CALL_WAITER, GuestRequestKind.REQUEST_BILL).stream()
                 .filter(kind -> requests.findFirstByTableIdAndKindAndStatus(table.getId(), kind, GuestRequestStatus.OPEN).isPresent())
                 .toList();
-        return new PublicTableResponse(restaurant.name(), table.getCode(), openCalls, serviceSettings.current().getMode());
+        return new PublicTableResponse(profile.name(restaurant.name()), table.getCode(), openCalls, serviceSettings.current().getMode());
     }
 
     public GuestRequestView order(String token, GuestOrderRequest cart, String client) {

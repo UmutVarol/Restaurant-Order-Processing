@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import org.hibernate.annotations.TenantId;
 import java.util.List;
 
 /** A day's tips, shared out among the staff who worked it. Fixed once made: it is what payroll pays. */
@@ -22,6 +23,11 @@ public class TipPool {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Column(name = "business_date", nullable = false, unique = true)
     private LocalDate businessDate;

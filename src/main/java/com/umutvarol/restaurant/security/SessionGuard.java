@@ -45,14 +45,17 @@ class SessionGuard implements OAuth2TokenValidator<Jwt> {
         if (username == null) {
             return OAuth2TokenValidatorResult.failure(ENDED);
         }
-        String key = username.toLowerCase(java.util.Locale.ROOT);
+        Object businessClaim = token.getClaim(com.umutvarol.restaurant.business.BusinessFilter.CLAIM);
+        long business = businessClaim instanceof Number id ? id.longValue() : 1L;
+        String key = business + ":" + username.toLowerCase(java.util.Locale.ROOT);
         Optional<State> state = states.getIfPresent(key);
         if (state == null) {
             // Loaded outside the cache's own lock on purpose: a database call inside Cache.get(key, loader) runs in a
             // synchronized section, which pins a virtual thread to its carrier while it waits for a connection. Under
             // load every carrier ends up pinned that way and the threads holding connections can never run again
             // (found by the busy-evening load test, docs/LOAD_TEST.md). Two requests may both load; that is harmless.
-            state = users.findByUsernameIgnoreCase(username).map(user -> new State(user.isEnabled(), user.getSessionVersion()));
+            state = com.umutvarol.restaurant.business.BusinessContext.call(business, () -> users.findByUsernameIgnoreCase(username)
+                    .map(user -> new State(user.isEnabled(), user.getSessionVersion())));
             states.put(key, state);
         }
         Object claim = token.getClaim(JwtTokenService.SESSION_VERSION_CLAIM);
@@ -68,6 +71,7 @@ class SessionGuard implements OAuth2TokenValidator<Jwt> {
 
     /** Call after changing an account, so this instance stops accepting its old tokens at once. */
     void forget(String username) {
-        states.invalidate(username.toLowerCase(java.util.Locale.ROOT));
+        Long business = com.umutvarol.restaurant.business.BusinessContext.current();
+        states.invalidate((business == null ? 1L : business) + ":" + username.toLowerCase(java.util.Locale.ROOT));
     }
 }

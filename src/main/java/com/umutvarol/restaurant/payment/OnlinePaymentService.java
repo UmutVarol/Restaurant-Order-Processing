@@ -42,7 +42,6 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -80,6 +79,7 @@ public class OnlinePaymentService {
     private final OnlinePayments online;
     private final PaymentProperties properties;
     private final RestaurantProperties restaurant;
+    private final com.umutvarol.restaurant.business.BusinessProfile profile;
     private final ApplicationEventPublisher events;
     private final TransactionTemplate transaction;
     private final PaymentAuditLog audit;
@@ -89,7 +89,8 @@ public class OnlinePaymentService {
                                 PaymentLinkRepository links, RefundRepository refunds, OnlinePayments online,
                                 PaymentProperties properties, RestaurantProperties restaurant,
                                 ApplicationEventPublisher events, PlatformTransactionManager transactionManager,
-                                PaymentAuditLog audit, Clock clock) {
+                                PaymentAuditLog audit, Clock clock, com.umutvarol.restaurant.business.BusinessProfile profile) {
+        this.profile = profile;
         this.billService = billService;
         this.paymentService = paymentService;
         this.payments = payments;
@@ -216,7 +217,7 @@ public class OnlinePaymentService {
                         payment.getFailureReason(), Objects.requireNonNullElse(payment.getCompletedAt(), payment.getCreatedAt())))
                 .orElse(null);
         return new PublicBillResponse(
-                restaurant.name(),
+                profile.name(restaurant.name()),
                 bill.getTable() == null ? null : bill.getTable().getCode(),
                 List.copyOf(lines.values()),
                 bill.total(),
@@ -292,7 +293,7 @@ public class OnlinePaymentService {
         BigDecimal tip = request.tip() == null ? Money.ZERO : request.tip();
         Payment payment = bill.startOnline(amount, tip, link, now, "guest");
         payments.saveAndFlush(payment);
-        String description = restaurant.name() + (bill.getTable() == null ? "" : " - " + bill.getTable().getCode());
+        String description = profile.name(restaurant.name()) + (bill.getTable() == null ? "" : " - " + bill.getTable().getCode());
         return new Started(payment.getId(), bill.getId(), payment.getAmount().add(payment.getTip()), description);
     }
 
@@ -394,7 +395,6 @@ public class OnlinePaymentService {
      * closed the browser before coming back is still recorded quickly. Payments still unfinished after
      * {@code pending-ttl} are given up, which frees their amount on the bill.
      */
-    @Scheduled(fixedDelayString = "${restaurant.payments.reconcile-interval:PT1M}", initialDelayString = "PT1M")
     public void reconcilePendingPayments() {
         Instant now = clock.instant();
         Instant giveUp = now.minus(properties.pendingTtl());
@@ -500,7 +500,6 @@ public class OnlinePaymentService {
     }
 
     /** Refunds the provider could not be reached for are tried again. */
-    @Scheduled(fixedDelayString = "PT5M", initialDelayString = "PT2M")
     public void retryPendingRefunds() {
         Instant settled = clock.instant().minusSeconds(60);
         List<Long> pending = transaction.execute(status -> refunds.findByStatus(RefundStatus.PENDING).stream()

@@ -81,7 +81,8 @@ public class LoginAttemptService {
     }
 
     private static String key(String username) {
-        return username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
+        Long business = com.umutvarol.restaurant.business.BusinessContext.current();
+        return (business == null ? 1L : business) + ":" + (username == null ? "" : username.trim().toLowerCase(Locale.ROOT));
     }
 
     private static final class Attempts {

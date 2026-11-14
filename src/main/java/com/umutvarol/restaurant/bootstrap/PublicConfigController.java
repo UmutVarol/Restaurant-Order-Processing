@@ -15,19 +15,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 class PublicConfigController {
 
-    record PublicConfig(String restaurantName, boolean demo) {
+    /** {@code businessCodeNeeded}: several businesses share this server and the address names none of them. */
+    record PublicConfig(String restaurantName, boolean demo, boolean businessCodeNeeded) {
     }
 
-    private final PublicConfig config;
+    private final RestaurantProperties restaurant;
+    private final DemoProperties demo;
+    private final com.umutvarol.restaurant.business.BusinessProfile profile;
 
-    PublicConfigController(RestaurantProperties restaurant, DemoProperties demo) {
-        this.config = new PublicConfig(restaurant.name(), demo.enabled());
+    PublicConfigController(RestaurantProperties restaurant, DemoProperties demo,
+                           com.umutvarol.restaurant.business.BusinessProfile profile) {
+        this.restaurant = restaurant;
+        this.demo = demo;
+        this.profile = profile;
     }
 
     @Operation(summary = "Sign-in screen settings")
     @SecurityRequirements
     @GetMapping("/api/v1/public/config")
     PublicConfig config() {
-        return config;
+        // the business the address or business code names; without one, nobody's name is given away
+        boolean known = com.umutvarol.restaurant.business.BusinessContext.current() != null;
+        return new PublicConfig(known ? profile.name(restaurant.name()) : null, demo.enabled(), !known);
     }
 }

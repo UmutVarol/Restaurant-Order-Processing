@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -20,6 +21,11 @@ public class PosDevice {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** The business this belongs to; Hibernate filters every query by it (docs/adr/0001-multi-business.md). */
+    @TenantId
+    @Column(name = "business_id", nullable = false, updatable = false)
+    private Long businessId;
 
     @Column(nullable = false, length = 60)
     private String name;
@@ -66,6 +72,10 @@ public class PosDevice {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getBusinessId() {
+        return businessId;
     }
 
     public String getName() {
