@@ -12,6 +12,7 @@ sunucusundaki kurulum ([INSTALL.md](INSTALL.md)) bundan etkilenmez: orada abonel
 | Planlar: Başlangıç $19, İşletme $39, Zincir $29 (3+ şube), şube başına aylık; yıllıkta 2 ay bedava | hazır |
 | Başlangıç planı sınırları: 1 şube, 5 etkin personel, 15 masa (aşılınca `PLAN_LIMIT`) | hazır |
 | Deneme bitince / ödeme 14 günden fazla gecikince **yalnızca okuma**: veri silinmez; rapor, dışa aktarma, giriş ve ödeme çalışır; sipariş alınamaz (`402 SUBSCRIPTION_INACTIVE`). Ödeme gelince hemen açılır | hazır |
+| İşletmenin kendi iyzico hesabı (misafir telefondan öder), şifreli saklanır | hazır |
 | Paddle ile tahsilat: ödeme sayfası, kart/fatura sayfası, imzalı webhook, şube sayısı değişince otomatik fiyat güncelleme | hazır, **sandbox'ta denenmeli** |
 | "Plan ve ödeme" ekranı, deneme bitiyor / ödeme gecikti bandı, 6 dil | hazır |
 | Mağaza uygulamaları için kabuklar (`mobile/`), Android doğrulama dosyası | hazır, **derlenmesi sizde** |
@@ -40,8 +41,14 @@ PRICE_CHAIN_MONTHLY=pri_...    PRICE_CHAIN_YEARLY=pri_...
   `http://<iç adres>:9090/actuator/health/readiness` olmalı.
 - **Veritabanı:** yönetilen PostgreSQL (yedekli). Gece yedeği ve geri yükleme [OPERATIONS.md](OPERATIONS.md)'deki
   gibi.
-- **Entegrasyonlar:** iyzico üye işyeri, e-Arşiv ve paket servis anahtarları bugün sunucu genelinde ayardır. Her
-  işletmenin kendi anahtarını girebileceği ekran gelene kadar bulutta kapalı kalırlar (`PAYMENT_PROVIDER=NONE`).
+- **Misafirin telefondan ödemesi (iyzico):** her işletme kendi iyzico üye işyeri hesabını **Ayarlar › Online ödeme
+  hesabı** kartından bağlar (yalnızca tüm şubelerin yöneticisi, şifre onayıyla). Anahtarlar AES-GCM ile şifrelenip
+  saklanır, bir daha gösterilmez; para doğrudan işletmenin hesabına gider. Şifreleme anahtarı olarak
+  `TOTP_ENCRYPTION_KEY` kullanılır (`openssl rand -base64 32`); bulutta mutlaka ayarlanmalı ve yedeklenmeli, kaybolursa
+  kayıtlı anahtarlar çözülemez ve işletmelerin yeniden girmesi gerekir. Sunucu genelinde iyzico hesabı yoktur
+  (`PAYMENT_PROVIDER=NONE`).
+- **e-Arşiv ve paket servis platformları** bugün hâlâ sunucu genelinde ayardır; işletme başına ekranları gelene kadar
+  bulutta kapalıdır.
 - **Yazıcılar:** buluttaki sunucu restoranın yerel ağındaki yazıcıya doğrudan ulaşamaz. Bulutta mutfak fişi için
   restoranda çalışacak küçük bir "yazıcı köprüsü" gerekir (sonraki iş).
 

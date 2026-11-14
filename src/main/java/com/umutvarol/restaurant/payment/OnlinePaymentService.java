@@ -343,6 +343,17 @@ public class OnlinePaymentService {
      */
     public void handleNotification(String provider, Map<String, Object> body) {
         String token = body.get("token") instanceof String value && value.length() <= 200 ? value : null;
+        if (com.umutvarol.restaurant.business.BusinessContext.current() == null) {
+            // a notification names no business: it is the one of the payment it names, whose keys check it
+            Long business = com.umutvarol.restaurant.business.BusinessContext.acrossAll(() -> transaction.execute(status ->
+                    paymentNamedBy(token, body).map(Payment::getBusinessId).orElse(null)));
+            if (business == null) {
+                audit.suspicious("unknown_notification", provider);
+                return;
+            }
+            com.umutvarol.restaurant.business.BusinessContext.run(business, () -> handleNotification(provider, body));
+            return;
+        }
         Long paymentId = transaction.execute(status -> {
             if (token != null) {
                 return payments.findByProviderToken(token).map(Payment::getId).orElse(null);
@@ -359,6 +370,15 @@ public class OnlinePaymentService {
             return;
         }
         reconcile(found, false);
+    }
+
+    private java.util.Optional<Payment> paymentNamedBy(@Nullable String token, Map<String, Object> body) {
+        if (token != null) {
+            return payments.findByProviderToken(token);
+        }
+        Object conversation = body.get("paymentConversationId");
+        java.util.regex.Matcher match = conversation instanceof String value ? CONVERSATION_ID.matcher(value) : null;
+        return match != null && match.matches() ? payments.findById(Long.valueOf(match.group(1))) : java.util.Optional.empty();
     }
 
     /**

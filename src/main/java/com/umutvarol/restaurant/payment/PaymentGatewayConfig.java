@@ -24,7 +24,7 @@ class PaymentGatewayConfig {
     private static final Logger log = LoggerFactory.getLogger(PaymentGatewayConfig.class);
 
     @Bean
-    OnlinePayments onlinePayments(PaymentProperties properties, IyzicoProperties iyzico,
+    OnlinePayments onlinePayments(PaymentProperties properties, IyzicoProperties iyzico, BusinessGateways own,
                                   // Read as a plain property: nothing may depend on the bootstrap package.
                                   @Value("${restaurant.demo.enabled:true}") boolean demoMode) {
         Provider provider = properties.provider() != null ? properties.provider()
@@ -32,7 +32,7 @@ class PaymentGatewayConfig {
         return switch (provider) {
             case NONE -> {
                 log.info("Online payments are off. Set PAYMENT_PROVIDER=IYZICO to take QR payments.");
-                yield new OnlinePayments(null);
+                yield new OnlinePayments(null, own::current);
             }
             case SIMULATED -> {
                 if (!demoMode && !properties.allowSimulated()) {
@@ -41,10 +41,10 @@ class PaymentGatewayConfig {
                             + "restaurant.payments.allow-simulated=true on a test server.");
                 }
                 log.warn("Online payments use the simulated provider: nothing is charged.");
-                yield new OnlinePayments(new SimulatedGateway());
+                yield new OnlinePayments(new SimulatedGateway(), own::current);
             }
             case IYZICO -> new OnlinePayments(new IyzicoGateway(iyzico, RestClient.builder()
-                    .requestFactory(requestFactory())));
+                    .requestFactory(requestFactory())), own::current);
         };
     }
 

@@ -149,6 +149,7 @@ class SecurityConfig {
                         .requestMatchers("/api/v1/devices", "/api/v1/devices/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/staff", "/api/v1/staff/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/billing", "/api/v1/billing/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers("/api/v1/payment-settings").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/branches").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/branches/*").hasRole(Role.ADMIN.name())
                         // everyone clocks themselves in and reads the rota; managers see and fix everyone's time

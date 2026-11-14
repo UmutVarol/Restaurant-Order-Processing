@@ -14,25 +14,28 @@ class PaymentGatewayConfigTest {
     private static final IyzicoProperties NO_KEYS = new IyzicoProperties(null, null,
             URI.create("https://sandbox-api.iyzipay.com"), "a@b.c", "1", "c", "c", "a");
 
+    /** No business has its own account here: the server's provider is the one in use. */
+    private static final BusinessGateways OWN = org.mockito.Mockito.mock(BusinessGateways.class);
+
     private final PaymentGatewayConfig config = new PaymentGatewayConfig();
 
     @Test
     void demoModeUsesTheSimulatedProviderAndProductionNone() {
-        assertThat(config.onlinePayments(properties(null, false), NO_KEYS, true).simulated()).isPresent();
-        assertThat(config.onlinePayments(properties(null, false), NO_KEYS, false).enabled()).isFalse();
+        assertThat(config.onlinePayments(properties(null, false), NO_KEYS, OWN, true).simulated()).isPresent();
+        assertThat(config.onlinePayments(properties(null, false), NO_KEYS, OWN, false).enabled()).isFalse();
     }
 
     @Test
     void refusesTheSimulatedProviderInProductionUnlessAllowed() {
-        assertThatThrownBy(() -> config.onlinePayments(properties(Provider.SIMULATED, false), NO_KEYS, false))
+        assertThatThrownBy(() -> config.onlinePayments(properties(Provider.SIMULATED, false), NO_KEYS, OWN, false))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SIMULATED");
-        assertThat(config.onlinePayments(properties(Provider.SIMULATED, true), NO_KEYS, false).enabled()).isTrue();
+        assertThat(config.onlinePayments(properties(Provider.SIMULATED, true), NO_KEYS, OWN, false).enabled()).isTrue();
     }
 
     @Test
     void iyzicoNeedsItsKeys() {
-        assertThatThrownBy(() -> config.onlinePayments(properties(Provider.IYZICO, false), NO_KEYS, true))
+        assertThatThrownBy(() -> config.onlinePayments(properties(Provider.IYZICO, false), NO_KEYS, OWN, true))
                 .hasMessageContaining("IYZICO_API_KEY");
     }
 

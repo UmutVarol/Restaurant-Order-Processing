@@ -610,6 +610,11 @@
     CHAIN: { monthlyCentsPerBranch: 2900, minimumBranches: 3, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
   };
   const billing = () => (state.billing ??= { plan: 'BUSINESS', status: 'TRIAL', trialEndsAt: Date.now() + 10 * 86_400_000, interval: null, periodEndsAt: null });
+  function paymentAccountView() {
+    const own = state.paymentAccount;
+    return { provider: own ? 'IYZICO' : null, configured: Boolean(own), keyHint: own?.keyHint ?? null, sandbox: own ? own.sandbox : true,
+      updatedAt: own ? iso(own.updatedAt) : null, updatedBy: own?.updatedBy ?? null, serverProvider: 'SIMULATED', encryptionReady: true };
+  }
   function billingView() {
     const b = billing();
     const open = branches().filter((x) => x.active).length;
@@ -1980,6 +1985,23 @@
     ['GET', /^public\/config$/, 'public', () => ({ restaurantName: 'Sofra Bistro', demo: true, billing: true })],
     // the demo shows Sofra Cloud's plan screen with a simulated provider: choosing a plan charges nothing
     ['GET', /^billing$/, 'manager', () => billingView()],
+    // the business's own iyzico account: the demo keeps only the last characters, like the server
+    ['GET', /^payment-settings$/, 'manager', () => paymentAccountView()],
+    ['PUT', /^payment-settings$/, 'manager', ({ user }, body) => {
+      requirePassword(user);
+      const api = String(body.apiKey || '').trim();
+      const secret = String(body.secretKey || '').trim();
+      if (api.length < 8 || secret.length < 8 || /\s/.test(api + secret)) throw new Problem(422, 'PAYMENT_KEY_INVALID', 'Paste the key exactly as iyzico shows it');
+      state.paymentAccount = { keyHint: api.slice(-4), sandbox: body.sandbox !== false, updatedAt: Date.now(), updatedBy: user.username };
+      save();
+      return paymentAccountView();
+    }],
+    ['DELETE', /^payment-settings$/, 'manager', ({ user }) => {
+      requirePassword(user);
+      state.paymentAccount = null;
+      save();
+      return paymentAccountView();
+    }],
     ['GET', /^plan$/, 'staff', () => { const v = billingView(); return { plan: v.plan, status: v.status, writable: v.writable, features: PLAN_OFFERS[v.plan].features }; }],
     ['POST', /^billing\/checkout$/, 'manager', (_, body) => {
       const offer = PLAN_OFFERS[body.plan];

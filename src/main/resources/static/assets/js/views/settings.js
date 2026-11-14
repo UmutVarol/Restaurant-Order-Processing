@@ -4,7 +4,7 @@ import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { dateTime } from '../core/format.js';
-import { api, currentDevice, errorMessage, forgetDevice, saveDevice, updateDevice } from '../core/api.js';
+import { api, currentDevice, errorMessage, forgetDevice, hasFeature, saveDevice, updateDevice } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
 import { qrCode } from './qr.js';
@@ -25,6 +25,9 @@ export default {
     const printersCard = h('div', { class: 'card settings-card' });
     const stationsCard = h('div', { class: 'card settings-card' });
     const totpCard = h('div', { class: 'card settings-card' });
+    // the business's own online payment account: for managers of all branches, on a plan with online payments
+    const ownsPayments = manager && user.branchId == null && hasFeature('ONLINE_PAYMENTS');
+    const paymentsCard = h('div', { class: 'card settings-card', 'data-testid': 'payment-account' });
     const serviceCard = h('div', { class: 'card settings-card service-card' });
     let totp = null;
     let service = null;
@@ -32,12 +35,63 @@ export default {
     let tables = null;
     let printers = null;
     let stations = null;
-    mount(container, h('div', { class: 'settings-grid' }, manager ? serviceCard : null, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
+    mount(container, h('div', { class: 'settings-grid' }, manager ? serviceCard : null, ownsPayments ? paymentsCard : null, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
       manager ? stationsCard : null, manager ? printersCard : null));
 
     const head = (iconName, title, sub) => h('div', { class: 'card-head' },
       h('span', { class: 'settings-ic' }, icon(iconName, 'sm')),
       h('div', null, h('div', { class: 'card-title' }, title), h('div', { class: 'card-sub' }, sub)));
+
+    // ------------------------------------------------------------------ online payment account (owner)
+    let account = null;
+    async function loadAccount() {
+      if (!ownsPayments) return;
+      try { account = await api.paymentSettings(); } catch { account = null; paymentsCard.hidden = true; return; }
+      renderAccount();
+    }
+
+    function renderAccount() {
+      if (!account) {
+        mount(paymentsCard, head('online', t('payAccount.title'), t('payAccount.sub')),
+          h('div', { class: 'card-body' }, h('div', { class: 'skeleton', style: { height: '90px' } })));
+        return;
+      }
+      const status = account.configured
+        ? t(account.sandbox ? 'payAccount.connectedTest' : 'payAccount.connected', { hint: account.keyHint })
+        : account.serverProvider ? t('payAccount.server') : t('payAccount.none');
+      const apiKey = h('input', { class: 'input', id: 'pay-api-key', autocomplete: 'off', spellcheck: false, autocapitalize: 'none', maxlength: 200 });
+      const secretKey = h('input', { class: 'input', id: 'pay-secret-key', type: 'password', autocomplete: 'new-password', maxlength: 200 });
+      const sandbox = h('input', { type: 'checkbox', checked: account.configured ? account.sandbox : true, 'data-testid': 'pay-sandbox' });
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const fail = (error) => { problem.replaceChildren(icon('alert', 'sm'), errorMessage(error)); problem.hidden = false; };
+      const save = h('button', { class: 'btn primary', 'data-testid': 'pay-save', onclick: async () => {
+        save.disabled = true;
+        problem.hidden = true;
+        try {
+          const saved = await withRecentSignIn(() => api.savePaymentSettings({ apiKey: apiKey.value.trim(), secretKey: secretKey.value.trim(), sandbox: sandbox.checked }));
+          if (saved) { account = saved; toast({ title: t('payAccount.saved') }); renderAccount(); }
+        } catch (error) { fail(error); }
+        save.disabled = false;
+      } }, icon('check', 'sm'), t(account.configured ? 'payAccount.replace' : 'payAccount.connect'));
+      const remove = account.configured ? h('button', { class: 'btn ghost danger-text', 'data-testid': 'pay-remove', onclick: async () => {
+        if (!(await confirmDialog({ title: t('payAccount.removeTitle'), text: t('payAccount.removeText'), confirmLabel: t('payAccount.remove'), danger: true }))) return;
+        try {
+          const saved = await withRecentSignIn(() => api.removePaymentSettings());
+          if (saved) { account = saved; renderAccount(); }
+        } catch (error) { fail(error); }
+      } }, icon('trash', 'sm'), t('payAccount.remove')) : null;
+      mount(paymentsCard, head('online', t('payAccount.title'), t('payAccount.sub')),
+        h('div', { class: 'card-body' },
+          h('p', { class: account.configured ? '' : 'muted', 'data-testid': 'pay-status' }, status),
+          account.encryptionReady ? [
+            h('div', { class: 'field' }, h('label', { for: 'pay-api-key' }, t('payAccount.apiKey')), apiKey),
+            h('div', { class: 'field' }, h('label', { for: 'pay-secret-key' }, t('payAccount.secretKey')), secretKey,
+              h('small', { class: 'faint' }, t('payAccount.keysHint'))),
+            h('label', { class: 'checkbox' }, sandbox, t('payAccount.sandbox')),
+            problem,
+            h('div', { class: 'setup-more' }, save, remove),
+          ] : h('p', { class: 'form-error-text' }, t('error.ENCRYPTION_KEY_MISSING'))));
+    }
 
     // ------------------------------------------------------------------ service mode (managers)
     function renderService() {
@@ -614,6 +668,10 @@ export default {
     loadTotp();
     renderService();
     loadService();
+    if (ownsPayments) {
+      renderAccount();
+      loadAccount();
+    }
     const offPrint = bus.on('print', () => loadPrinters());
     return { destroy: () => offPrint() };
   },
