@@ -1,0 +1,18 @@
+
+# Local network only: plain http://{DOMAIN} is the welcome page for new devices. It hands out this installation's
+# certificate (the public one; the private key never leaves Caddy) and links to the real, encrypted address.
+http://{DOMAIN} {
+	handle /sofra-ca.crt {
+		root * /data/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Type application/x-x509-ca-cert
+		header Content-Disposition "attachment; filename=sofra-ca.crt"
+		file_server
+	}
+	handle {
+		root * /srv/welcome
+		try_files {path} /index.html
+		file_server
+	}
+	header -Server
+}

@@ -38,8 +38,9 @@ export default {
         { id: 'password', done: !user.mustChangePassword, label: t('setup.step.password') },
         { id: 'totp', done: user.totpEnabled, label: t('setup.step.totp'), go: () => navigate('settings') },
         { id: 'staff', done: staff.filter((s) => s.enabled).length > 1, label: t('setup.step.staff'), go: () => addStaff() },
-        { id: 'tables', done: tables.length > 0, label: t('setup.step.tables'), go: () => editTable(null) },
-        { id: 'menu', done: facts.menuItems > 0, label: t('setup.step.menu'), go: () => navigate('menu') },
+        // a new installation comes with a sample menu and twelve sample tables: done once the manager has been through them
+        { id: 'tables', done: tables.length > 0 && reviewed('tables'), label: t('setup.step.tables'), go: () => { markReviewed('tables'); renderChecklist(); tablesCard.scrollIntoView({ behavior: 'smooth' }); } },
+        { id: 'menu', done: facts.menuItems > 0 && reviewed('menu'), label: t('setup.step.menu'), go: () => { markReviewed('menu'); navigate('menu'); } },
         { id: 'qr', done: tables.length > 0 && tables.every((x) => x.qrIssuedAt), label: t('setup.step.qr'), go: () => navigate('settings') },
         { id: 'printers', done: facts.printers > 0, label: t('setup.step.printers'), optional: true, go: () => navigate('settings') },
       ];
@@ -53,6 +54,14 @@ export default {
             h('span', { class: 'setup-tick', 'aria-hidden': 'true' }, step.done ? icon('check', 'sm') : null),
             h('span', { class: 'setup-label' }, step.label, step.optional ? h('small', { class: 'faint' }, ` · ${t('setup.optional')}`) : null),
             !step.done && step.go ? h('button', { class: 'btn sm ghost', onclick: step.go }, t('setup.do'), icon('chevronRight', 'sm')) : null)))));
+    }
+
+    // per device: a convenience, not a record (losing it only shows the step again)
+    function reviewed(step) {
+      try { return localStorage.getItem(`sofra.setup.${step}`) === '1'; } catch { return false; }
+    }
+    function markReviewed(step) {
+      try { localStorage.setItem(`sofra.setup.${step}`, '1'); } catch { /* storage blocked */ }
     }
 
     // ------------------------------------------------------------------ staff

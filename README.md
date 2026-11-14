@@ -32,6 +32,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 - [Testing](#testing)
 - [Configuration](#configuration)
 - [Roadmap](docs/ROADMAP.md)
+- [Install in a restaurant (Turkish)](docs/INSTALL.md)
 - [Operations: monitoring, alerts, backups](docs/OPERATIONS.md)
 - [Project history](#project-history)
 - [Türkçe özet](#türkçe-özet)
@@ -75,7 +76,19 @@ the floor plan tracks every open check, and the manager watches it all on a live
 
 <p align="center"><img src="docs/screenshots/mobile.png" alt="Phone layouts: POS, kitchen display and floor plan" width="760"></p>
 
-## Quick start
+## Install it in your restaurant
+
+One command on a Linux computer that stays on (mini PC, laptop, Raspberry Pi 4/5):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/UmutVarol/Restaurant-Order-Processing/main/deploy/get.sh | bash
+```
+
+It installs Docker if needed and asks two questions (Enter accepts the suggestion). Then open `http://<server>` on
+every tablet and phone and follow the two steps on that page. HTTPS, backups, fresh secrets and a temporary manager
+password are set up for you. The full guide, in Turkish: **[docs/INSTALL.md](docs/INSTALL.md)**.
+
+## Quick start (development)
 
 **Requirements:** Java 21. Nothing else: Maven is bundled through the wrapper and the default database is an in-memory H2.
 
@@ -388,6 +401,8 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 </details>
 
 ## Türkçe özet
+
+**Restoranınıza kurulum:** Linux bir bilgisayarda tek komut (`curl -fsSL https://raw.githubusercontent.com/UmutVarol/Restaurant-Order-Processing/main/deploy/get.sh | bash`), ardından her tablet ve telefonda `http://<sunucu adresi>`. Ayrıntılı kılavuz: [docs/INSTALL.md](docs/INSTALL.md).
 
 **Sofra**, Spring Boot 4 ve Java 21 ile geliştirilmiş, gerçek zamanlı bir restoran sipariş ve POS sistemidir.
 

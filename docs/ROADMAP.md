@@ -217,7 +217,7 @@ finished in code.
 | 1 | S4.1 | **Operations: backups, restore, silent failures** | Losing a day's bills or not noticing that receipts stopped being issued is the costliest failure; it must exist before the first real evening | done |
 | 2 | S4.2 | **Reservations and a waitlist** | The first thing an owner asks for; the floor plan only knows "now" | done |
 | 3 | S4.3 | **Staff shifts, time clock and tip pooling** | Payroll and tips are a weekly argument without them; PINs and tip data already exist | planned |
-| 4 | S4.4 | **First-run setup** | Today a new restaurant enters menu, tables and staff by hand through several screens | planned |
+| 4 | S4.4 | **First-run setup and one-command install** | Today a new restaurant enters menu, tables and staff by hand through several screens | done |
 | 5 | S4.5 | **Load test of a busy evening** | 40 tables, 12 phones and 3 kitchen screens at once have never been measured | planned |
 | 6 | S4.6 | **Multi-branch foundation (design)** | Every table assumes one restaurant; the change is cheap now and expensive later. Decision record first, code after | planned |
 | — | — | **Live partners** (iyzico merchant, e-Arşiv integrator, ÖKC bridge, delivery platforms) | Needs contracts and credentials from the owner; adapters and simulations already exist | waiting on the owner |
@@ -244,6 +244,24 @@ finished in code.
 - Phone numbers are erased 30 days after the visit (`restaurant.reservations.keep-contact-for`); the kitchen cannot
   see reservations at all.
 - A Reservations screen in six languages, in the demo too, with browser tests.
+
+### S4.4 First-run setup and one-command install
+
+- `deploy/`: one command on a Linux computer (`get.sh` installs Docker and Git, `install.sh` asks two questions)
+  starts Sofra, PostgreSQL, Caddy with HTTPS (Let's Encrypt for a domain, a local authority on the restaurant's
+  network) and nightly backups, with fresh secrets and the demo switched off. Tested end to end with Docker.
+- On the local network, `http://<server>` is a welcome page that hands each device the certificate and links to
+  Sofra: no USB sticks. `update.sh` backs up first and checks health after; `reset-admin.sh` for a lost password.
+- A Setup screen for managers: checklist before the first evening, staff accounts, tables.
+- Released images for amd64 and arm64 (Raspberry Pi) on version tags (`.github/workflows/release.yml`).
+- Owner's guide in Turkish: [INSTALL.md](INSTALL.md).
+
+### Security review (with S4.4)
+
+- Sessions end at once when an account is switched off, changes role or has its password reset or changed.
+- Demo accounts are offered only in the demo; the installer's password is temporary and replaced at the first
+  sign-in; a password policy; client addresses behind the proxy are the real ones; Java and OS versions are no
+  longer public; API docs are off on a restaurant's server.
 
 ## Later
 

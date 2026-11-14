@@ -1,0 +1,5 @@
+# written by install.sh: secrets and this restaurant's settings
+.env
+Caddyfile
+backups/
+sofra-local-ca.crt

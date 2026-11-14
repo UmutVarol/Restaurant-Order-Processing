@@ -1,0 +1,30 @@
+# Written by install.sh. {DOMAIN} and {TLS} are filled in; edit and run `docker compose restart caddy` to change it.
+{
+	# no admin API on the network
+	admin off
+	# clients send no server name when they reach Sofra by an IP address; answer them with this site's certificate
+	default_sni {DOMAIN}
+}
+
+{DOMAIN} {
+	{TLS}
+	encode zstd gzip
+
+	# metrics are scraped inside the Docker network, never from outside
+	@internal path /actuator/prometheus /actuator/metrics /actuator/metrics/*
+	respond @internal 404
+
+	# live updates: pass every event on at once
+	@events path /api/v1/events/*
+	reverse_proxy @events app:8080 {
+		flush_interval -1
+	}
+
+	reverse_proxy app:8080
+
+	header -Server
+	log {
+		output stdout
+		format console
+	}
+}

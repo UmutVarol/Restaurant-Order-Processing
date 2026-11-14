@@ -165,6 +165,14 @@ can be scraped by Prometheus at `/actuator/prometheus` (admin only).
 - **The container** runs as a non-root user and exits on out-of-memory errors. `docker-compose.yml` adds a
   read-only root filesystem, drops all Linux capabilities, sets `no-new-privileges`, and caps memory, CPU and
   process counts. The database is not published to the host.
+- **Accounts:** managers add and switch off staff themselves. Every token carries its account's session version;
+  switching an account off, changing its role or resetting or changing its password raises it, and the old tokens
+  stop working at once rather than when they expire. A password someone else chose (the installer's, a manager's
+  reset) has to be replaced before anything else works. Passwords need 10+ characters, not a common one, not the
+  username. Demo accounts exist only in demo mode, and the sign-in screen offers them only there.
+- **Behind the proxy** (`deploy/`): only Caddy is published; the app and database are on Docker networks the
+  outside cannot reach (the database's has no outside access at all), and the app trusts forwarded client
+  addresses from private-network proxies only. Metrics are not reachable through Caddy; API docs are off.
 - **Guests' personal data** (KVKK): a reservation's phone number is kept only for the visit and erased 30 days
   later; names and phone numbers are visible to waiters and managers, not to the kitchen, and are never written
   to the audit log, the floor plan or the live event stream.

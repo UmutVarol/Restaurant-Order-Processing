@@ -115,7 +115,7 @@ jobs:
             git /repo --config /repo/.gitleaks.toml --redact --no-banner
 
   operations:
-    name: Operations (alert rules, backup scripts)
+    name: Operations (alert rules, install and backup scripts)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -126,8 +126,8 @@ jobs:
             prom/prometheus:v3.5.0 check rules alerts.yml
           docker run --rm -v "$PWD/ops/prometheus:/rules:ro" --workdir /rules --entrypoint promtool \
             prom/prometheus:v3.5.0 test rules alerts.test.yml
-      - name: Lint the backup scripts
-        run: shellcheck ops/backup.sh ops/restore.sh ops/backup-loop.sh
+      - name: Lint the install and backup scripts
+        run: shellcheck ops/backup.sh ops/restore.sh ops/backup-loop.sh deploy/install.sh deploy/update.sh deploy/get.sh deploy/reset-admin.sh
 
   dependency-review:
     name: Dependency review

@@ -1,0 +1,124 @@
+# Sofra for a restaurant: the app, PostgreSQL, Caddy in front with HTTPS, and nightly backups.
+# Set up with ./install.sh (it writes .env and Caddyfile); update with ./update.sh. Guide: docs/INSTALL.md
+name: sofra
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sofra
+      POSTGRES_USER: sofra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run ./install.sh first}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sofra -d sofra"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    # A released image (SOFRA_IMAGE=ghcr.io/umutvarol/restaurant-order-processing:1.2.3) or one built here from source.
+    image: ${SOFRA_IMAGE:-sofra-restaurant:local}
+    build:
+      context: ..
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      DATABASE_URL: jdbc:postgresql://postgres:5432/sofra
+      DATABASE_USERNAME: sofra
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?run ./install.sh first}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?run ./install.sh first}
+      TOTP_REQUIRED_FOR_MANAGERS: ${TOTP_REQUIRED_FOR_MANAGERS:-true}
+      RESTAURANT_BOOTSTRAP_ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      RESTAURANT_NAME: ${RESTAURANT_NAME:-Sofra}
+      RESTAURANT_TIME_ZONE: ${TIME_ZONE:-Europe/Istanbul}
+      PUBLIC_BASE_URL: https://${SOFRA_DOMAIN:?run ./install.sh first}
+      DEMO_MODE: "false"
+      API_DOCS_ENABLED: "false"
+      # Caddy is the only way in, so the client address it forwards can be trusted.
+      FORWARD_HEADERS_STRATEGY: native
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-NONE}
+      IYZICO_API_KEY: ${IYZICO_API_KEY:-}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:-}
+      IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://api.iyzipay.com}
+      FISCAL_OKC_BRIDGE_URL: ${FISCAL_OKC_BRIDGE_URL:-}
+      FISCAL_OKC_API_KEY: ${FISCAL_OKC_API_KEY:-}
+      FISCAL_EARSIV_BASE_URL: ${FISCAL_EARSIV_BASE_URL:-}
+      FISCAL_EARSIV_API_KEY: ${FISCAL_EARSIV_API_KEY:-}
+    # No published port: only Caddy reaches the app. Printers and the ÖKC bridge on the restaurant's network are
+    # reached from inside the container like from any computer there.
+    networks: [internal, edge]
+    read_only: true
+    tmpfs: ["/tmp:size=64m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    cpus: 2
+    pids_limit: 512
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./welcome:/srv/welcome:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: sofra
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: sofra
+      KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_DIR: /backups
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+    volumes:
+      - ../ops/backup.sh:/usr/local/bin/sofra-backup:ro
+      - ../ops/restore.sh:/usr/local/bin/sofra-restore:ro
+      - ../ops/backup-loop.sh:/usr/local/bin/sofra-backup-loop:ro
+      # a folder next to this file, so copying the backups elsewhere is one rsync away
+      - ./backups:/backups
+    entrypoint: ["bash", "/usr/local/bin/sofra-backup-loop"]
+    networks: [internal]
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+
+networks:
+  # the database and backups never touch the outside
+  internal:
+    internal: true
+  edge: {}
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

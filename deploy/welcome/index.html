@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sofra'ya bağlan</title>
+<style>
+  :root { --bg: #f7f1ea; --card: #fff; --text: #2a211b; --muted: #74675d; --brand: #e4572e; --line: #eadfd3; --ok: #2f9e6b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1d1714; --card: #2a221d; --text: #f5ece4; --muted: #b9a99b; --line: #3a302a; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 560px; margin: 0 auto; padding: 28px 16px 48px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; margin-bottom: 14px; }
+  .step h2 { font-size: 18px; margin: 0 0 8px; display: flex; gap: 10px; align-items: center; }
+  .num { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center; font-size: 15px; }
+  .btn { display: block; text-align: center; background: var(--brand); color: #fff; text-decoration: none; font-weight: 700; padding: 14px; border-radius: 14px; margin: 12px 0 4px; }
+  .btn.ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
+  details { border-top: 1px solid var(--line); padding: 10px 0 0; margin-top: 10px; }
+  details[open] summary { margin-bottom: 6px; }
+  summary { cursor: pointer; font-weight: 600; }
+  ol { margin: 0; padding-inline-start: 20px; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 14px; }
+  .en { margin-top: 28px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sofra'ya bağlan</h1>
+  <p class="lead">Bu cihazı restoranın Sofra sistemine bağlamak için iki adım. Her cihazda yalnızca bir kez yapılır.</p>
+
+  <section class="step">
+    <h2><span class="num">1</span> Güvenlik sertifikasını yükleyin</h2>
+    <p class="hint">Bağlantının şifreli ve bu restorana ait olduğunu cihazınıza tanıtır.</p>
+    <a class="btn" href="/sofra-ca.crt" id="download">Sertifikayı indir</a>
+    <details id="android"><summary>Android</summary><ol>
+      <li>"Sertifikayı indir"e dokunun.</li>
+      <li>Ayarlar › Güvenlik › Diğer güvenlik ayarları › Şifrelemeler ve kimlik bilgileri › Sertifika yükle › <b>CA sertifikası</b>.</li>
+      <li>İndirilenler'den <b>sofra-ca.crt</b> dosyasını seçin.</li>
+    </ol></details>
+    <details id="ios"><summary>iPhone / iPad</summary><ol>
+      <li>Bu sayfayı <b>Safari</b>'de açıp "Sertifikayı indir"e dokunun, "İzin ver" deyin.</li>
+      <li>Ayarlar › Genel › VPN ve Cihaz Yönetimi › Sofra profili › <b>Yükle</b>.</li>
+      <li>Ayarlar › Genel › Hakkında › Sertifika Güven Ayarları › Sofra'yı <b>açın</b>.</li>
+    </ol></details>
+    <details id="windows"><summary>Windows</summary><ol>
+      <li>İndirilen dosyaya çift tıklayın › <b>Sertifika yükle</b>.</li>
+      <li>Yerel Makine › "Tüm sertifikaları aşağıdaki depolama alanına yerleştir" › <b>Güvenilen Kök Sertifika Yetkilileri</b> › Bitir.</li>
+      <li>Tarayıcıyı kapatıp yeniden açın.</li>
+    </ol></details>
+    <details id="mac"><summary>Mac</summary><ol>
+      <li>İndirilen dosyaya çift tıklayın (Anahtar Zinciri açılır).</li>
+      <li>Sofra sertifikasını açın › Güven › <b>Her zaman güven</b>.</li>
+    </ol></details>
+  </section>
+
+  <section class="step">
+    <h2><span class="num">2</span> Sofra'yı açın ve uygulama olarak ekleyin</h2>
+    <a class="btn" id="open" href="/">Sofra'yı aç</a>
+    <p class="hint">Açıldıktan sonra tarayıcı menüsünden <b>Uygulamayı yükle</b> / <b>Ana Ekrana Ekle</b>'yi seçin: Sofra tam ekran açılır, bağlantı kısa süre kopsa da çalışmaya devam eder.</p>
+  </section>
+
+  <p class="en">English: 1) download and trust the certificate (steps above, per device), 2) open Sofra and add it to the home screen.</p>
+</main>
+<script>
+  // the encrypted address of this same server
+  document.getElementById('open').href = 'https://' + location.host + '/';
+  // open the instructions for this device
+  const ua = navigator.userAgent;
+  const id = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'ios'
+    : /Android/.test(ua) ? 'android' : /Windows/.test(ua) ? 'windows' : /Macintosh/.test(ua) ? 'mac' : null;
+  if (id) document.getElementById(id).open = true;
+</script>
+</body>
+</html>
