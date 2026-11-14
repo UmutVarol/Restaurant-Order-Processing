@@ -739,6 +739,40 @@
     };
   }
 
+
+  // ---------------------------------------------------------------- shifts, time clock, tips (this tab only)
+  const staffTime = () => (state.staffTime ??= { entries: [], shifts: [], pools: {}, nextId: 1 });
+  const userIndex = (username) => Object.keys(USERS).indexOf(username) + 1;
+  const userByIndex = (id) => Object.entries(USERS)[Number(id) - 1] ?? [];
+  const dayStartMs = (day) => new Date(`${day}T00:00:00`).getTime();
+  const entryView = (e) => {
+    const [username, u] = userByIndex(e.userId);
+    const end = e.out ?? Date.now();
+    return { id: e.id, userId: e.userId, username, displayName: u.displayName, clockedInAt: iso(e.in), clockedOutAt: e.out ? iso(e.out) : null,
+      minutes: Math.max(0, Math.floor((end - e.in) / MINUTE)), forgotten: !e.out && Date.now() - e.in > 14 * 60 * MINUTE,
+      clockedInBy: username, clockedOutBy: e.outBy ?? null, correctedBy: e.correctedBy ?? null, correctionReason: e.reason ?? null };
+  };
+  const shiftView = (s) => { const [username, u] = userByIndex(s.userId); return { id: s.id, userId: s.userId, username, displayName: u.displayName, role: u.role, startsAt: iso(s.startsAt), endsAt: iso(s.endsAt), note: s.note }; };
+  const within = (e, from, to) => Math.max(0, Math.min(e.out ?? Date.now(), to) - Math.max(e.in, from));
+  const TIP_WEIGHT = { WAITER: 1, KITCHEN: 0.5, ADMIN: 0 };
+  function tipPreview(day) {
+    const from = dayStartMs(day); const to = from + 24 * 60 * MINUTE;
+    const totalC = state.bills.flatMap((b) => b.payments || []).filter((p) => p.status === 'SUCCEEDED' && p.createdAt >= from && p.createdAt < to)
+      .reduce((n, p) => n + (p.tipC || 0), 0);
+    const minutes = {}; const open = [];
+    staffTime().entries.filter((e) => e.in < to && (!e.out || e.out > from)).forEach((e) => {
+      minutes[e.userId] = (minutes[e.userId] || 0) + Math.floor(within(e, from, to) / MINUTE);
+      if (!e.out) open.push(userByIndex(e.userId)[1].displayName);
+    });
+    const sharing = Object.entries(minutes).map(([id, m]) => { const u = userByIndex(id)[1]; return { userId: Number(id), u, m, w: TIP_WEIGHT[u.role] ?? 0 }; }).filter((x) => x.m * x.w > 0);
+    const points = sharing.reduce((n, x) => n + x.m * x.w, 0);
+    let left = totalC;
+    const shares = sharing.map((x) => { const c = points ? Math.floor(totalC * x.m * x.w / points) : 0; left -= c; return { ...x, c }; });
+    for (let i = 0; left > 0 && shares.length; i++, left--) shares[i % shares.length].c++;
+    return { date: day, tipsTotal: toLira(totalC), closed: false, closedBy: null, closedAt: null, stillClockedIn: open,
+      shares: shares.map((x) => ({ userId: x.userId, displayName: x.u.displayName, role: x.u.role, minutes: x.m, weight: x.w, amount: toLira(x.c) })) };
+  }
+
   function tableById(id) {
     const table = TABLES.find((x) => x.id === Number(id));
     if (!table) throw new Problem(404, 'NOT_FOUND', `Table ${id} was not found`);
@@ -1837,6 +1871,93 @@
       entry.recovery = newRecoveryCodes();
       save();
       return { codes: entry.recovery.map((c) => `${c.slice(0, 5)}-${c.slice(5)}`) };
+    }],
+    ['GET', /^time-clock\/me$/, 'staff', ({ user }) => {
+      const id = userIndex(user.username);
+      const mine = staffTime().entries.filter((e) => e.userId === id);
+      const open = mine.find((e) => !e.out);
+      const today = dayStartMs(todayIso());
+      const week = today - ((new Date().getDay() + 6) % 7) * 24 * 60 * MINUTE;
+      const tips = Object.values(staffTime().pools).flatMap((p) => p.shares.filter((x) => x.userId === id).map((x) => ({ date: p.date, amount: x.amount, minutes: x.minutes })));
+      return { clockedIn: Boolean(open), since: open ? iso(open.in) : null,
+        todayMinutes: Math.floor(mine.reduce((n, e) => n + within(e, today, Date.now()), 0) / MINUTE),
+        weekMinutes: Math.floor(mine.reduce((n, e) => n + within(e, week, Date.now()), 0) / MINUTE),
+        week: mine.filter((e) => (e.out ?? Date.now()) > week).map(entryView).reverse(),
+        upcoming: staffTime().shifts.filter((x) => x.userId === id && x.endsAt > Date.now()).sort((a, b) => a.startsAt - b.startsAt).map(shiftView), tips };
+    }],
+    ['POST', /^time-clock\/(in|out)$/, 'staff', ({ params, user }) => {
+      const id = userIndex(user.username);
+      const open = staffTime().entries.find((e) => e.userId === id && !e.out);
+      if (params[0] === 'in') {
+        if (open) throw new Problem(409, 'ALREADY_CLOCKED_IN', 'Already clocked in');
+        staffTime().entries.push({ id: staffTime().nextId++, userId: id, in: Date.now() });
+      } else {
+        if (!open) throw new Problem(409, 'NOT_CLOCKED_IN', 'Not clocked in');
+        Object.assign(open, { out: Date.now(), outBy: user.username });
+      }
+      save();
+      return { clockedIn: params[0] === 'in' };
+    }],
+    ['GET', /^time-clock\/entries$/, 'manager', ({ query }) => {
+      const from = dayStartMs(query.get('from')); const to = dayStartMs(query.get('to')) + 24 * 60 * MINUTE;
+      return staffTime().entries.filter((e) => e.in < to && (!e.out || e.out > from)).map(entryView).reverse();
+    }],
+    ['GET', /^time-clock\/report$/, 'manager', ({ query }) => {
+      const from = dayStartMs(query.get('from')); const to = dayStartMs(query.get('to')) + 24 * 60 * MINUTE;
+      const rows = {};
+      staffTime().entries.filter((e) => e.in < to && (!e.out || e.out > from)).forEach((e) => {
+        const [username, u] = userByIndex(e.userId);
+        const row = (rows[e.userId] ??= { userId: e.userId, username, displayName: u.displayName, role: u.role, minutes: 0, entries: 0, clockedInNow: false });
+        row.minutes += Math.floor(within(e, from, to) / MINUTE); row.entries++; row.clockedInNow ||= !e.out;
+      });
+      return Object.values(rows);
+    }],
+    ['PUT', /^time-clock\/entries\/(\d+)$/, 'manager', ({ params, user }, body) => {
+      const e = staffTime().entries.find((x) => x.id === Number(params[0]));
+      if (!e) throw new Problem(404, 'TIME_ENTRY_NOT_FOUND', 'Not found');
+      requireFields({ reason: blank(body.reason) ? 'must not be blank' : null });
+      Object.assign(e, { in: Date.parse(body.clockedInAt), out: body.clockedOutAt ? Date.parse(body.clockedOutAt) : null, reason: body.reason, correctedBy: user.username });
+      save();
+      return entryView(e);
+    }],
+    ['POST', /^time-clock\/users\/(\d+)\/out$/, 'manager', ({ params, user }) => {
+      const e = staffTime().entries.find((x) => x.userId === Number(params[0]) && !x.out);
+      if (!e) throw new Problem(409, 'NOT_CLOCKED_IN', 'Not clocked in');
+      Object.assign(e, { out: Date.now(), outBy: user.username });
+      save();
+      return entryView(e);
+    }],
+    ['GET', /^shifts$/, 'staff', ({ query }) => {
+      const from = dayStartMs(query.get('from')); const to = dayStartMs(query.get('to')) + 24 * 60 * MINUTE;
+      return staffTime().shifts.filter((x) => x.startsAt < to && x.endsAt > from).sort((a, b) => a.startsAt - b.startsAt).map(shiftView);
+    }],
+    ['POST', /^shifts$/, 'manager', (_, body) => {
+      const shift = { id: staffTime().nextId++, userId: Number(body.userId), startsAt: Date.parse(body.startsAt), endsAt: Date.parse(body.endsAt), note: body.note || null };
+      const clash = staffTime().shifts.find((x) => x.userId === shift.userId && x.startsAt < shift.endsAt && x.endsAt > shift.startsAt);
+      if (clash) throw new Problem(409, 'SHIFT_OVERLAP', 'Overlaps', { parameters: { name: userByIndex(shift.userId)[1].displayName, from: hhmm(clash.startsAt), to: hhmm(clash.endsAt) } });
+      staffTime().shifts.push(shift);
+      save();
+      return [201, shiftView(shift)];
+    }],
+    ['PUT', /^shifts\/(\d+)$/, 'manager', ({ params }, body) => {
+      const shift = staffTime().shifts.find((x) => x.id === Number(params[0]));
+      Object.assign(shift, { userId: Number(body.userId), startsAt: Date.parse(body.startsAt), endsAt: Date.parse(body.endsAt), note: body.note || null });
+      save();
+      return shiftView(shift);
+    }],
+    ['DELETE', /^shifts\/(\d+)$/, 'manager', ({ params }) => {
+      staffTime().shifts = staffTime().shifts.filter((x) => x.id !== Number(params[0]));
+      save();
+      return [204, null];
+    }],
+    ['GET', /^tips\/pool$/, 'manager', ({ query }) => staffTime().pools[query.get('date')] ?? tipPreview(query.get('date'))],
+    ['POST', /^tips\/pool$/, 'manager', ({ user }, body) => {
+      if (staffTime().pools[body.date]) throw new Problem(409, 'TIP_POOL_CLOSED', 'Already shared out');
+      const preview = tipPreview(body.date);
+      if (preview.stillClockedIn.length) throw new Problem(409, 'TIP_POOL_STAFF_CLOCKED_IN', 'Still clocked in', { parameters: { names: preview.stillClockedIn.join(', ') } });
+      staffTime().pools[body.date] = { ...preview, closed: true, closedBy: user.username, closedAt: iso(Date.now()) };
+      save();
+      return staffTime().pools[body.date];
     }],
     ['GET', /^public\/config$/, 'public', () => ({ restaurantName: 'Sofra Bistro', demo: true })],
     // Setup screen: staff and tables change for this tab only; the demo starts fresh on reload.

@@ -137,6 +137,12 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/pin-staff").permitAll()
                         .requestMatchers("/api/v1/devices", "/api/v1/devices/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/staff", "/api/v1/staff/**").hasRole(Role.ADMIN.name())
+                        // everyone clocks themselves in and reads the rota; managers see and fix everyone's time
+                        .requestMatchers("/api/v1/time-clock/me", "/api/v1/time-clock/in", "/api/v1/time-clock/out").authenticated()
+                        .requestMatchers("/api/v1/time-clock/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shifts").authenticated()
+                        .requestMatchers("/api/v1/shifts", "/api/v1/shifts/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers("/api/v1/tips/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.GET, "/api/v1/tables").hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/tables").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/tables/*").hasRole(Role.ADMIN.name())

@@ -15,6 +15,7 @@ const ROUTES = [
   { id: 'service', icon: 'flash', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/service.js') },
   { id: 'kitchen', icon: 'kitchen', roles: ALL, section: 'service', load: () => import('./views/kitchen.js') },
   { id: 'floor', icon: 'floor', roles: ALL, section: 'service', load: () => import('./views/floor.js') },
+  { id: 'time', icon: 'clock', roles: ALL, section: 'service', load: () => import('./views/time.js') },
   { id: 'reservations', icon: 'calendar', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/reservations.js') },
   { id: 'orders', icon: 'orders', roles: ALL, section: 'service', load: () => import('./views/orders.js') },
   { id: 'cashier', icon: 'coins', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/cashier.js') },

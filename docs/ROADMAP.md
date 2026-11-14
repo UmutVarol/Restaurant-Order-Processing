@@ -216,7 +216,7 @@ finished in code.
 |---|---|---|---|---|
 | 1 | S4.1 | **Operations: backups, restore, silent failures** | Losing a day's bills or not noticing that receipts stopped being issued is the costliest failure; it must exist before the first real evening | done |
 | 2 | S4.2 | **Reservations and a waitlist** | The first thing an owner asks for; the floor plan only knows "now" | done |
-| 3 | S4.3 | **Staff shifts, time clock and tip pooling** | Payroll and tips are a weekly argument without them; PINs and tip data already exist | planned |
+| 3 | S4.3 | **Staff shifts, time clock and tip pooling** | Payroll and tips are a weekly argument without them; PINs and tip data already exist | done |
 | 4 | S4.4 | **First-run setup and one-command install** | Today a new restaurant enters menu, tables and staff by hand through several screens | done |
 | 5 | S4.5 | **Load test of a busy evening** | 40 tables, 12 phones and 3 kitchen screens at once have never been measured | planned |
 | 6 | S4.6 | **Multi-branch foundation (design)** | Every table assumes one restaurant; the change is cheap now and expensive later. Decision record first, code after | planned |
@@ -255,6 +255,17 @@ finished in code.
 - A Setup screen for managers: checklist before the first evening, staff accounts, tables.
 - Released images for amd64 and arm64 (Raspberry Pi) on version tags (`.github/workflows/release.yml`).
 - Owner's guide in Turkish: [INSTALL.md](INSTALL.md).
+
+### S4.3 Staff shifts, time clock and tip pooling
+
+- Everyone clocks themselves in and out (on a shared till, as the person signed in with their PIN); a unique
+  column makes a double clock-in impossible even for two taps at once.
+- Managers plan the rota (no one booked for two shifts at once, at most 16 hours), see every entry, clock out who
+  forgot, and correct times with a reason that stays on the entry. Hours per person for payroll.
+- Tip pooling: a day's tips (card, cash, online) are shared by minutes on the clock times a role weight (waiter 1,
+  kitchen 0.5, manager 0; `restaurant.tips.weight.*`), to the kuruş with the largest-remainder method. Closing
+  the day fixes the shares for payroll and needs everyone clocked out; each person sees their own tips.
+- A Shifts screen for every role, six languages, demo backend, API and browser tests.
 
 ### Security review (with S4.4)
 

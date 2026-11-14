@@ -1871,3 +1871,32 @@ body.sheet-locked { overflow: hidden; }
 .setup-credentials dt { color: var(--muted); }
 .setup-credentials dd { margin: 0; }
 .setup-credentials code { font-size: 17px; letter-spacing: .04em; user-select: all; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- shifts, time clock, tips */
+.time-tabs { margin-bottom: 16px; max-width: 100%; overflow-x: auto; }
+.time-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.time-totals { display: flex; gap: 24px; margin-bottom: 16px; }
+.time-totals div { display: flex; flex-direction: column; }
+.time-totals b { font-size: 26px; font-variant-numeric: tabular-nums; }
+.time-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.time-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.time-list li:first-child { border-top: 0; }
+.time-list li > span:first-child { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.time-list li.forgotten { background: var(--amber-soft); margin: 0 -8px; padding-inline: 8px; border-radius: 10px; }
+.time-list b { font-variant-numeric: tabular-nums; }
+.time-reason { display: block; }
+.time-actions { display: flex; gap: 6px; }
+.time-on { margin-inline-start: 6px; }
+.time-hint { font-size: 12.5px; margin-top: 12px; }
+.time-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.time-toolbar > b { min-width: 0; }
+.time-toolbar .btn { margin-inline-start: auto; }
+.rota { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+.rota-day { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rota-head { font-weight: 650; font-size: 13px; }
+.rota-shift { display: flex; flex-direction: column; gap: 1px; text-align: start; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--border) 55%, var(--surface)); border: 1px solid transparent; color: var(--text); font: inherit; overflow-wrap: anywhere; }
+button.rota-shift { cursor: pointer; }
+.rota-shift.mine { border-color: var(--brand); }
+.rota-shift span { font-variant-numeric: tabular-nums; font-size: 13px; }
+.rota-empty { margin: 0; }
+.rota-add { align-self: flex-start; }
