@@ -46,6 +46,8 @@ export function errorMessage(error) {
   for (const key of ['minimumSubtotal', 'balance', 'available', 'required', 'refundable']) {
     if (params[key] != null) params[key] = money(params[key]);
   }
+  // what a plan limit is about, in the reader's language
+  if (params.resource && has(`billing.resource.${params.resource}`)) params.resource = t(`billing.resource.${params.resource}`);
   return t(key, params);
 }
 

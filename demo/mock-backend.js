@@ -1986,6 +1986,7 @@
       const view = billingView();
       if (offer.limits.tables >= 0 && view.usage.tables > offer.limits.tables) throw new Problem(422, 'PLAN_TOO_SMALL', 'This business uses more than the plan includes');
       Object.assign(billing(), { plan: body.plan, status: 'ACTIVE', interval: body.interval, periodEndsAt: Date.now() + (body.interval === 'YEARLY' ? 365 : 30) * 86_400_000 });
+      save();
       return { url: `${location.origin}${location.pathname}#/billing` };
     }],
     ['POST', /^billing\/portal$/, 'manager', () => { throw new Problem(422, 'NO_PORTAL', 'Manage your subscription from the provider’s e-mails'); }],
@@ -1997,6 +1998,7 @@
       if (branches().some((b) => b.code === code)) throw new Problem(409, 'BRANCH_CODE_TAKEN', `There is already a branch ${code}`);
       const branch = { id: Math.max(...branches().map((b) => b.id)) + 1, code, name: String(body.name).trim(), active: true };
       branches().push(branch);
+      save();
       return [201, branch];
     }],
     ['PUT', /^branches\/(\d+)$/, 'manager', ({ params }, body) => {
@@ -2004,6 +2006,7 @@
       if (!branch) throw new Problem(404, 'BRANCH_NOT_FOUND', 'Branch not found');
       if (branch.active && body.active === false && branches().filter((b) => b.active).length <= 1) throw new Problem(422, 'LAST_BRANCH', 'A business needs at least one open branch');
       Object.assign(branch, { name: String(body.name).trim(), active: body.active !== false });
+      save();
       return branch;
     }],
     ['GET', /^staff$/, 'manager', () => Object.entries(USERS).map(([username, u], i) => staffView(username, u, i + 1))],
