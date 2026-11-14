@@ -218,7 +218,7 @@ finished in code.
 | 2 | S4.2 | **Reservations and a waitlist** | The first thing an owner asks for; the floor plan only knows "now" | done |
 | 3 | S4.3 | **Staff shifts, time clock and tip pooling** | Payroll and tips are a weekly argument without them; PINs and tip data already exist | done |
 | 4 | S4.4 | **First-run setup and one-command install** | Today a new restaurant enters menu, tables and staff by hand through several screens | done |
-| 5 | S4.5 | **Load test of a busy evening** | 40 tables, 12 phones and 3 kitchen screens at once have never been measured | planned |
+| 5 | S4.5 | **Load test of a busy evening** | 40 tables, 12 phones and 3 kitchen screens at once have never been measured | done |
 | 6 | S4.6 | **Multi-branch foundation (design)** | Every table assumes one restaurant; the change is cheap now and expensive later. Decision record first, code after | planned |
 | — | — | **Live partners** (iyzico merchant, e-Arşiv integrator, ÖKC bridge, delivery platforms) | Needs contracts and credentials from the owner; adapters and simulations already exist | waiting on the owner |
 
@@ -266,6 +266,13 @@ finished in code.
   kitchen 0.5, manager 0; `restaurant.tips.weight.*`), to the kuruş with the largest-remainder method. Closing
   the day fixes the shares for payroll and needs everyone clocked out; each person sees their own tips.
 - A Shifts screen for every role, six languages, demo backend, API and browser tests.
+
+### S4.5 Load test of a busy evening
+
+- `ops/loadtest/evening.mjs`: 40 tables, 12 waiters, 3 kitchen screens and QR guests at 10× a real evening.
+  0 errors, worst p95 191 ms on PostgreSQL; no errors at 40× either. Results: [LOAD_TEST.md](LOAD_TEST.md).
+- It found a deadlock between virtual threads and the connection pool (a database call inside a cache's lock
+  pinned every carrier thread); fixed.
 
 ### Security review (with S4.4)
 

@@ -45,8 +45,16 @@ class SessionGuard implements OAuth2TokenValidator<Jwt> {
         if (username == null) {
             return OAuth2TokenValidatorResult.failure(ENDED);
         }
-        Optional<State> state = states.get(username.toLowerCase(java.util.Locale.ROOT), key -> users.findByUsernameIgnoreCase(username)
-                .map(user -> new State(user.isEnabled(), user.getSessionVersion())));
+        String key = username.toLowerCase(java.util.Locale.ROOT);
+        Optional<State> state = states.getIfPresent(key);
+        if (state == null) {
+            // Loaded outside the cache's own lock on purpose: a database call inside Cache.get(key, loader) runs in a
+            // synchronized section, which pins a virtual thread to its carrier while it waits for a connection. Under
+            // load every carrier ends up pinned that way and the threads holding connections can never run again
+            // (found by the busy-evening load test, docs/LOAD_TEST.md). Two requests may both load; that is harmless.
+            state = users.findByUsernameIgnoreCase(username).map(user -> new State(user.isEnabled(), user.getSessionVersion()));
+            states.put(key, state);
+        }
         Object claim = token.getClaim(JwtTokenService.SESSION_VERSION_CLAIM);
         // tokens from before versions existed carry none: they belong to version 0
         int version = claim instanceof Number number ? number.intValue() : 0;
