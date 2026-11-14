@@ -3,7 +3,7 @@ import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { locale, t } from '../core/i18n.js';
 import { dateTime, money, percent, time } from '../core/format.js';
-import { api, ApiError, errorMessage, newIdempotencyKey } from '../core/api.js';
+import { ApiError, api, errorMessage, hasFeature, newIdempotencyKey } from '../core/api.js';
 import { isOnline } from '../core/offline.js';
 import { bus } from '../core/store.js';
 import { openModal, toast } from '../core/ui.js';
@@ -58,7 +58,7 @@ export function openBill(ref, user) {
   // the bill's legal document (ÖKC receipt or e-Arşiv invoice); undefined until asked, null when there is none
   let fiscal;
   async function loadFiscal() {
-    if (!bill) return;
+    if (!bill || !hasFeature('FISCAL')) return;
     try {
       fiscal = await api.fiscalForBill(bill.id);
     } catch (error) {
@@ -211,7 +211,7 @@ export function openBill(ref, user) {
     }));
 
     mount(panel,
-      h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': t('bill.method') }, METHODS.map((method) => h('button', {
+      h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': t('bill.method') }, METHODS.filter((method) => method.id !== 'QR' || hasFeature('ONLINE_PAYMENTS')).map((method) => h('button', {
         role: 'radio', 'aria-checked': state.method === method.id, class: state.method === method.id ? 'active' : '',
         'data-method': method.id,
         // a QR payment goes through the payment provider, which cannot be reached offline

@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.channel;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.channel.dto.ChannelOrderResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Delivery platform webhooks", description = "Signed order deliveries from Yemeksepeti, Getir Yemek and Trendyol Go")
+@RequiresFeature(Feature.DELIVERY_PLATFORMS)
 @RestController
 class ChannelWebhookController {
 

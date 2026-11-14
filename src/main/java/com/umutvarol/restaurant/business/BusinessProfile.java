@@ -12,6 +12,7 @@ public class BusinessProfile {
 
     private final BusinessRepository businesses;
     private final Cache<Long, String> names = Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(5)).build();
+    private final Cache<Long, Business.Plan> plans = Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(1)).build();
 
     BusinessProfile(BusinessRepository businesses) {
         this.businesses = businesses;
@@ -28,7 +29,24 @@ public class BusinessProfile {
         return cached;
     }
 
-    void forget(long id) {
+    /** The business's plan; a restaurant's own server has the full product. */
+    public Business.Plan plan() {
+        Long id = Optional.ofNullable(BusinessContext.current()).orElse(BusinessTenantResolver.SINGLE);
+        Business.Plan cached = plans.getIfPresent(id);
+        if (cached == null) {
+            cached = BusinessContext.acrossAll(() -> businesses.findById(id)).map(Business::getPlan).orElse(Business.Plan.BUSINESS);
+            plans.put(id, cached);
+        }
+        return cached;
+    }
+
+    public boolean includes(Feature feature) {
+        return plan().includes(feature);
+    }
+
+    /** Forgets what was read about a business, after its name or plan changed. */
+    public void forget(long id) {
         names.invalidate(id);
+        plans.invalidate(id);
     }
 }

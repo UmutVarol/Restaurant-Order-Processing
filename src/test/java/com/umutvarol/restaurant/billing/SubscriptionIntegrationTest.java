@@ -49,6 +49,8 @@ class SubscriptionIntegrationTest {
     void aTrialPicksStarterAndItsLimitsHold() throws Exception {
         String[] opened = open();
         String owner = opened[1];
+        mvc.perform(with(owner, get("/api/v1/plan")))
+                .andExpect(jsonPath("$.features.length()").value(5));
         mvc.perform(with(owner, get("/api/v1/billing")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("TRIAL"))
@@ -68,6 +70,17 @@ class SubscriptionIntegrationTest {
                 .andExpect(jsonPath("$.plan").value("STARTER"))
                 .andExpect(jsonPath("$.billedBranches").value(1))
                 .andExpect(jsonPath("$.limits.tables").value(15));
+
+        // the parts Starter leaves out answer 402, and the app is told so
+        mvc.perform(with(owner, get("/api/v1/plan")))
+                .andExpect(jsonPath("$.plan").value("STARTER"))
+                .andExpect(jsonPath("$.features").isEmpty());
+        mvc.perform(with(owner, get("/api/v1/shifts")))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.code").value("PLAN_FEATURE"))
+                .andExpect(jsonPath("$.parameters.feature").value("SHIFTS_AND_TIPS"));
+        mvc.perform(with(owner, get("/api/v1/fiscal/documents"))).andExpect(status().isPaymentRequired());
+        mvc.perform(with(owner, get("/api/v1/channels"))).andExpect(status().isPaymentRequired());
 
         // fifteen tables, and no sixteenth; one branch, and no second
         for (int code = 13; code <= 15; code++) {

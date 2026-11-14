@@ -1449,4 +1449,5 @@ export default {
   'billing.resource.BRANCHES': 'branch(es)',
   'billing.resource.STAFF': 'active staff',
   'billing.resource.TABLES': 'tables',
+  'error.PLAN_FEATURE': 'This is part of the Business plan.',
 };

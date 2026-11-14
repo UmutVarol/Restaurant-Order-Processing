@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.staff;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.staff.dto.ClockStatus;
 import com.umutvarol.restaurant.staff.dto.CorrectionRequest;
 import com.umutvarol.restaurant.staff.dto.HoursRow;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Staff time", description = "The time clock, the rota and tip pooling")
+@RequiresFeature(Feature.SHIFTS_AND_TIPS)
 @RestController
 class StaffTimeController {
 

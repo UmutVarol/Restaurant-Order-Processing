@@ -167,6 +167,16 @@ export function storeApp() {
   } catch { return false; }
 }
 
+// What this business's plan includes (ONLINE_PAYMENTS, STOCK, ...), loaded once after signing in. Unknown means
+// everything: a restaurant's own server has the full product, and the server refuses anything not included anyway.
+let planFeatures = null;
+export function setPlanFeatures(features) {
+  planFeatures = features ? new Set(features) : null;
+}
+export function hasFeature(feature) {
+  return !planFeatures || planFeatures.has(feature);
+}
+
 // A chain's manager who works in all branches picks the one this device works in (or none: all of them at once);
 // someone who works in one branch always works there, whatever the device says.
 const BRANCH_KEY = 'sofra.branch';
@@ -341,6 +351,7 @@ export const api = {
   updateStaff: (id, member) => request('PUT', `/staff/${id}`, member),
   resetStaffPassword: (id) => request('POST', `/staff/${id}/reset-password`),
   clearStaffPin: (id) => request('DELETE', `/staff/${id}/pin`),
+  plan: () => request('GET', '/plan'),
   billing: () => request('GET', '/billing'),
   billingCheckout: (choice) => request('POST', '/billing/checkout', choice),
   billingPortal: () => request('POST', '/billing/portal'),

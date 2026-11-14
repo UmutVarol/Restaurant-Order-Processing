@@ -4,6 +4,7 @@ import com.umutvarol.restaurant.business.BillingInterval;
 import com.umutvarol.restaurant.business.Business;
 import com.umutvarol.restaurant.business.Business.Plan;
 import com.umutvarol.restaurant.business.BusinessFilter;
+import com.umutvarol.restaurant.business.Feature;
 import com.umutvarol.restaurant.common.error.AccessRefusedException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,13 +28,17 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 class BillingController {
 
     record Offer(Plan plan, int monthlyCentsPerBranch, int yearlyCentsPerBranch, int minimumBranches,
-                 PlanCatalog.Limits limits, Set<PlanCatalog.Feature> features, int billedBranches) {
+                 PlanCatalog.Limits limits, Set<Feature> features, int billedBranches) {
     }
 
     record BillingResponse(Plan plan, Business.Status status, @Nullable Instant trialEndsAt, @Nullable Instant periodEndsAt,
                            @Nullable BillingInterval interval, @Nullable Integer billedBranches, @Nullable Instant pastDueSince,
                            int graceDays, boolean writable, SubscriptionService.Usage usage, PlanCatalog.Limits limits,
                            boolean billingEnabled, boolean portal, List<Offer> offers) {
+    }
+
+    /** What every signed-in screen needs to know: which parts of Sofra this business has. */
+    record PlanResponse(Plan plan, Business.Status status, boolean writable, Set<Feature> features) {
     }
 
     record CheckoutRequest(@NotNull Plan plan, @NotNull BillingInterval interval) {
@@ -62,6 +67,14 @@ class BillingController {
         return new BillingResponse(b.getPlan(), b.getStatus(), b.getTrialEndsAt(), b.getPeriodEndsAt(), b.getBillingInterval(),
                 b.getBilledBranches(), b.getPastDueSince(), properties.graceDays(), summary.writable(), summary.usage(),
                 summary.offer().limits(), summary.billingEnabled(), summary.portal(), offers);
+    }
+
+    @Operation(summary = "This business's plan", description = "For every signed-in screen: what the plan includes.")
+    @GetMapping("/api/v1/plan")
+    PlanResponse plan() {
+        SubscriptionService.Summary summary = subscriptions.summary();
+        return new PlanResponse(summary.business().getPlan(), summary.business().getStatus(), summary.writable(),
+                summary.offer().features());
     }
 
     @Operation(summary = "Pay for a plan", description = "Returns the provider's checkout page.")

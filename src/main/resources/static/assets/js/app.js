@@ -2,7 +2,7 @@
 import { h, initials, mount } from './core/dom.js';
 import { icon, logoMark } from './core/icons.js';
 import { languageName, onLangChange, ready as languageReady, t, tn } from './core/i18n.js';
-import { api, branchChoice, clearSession, currentDevice, currentSession, saveSession, setBranchChoice, storeApp } from './core/api.js';
+import { api, branchChoice, clearSession, currentDevice, currentSession, hasFeature, saveSession, setBranchChoice, setPlanFeatures, storeApp } from './core/api.js';
 import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { clearOutbox, entries as outboxEntries, flush, isOnline, registerServiceWorker } from './core/offline.js';
@@ -15,14 +15,14 @@ const ROUTES = [
   { id: 'service', icon: 'flash', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/service.js') },
   { id: 'kitchen', icon: 'kitchen', roles: ALL, section: 'service', load: () => import('./views/kitchen.js') },
   { id: 'floor', icon: 'floor', roles: ALL, section: 'service', load: () => import('./views/floor.js') },
-  { id: 'time', icon: 'clock', roles: ALL, section: 'service', load: () => import('./views/time.js') },
+  { id: 'time', icon: 'clock', roles: ALL, section: 'service', when: () => hasFeature('SHIFTS_AND_TIPS'), load: () => import('./views/time.js') },
   { id: 'reservations', icon: 'calendar', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/reservations.js') },
   { id: 'orders', icon: 'orders', roles: ALL, section: 'service', load: () => import('./views/orders.js') },
   { id: 'cashier', icon: 'coins', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/cashier.js') },
   { id: 'dashboard', icon: 'dashboard', roles: ['ADMIN'], section: 'manage', load: () => import('./views/dashboard.js') },
   { id: 'menu', icon: 'menu', roles: ['ADMIN'], section: 'manage', load: () => import('./views/menu.js') },
-  { id: 'stock', icon: 'box', roles: ['ADMIN'], section: 'manage', load: () => import('./views/stock.js') },
-  { id: 'channels', icon: 'delivery', roles: ['ADMIN'], section: 'manage', load: () => import('./views/channels.js') },
+  { id: 'stock', icon: 'box', roles: ['ADMIN'], section: 'manage', when: () => hasFeature('STOCK'), load: () => import('./views/stock.js') },
+  { id: 'channels', icon: 'delivery', roles: ['ADMIN'], section: 'manage', when: () => hasFeature('DELIVERY_PLATFORMS'), load: () => import('./views/channels.js') },
   { id: 'setup', icon: 'users', roles: ['ADMIN'], section: 'manage', load: () => import('./views/setup.js') },
   // reached from the user card, not the navigation
   { id: 'settings', icon: 'settings', roles: ALL, section: null, load: () => import('./views/settings.js') },
@@ -71,6 +71,7 @@ function allowedRoutes() {
 
 // what this server offers (subscriptions, sign-up), asked once
 let serverConfig = null;
+let planReady = null;
 const serverConfigReady = api.publicConfig().then((config) => { serverConfig = config; }).catch(() => { serverConfig = {}; });
 
 async function render() {
@@ -115,6 +116,9 @@ async function render() {
   }
 
   await serverConfigReady;
+  // what the plan includes decides which screens there are; asked once per sign-in
+  if (planReady == null) planReady = api.plan().then((plan) => setPlanFeatures(plan.features)).catch(() => setPlanFeatures(null));
+  await planReady;
   if (token !== renderToken) return;
   const { route: requested, params } = parseHash();
   const route = allowedRoutes().find((r) => r.id === requested);
@@ -436,6 +440,8 @@ function signOut() {
   stopRealtime();
   branchList = null;
   billingState = null;
+  planReady = null;
+  setPlanFeatures(null);
   // Revoke the token on the server too; the local sign-out does not wait for it or depend on it.
   if (currentSession()) api.logout().catch(() => {});
   clearSession();

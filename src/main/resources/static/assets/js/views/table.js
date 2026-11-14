@@ -79,7 +79,7 @@ export function renderTable(root, token) {
         h('div', { class: 'table-calls' },
           callButton('CALL_WAITER', 'bell'),
           callButton('REQUEST_BILL', 'receipt')),
-        state.bill?.payable ? h('div', { class: 'table-pay' },
+        state.bill?.payable && state.table.selfPay !== false ? h('div', { class: 'table-pay' },
           h('button', { class: 'btn primary lg block', 'data-testid': 'pay-bill', disabled: state.busy, onclick: payBill },
             icon('card', 'sm'), t('table.payBill', { amount: money(state.bill.due) })),
           h('small', { class: 'faint' }, t('table.payHint'))) : null),

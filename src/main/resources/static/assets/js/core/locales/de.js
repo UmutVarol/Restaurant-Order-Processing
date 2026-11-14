@@ -1435,4 +1435,5 @@ export default {
   "billing.resource.BRANCHES": "Filiale(n)",
   "billing.resource.STAFF": "aktive Mitarbeitende",
   "billing.resource.TABLES": "Tische",
+  "error.PLAN_FEATURE": "Das gehört zum Business-Tarif.",
 };

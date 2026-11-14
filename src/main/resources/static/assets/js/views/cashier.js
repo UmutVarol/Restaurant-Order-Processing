@@ -3,7 +3,7 @@ import { debounce, h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t, tn } from '../core/i18n.js';
 import { dateTime, elapsed, money } from '../core/format.js';
-import { api, errorMessage } from '../core/api.js';
+import { api, errorMessage, hasFeature } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { toast } from '../core/ui.js';
 import { openBill, parseCents } from './bill.js';
@@ -158,6 +158,11 @@ export default {
     }
 
     async function loadFiscal() {
+      // legal receipts are part of the Business plan
+      if (!hasFeature('FISCAL')) {
+        fiscalCard.hidden = true;
+        return;
+      }
       const [documents, z] = await Promise.allSettled([api.fiscalDocuments(), manager ? api.zReport() : Promise.resolve(null)]);
       fiscal = documents.status === 'fulfilled' ? documents.value : [];
       zReport = z.status === 'fulfilled' ? z.value : null;

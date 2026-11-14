@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.inventory;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.inventory.dto.DishCostResponse;
 import com.umutvarol.restaurant.inventory.dto.RecipeRequest;
 import com.umutvarol.restaurant.inventory.dto.RecipeResponse;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Recipes", description = "What dishes are made of and what they cost (managers)")
+@RequiresFeature(Feature.STOCK)
 @RestController
 @RequestMapping("/api/v1/recipes")
 class RecipeController {

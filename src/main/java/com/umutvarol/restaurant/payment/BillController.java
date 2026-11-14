@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.payment;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.payment.dto.BillResponse;
 import com.umutvarol.restaurant.payment.dto.BillSummaryResponse;
 import com.umutvarol.restaurant.payment.dto.CreateLinkRequest;
@@ -75,6 +77,7 @@ class BillController {
 
     @Operation(summary = "Create a QR payment link",
             description = "The guest pays from their own phone. The token is returned only once.")
+    @RequiresFeature(Feature.ONLINE_PAYMENTS)
     @PostMapping("/{id}/links")
     @ResponseStatus(HttpStatus.CREATED)
     PaymentLinkResponse createLink(@PathVariable Long id, @Valid @RequestBody(required = false) CreateLinkRequest request,

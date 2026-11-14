@@ -1980,6 +1980,7 @@
     ['GET', /^public\/config$/, 'public', () => ({ restaurantName: 'Sofra Bistro', demo: true, billing: true })],
     // the demo shows Sofra Cloud's plan screen with a simulated provider: choosing a plan charges nothing
     ['GET', /^billing$/, 'manager', () => billingView()],
+    ['GET', /^plan$/, 'staff', () => { const v = billingView(); return { plan: v.plan, status: v.status, writable: v.writable, features: PLAN_OFFERS[v.plan].features }; }],
     ['POST', /^billing\/checkout$/, 'manager', (_, body) => {
       const offer = PLAN_OFFERS[body.plan];
       if (!offer || !['MONTHLY', 'YEARLY'].includes(body.interval)) throw new Problem(400, 'VALIDATION_FAILED', 'Choose a plan');
@@ -2405,6 +2406,7 @@
     ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})$/, 'public', ({ params }) => {
       const table = tableForToken(params[0]);
       return { restaurant: 'Sofra Bistro', tableCode: table.code, mode: serviceSettings().mode,
+        selfPay: PLAN_OFFERS[billing().plan].features.includes('ONLINE_PAYMENTS'),
         openCalls: ['CALL_WAITER', 'REQUEST_BILL'].filter((kind) => guestRequests().some((r) => r.tableId === table.id && r.kind === kind && r.status === 'OPEN')) };
     }],
     // Guests open their table's bill from its QR code, without waiting for a waiter's link.

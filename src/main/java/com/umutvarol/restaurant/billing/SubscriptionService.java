@@ -8,6 +8,7 @@ import com.umutvarol.restaurant.business.BranchRepository;
 import com.umutvarol.restaurant.business.Business;
 import com.umutvarol.restaurant.business.Business.Plan;
 import com.umutvarol.restaurant.business.BusinessContext;
+import com.umutvarol.restaurant.business.BusinessProfile;
 import com.umutvarol.restaurant.business.BusinessRepository;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
@@ -43,6 +44,7 @@ public class SubscriptionService {
     }
 
     private final BusinessRepository businesses;
+    private final BusinessProfile profile;
     private final BranchRepository branches;
     private final AppUserRepository users;
     private final DiningTableRepository tables;
@@ -57,10 +59,11 @@ public class SubscriptionService {
 
     private static final Duration WRITABLE_TTL = Duration.ofSeconds(30);
 
-    SubscriptionService(BusinessRepository businesses, BranchRepository branches, AppUserRepository users,
+    SubscriptionService(BusinessRepository businesses, BusinessProfile profile, BranchRepository branches, AppUserRepository users,
                         DiningTableRepository tables, Optional<BillingProvider> provider, BillingProperties properties,
                         PlatformTransactionManager transactions, Clock clock) {
         this.businesses = businesses;
+        this.profile = profile;
         this.branches = branches;
         this.users = users;
         this.tables = tables;
@@ -146,6 +149,7 @@ public class SubscriptionService {
             return null;
         }));
         writable.remove(update.businessId());
+        profile.forget(update.businessId());
     }
 
     /** Branches opened or closed: the provider bills the new number from now on. A failure is retried next time. */

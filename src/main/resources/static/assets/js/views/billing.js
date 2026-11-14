@@ -119,8 +119,9 @@ export default {
       try {
         const { url } = await api.billingCheckout({ plan, interval });
         if (new URL(url, location.href).origin === location.origin) {
-          toast({ title: t('billing.chosen', { plan: t(`billing.plan.${plan}`) }) });
-          await load();
+          // the plan changed at once (simulated provider): reload, so every screen follows what it includes
+          try { sessionStorage.setItem('sofra.planChosen', plan); } catch { /* private mode */ }
+          location.reload();
         } else {
           location.assign(url);
         }
@@ -139,6 +140,13 @@ export default {
       }
     }
 
+    try {
+      const chosen = sessionStorage.getItem('sofra.planChosen');
+      if (chosen) {
+        sessionStorage.removeItem('sofra.planChosen');
+        toast({ title: t('billing.chosen', { plan: t(`billing.plan.${chosen}`) }) });
+      }
+    } catch { /* private mode */ }
     root.append(h('div', { class: 'skeleton', style: { height: '160px' } }));
     load();
     return {};

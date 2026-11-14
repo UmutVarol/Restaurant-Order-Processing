@@ -1460,4 +1460,5 @@ export default {
   "billing.resource.BRANCHES": "филиалы",
   "billing.resource.STAFF": "активные сотрудники",
   "billing.resource.TABLES": "столы",
+  "error.PLAN_FEATURE": "Это входит в тариф «Бизнес».",
 };

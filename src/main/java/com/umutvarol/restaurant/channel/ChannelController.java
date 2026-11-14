@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.channel;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.channel.dto.ChannelOrderResponse;
 import com.umutvarol.restaurant.channel.dto.ChannelResponse;
 import com.umutvarol.restaurant.channel.dto.MappingRequest;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Delivery platforms", description = "Connections, item mapping and platform orders (managers)")
+@RequiresFeature(Feature.DELIVERY_PLATFORMS)
 @RestController
 @RequestMapping("/api/v1/channels")
 class ChannelController {

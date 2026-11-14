@@ -104,7 +104,8 @@ public class GuestService {
         List<GuestRequestKind> openCalls = List.of(GuestRequestKind.CALL_WAITER, GuestRequestKind.REQUEST_BILL).stream()
                 .filter(kind -> requests.findFirstByTableIdAndKindAndStatus(table.getId(), kind, GuestRequestStatus.OPEN).isPresent())
                 .toList();
-        return new PublicTableResponse(profile.name(restaurant.name()), table.getCode(), openCalls, serviceSettings.current().getMode());
+        return new PublicTableResponse(profile.name(restaurant.name()), table.getCode(), openCalls, serviceSettings.current().getMode(),
+                profile.includes(com.umutvarol.restaurant.business.Feature.ONLINE_PAYMENTS));
     }
 
     public GuestRequestView order(String token, GuestOrderRequest cart, String client) {

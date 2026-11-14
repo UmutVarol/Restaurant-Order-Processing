@@ -1433,4 +1433,5 @@ export default {
   'billing.resource.BRANCHES': 'şube',
   'billing.resource.STAFF': 'etkin personel',
   'billing.resource.TABLES': 'masa',
+  'error.PLAN_FEATURE': 'Bu bölüm İşletme planında var.',
 };

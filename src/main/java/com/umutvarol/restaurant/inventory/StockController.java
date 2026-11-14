@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.inventory;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.inventory.dto.IngredientRequest;
 import com.umutvarol.restaurant.inventory.dto.IngredientResponse;
 import com.umutvarol.restaurant.inventory.dto.MovementRequest;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Stock", description = "Ingredients and the stock ledger (managers)")
+@RequiresFeature(Feature.STOCK)
 @RestController
 @RequestMapping("/api/v1/stock")
 class StockController {

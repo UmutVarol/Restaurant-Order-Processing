@@ -16,7 +16,14 @@ import org.jspecify.annotations.Nullable;
 @Table(name = "businesses")
 public class Business {
 
-    public enum Plan { STARTER, BUSINESS, CHAIN }
+    public enum Plan {
+        STARTER, BUSINESS, CHAIN;
+
+        /** The Starter plan is the core of Sofra; Business and Chain have every part. */
+        public boolean includes(Feature feature) {
+            return this != STARTER;
+        }
+    }
 
     public enum Status { TRIAL, ACTIVE, PAST_DUE, READ_ONLY, CANCELLED }
 

@@ -1436,4 +1436,5 @@ export default {
   "billing.resource.BRANCHES": "établissement(s)",
   "billing.resource.STAFF": "employés actifs",
   "billing.resource.TABLES": "tables",
+  "error.PLAN_FEATURE": "Cela fait partie de l’offre Business.",
 };

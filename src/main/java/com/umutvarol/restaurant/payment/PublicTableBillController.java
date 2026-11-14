@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.payment;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.guest.GuestService;
 import com.umutvarol.restaurant.payment.dto.PaymentLinkResponse;
 import com.umutvarol.restaurant.payment.dto.TableBillResponse;
@@ -41,6 +43,7 @@ class PublicTableBillController {
     }
 
     @Operation(summary = "Open the bill to pay it", description = "A payment link for whatever is due on the table's bill.")
+    @RequiresFeature(Feature.ONLINE_PAYMENTS)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     PaymentLinkResponse open(@PathVariable @Pattern(regexp = "[A-Za-z0-9_-]{20,100}") String token) {

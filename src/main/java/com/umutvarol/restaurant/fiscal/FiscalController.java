@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.fiscal;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.fiscal.dto.FiscalDocumentResponse;
 import com.umutvarol.restaurant.fiscal.dto.InvoiceRequest;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Fiscal documents", description = "ÖKC receipts and e-Arşiv invoices")
+@RequiresFeature(Feature.FISCAL)
 @RestController
 @RequestMapping("/api/v1/fiscal")
 class FiscalController {

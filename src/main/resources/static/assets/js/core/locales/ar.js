@@ -1469,4 +1469,5 @@ export default {
   "billing.resource.BRANCHES": "الفروع",
   "billing.resource.STAFF": "الموظفون النشطون",
   "billing.resource.TABLES": "الطاولات",
+  "error.PLAN_FEATURE": "هذا جزء من خطة الأعمال.",
 };

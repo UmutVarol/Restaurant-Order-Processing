@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.payment;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.payment.dto.CheckoutResponse;
 import com.umutvarol.restaurant.payment.dto.PublicBillResponse;
@@ -50,6 +52,7 @@ class PublicPaymentController {
     }
 
     @Operation(summary = "Start paying", description = "Returns the provider's secure page to send the guest to.")
+    @RequiresFeature(Feature.ONLINE_PAYMENTS)
     @PostMapping("/api/v1/public/pay/{token}/checkout")
     CheckoutResponse checkout(@PathVariable String token, @Valid @RequestBody PublicCheckoutRequest request,
                               HttpServletRequest http) {

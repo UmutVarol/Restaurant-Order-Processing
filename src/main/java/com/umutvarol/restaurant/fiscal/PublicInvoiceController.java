@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.fiscal;
 
+import com.umutvarol.restaurant.business.Feature;
+import com.umutvarol.restaurant.business.RequiresFeature;
 import com.umutvarol.restaurant.fiscal.dto.GuestInvoiceResponse;
 import com.umutvarol.restaurant.fiscal.dto.InvoiceRequest;
 import com.umutvarol.restaurant.payment.OnlinePaymentService;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Guest payments", description = "Paying a bill from the guest's phone via a QR link. No sign-in.")
 @SecurityRequirements
 @Validated
+@RequiresFeature(Feature.FISCAL)
 @RestController
 @RequestMapping("/api/v1/public/pay/{token}/invoice")
 class PublicInvoiceController {
