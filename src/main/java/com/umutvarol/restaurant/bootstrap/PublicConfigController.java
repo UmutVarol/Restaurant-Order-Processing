@@ -16,15 +16,18 @@ import org.springframework.web.bind.annotation.RestController;
 class PublicConfigController {
 
     /** {@code businessCodeNeeded}: several businesses share this server and the address names none of them. */
-    record PublicConfig(String restaurantName, boolean demo, boolean businessCodeNeeded) {
+    record PublicConfig(String restaurantName, boolean demo, boolean businessCodeNeeded, boolean signupEnabled) {
     }
 
     private final RestaurantProperties restaurant;
     private final DemoProperties demo;
     private final com.umutvarol.restaurant.business.BusinessProfile profile;
+    private final boolean signup;
 
     PublicConfigController(RestaurantProperties restaurant, DemoProperties demo,
-                           com.umutvarol.restaurant.business.BusinessProfile profile) {
+                           com.umutvarol.restaurant.business.BusinessProfile profile,
+                           @org.springframework.beans.factory.annotation.Value("${restaurant.cloud.signup-enabled:false}") boolean signup) {
+        this.signup = signup;
         this.restaurant = restaurant;
         this.demo = demo;
         this.profile = profile;
@@ -36,6 +39,6 @@ class PublicConfigController {
     PublicConfig config() {
         // the business the address or business code names; without one, nobody's name is given away
         boolean known = com.umutvarol.restaurant.business.BusinessContext.current() != null;
-        return new PublicConfig(known ? profile.name(restaurant.name()) : null, demo.enabled(), !known);
+        return new PublicConfig(known ? profile.name(restaurant.name()) : null, demo.enabled(), !known, signup);
     }
 }

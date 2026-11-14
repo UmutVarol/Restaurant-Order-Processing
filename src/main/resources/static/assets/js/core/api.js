@@ -141,9 +141,21 @@ export function serverReachable() {
   return reachable;
 }
 
+// ---------------------------------------------------------------------------- business code
+// On a server shared by many businesses (Sofra Cloud) a device says once which business it works for: the code is
+// kept on the device and sent with every request. A signed-in request's business comes from its token instead.
+const BUSINESS_KEY = 'sofra.business';
+export function businessCode() {
+  try { return localStorage.getItem(BUSINESS_KEY) || null; } catch { return null; }
+}
+export function setBusinessCode(code) {
+  try { if (code) localStorage.setItem(BUSINESS_KEY, code); else localStorage.removeItem(BUSINESS_KEY); } catch { /* storage blocked */ }
+}
+
 async function request(method, path, body, { auth = true, headers: extra = {} } = {}) {
   const sentWith = auth ? session : null;
-  const headers = { Accept: 'application/json', ...(auth ? authHeader() : {}), ...extra };
+  const code = businessCode();
+  const headers = { Accept: 'application/json', ...(code ? { 'X-Business': code } : {}), ...(auth ? authHeader() : {}), ...extra };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   let response;
@@ -292,6 +304,8 @@ export const api = {
   tipPool: (date) => request('GET', `/tips/pool${query({ date })}`),
   closeTipPool: (date) => request('POST', '/tips/pool', { date }),
   publicConfig: () => request('GET', '/public/config', undefined, { auth: false }),
+  signUp: (form) => request('POST', '/public/signup', form, { auth: false }),
+  checkAddress: (name, slug) => request('GET', `/public/signup/address${query({ name, slug })}`, undefined, { auth: false }),
   changePassword: (currentPassword, newPassword) => request('POST', '/auth/password', { currentPassword, newPassword }),
   staff: () => request('GET', '/staff'),
   addStaff: (member) => request('POST', '/staff', member),

@@ -89,6 +89,12 @@ async function render() {
     return;
   }
 
+  if (!user && parseHash().route === 'signup') {
+    const { default: signup } = await import('./views/signup.js');
+    if (token !== renderToken) return;
+    mount(root, signup({ onSignedIn }));
+    return;
+  }
   if (!user) {
     const { default: login } = await import('./views/login.js');
     if (token !== renderToken) return;

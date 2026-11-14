@@ -1900,3 +1900,4 @@ button.rota-shift { cursor: pointer; }
 .rota-shift span { font-variant-numeric: tabular-nums; font-size: 13px; }
 .rota-empty { margin: 0; }
 .rota-add { align-self: flex-start; }
+.form-error-text { color: var(--red); font-size: 12.5px; }

@@ -2,7 +2,7 @@
 import { h, initials, mount } from '../core/dom.js';
 import { icon, logoMark } from '../core/icons.js';
 import { t } from '../core/i18n.js';
-import { api, currentDevice, errorMessage } from '../core/api.js';
+import { api, businessCode, currentDevice, errorMessage, setBusinessCode } from '../core/api.js';
 import { langButton, themeButton } from '../core/ui.js';
 import { lockScreen } from './lock.js';
 
@@ -40,6 +40,10 @@ export default function login({ onSignedIn }) {
 }
 
 function passwordForm({ onSignedIn, onPin }) {
+  // on a server shared by many businesses: which one this device signs in to, asked once and remembered
+  const business = h('input', { class: 'input', id: 'business', name: 'business', autocomplete: 'organization', autocapitalize: 'none', spellcheck: false, value: businessCode() ?? '' });
+  const businessField = h('div', { class: 'field', hidden: true }, h('label', { for: 'business' }, t('login.businessCode')), business,
+    h('small', { class: 'faint' }, t('login.businessCodeHint')));
   const username = h('input', { class: 'input', name: 'username', autocomplete: 'username', required: true, autofocus: true });
   const password = h('input', { class: 'input', name: 'password', type: 'password', autocomplete: 'current-password', required: true });
   const error = h('div', { class: 'form-error', hidden: true, role: 'alert' });
@@ -74,9 +78,11 @@ function passwordForm({ onSignedIn, onPin }) {
   const form = h('form', {
     onsubmit: (event) => {
       event.preventDefault();
+      if (!businessField.hidden) setBusinessCode(business.value.trim().toLowerCase());
       signIn(username.value.trim(), password.value);
     },
   },
+  businessField,
   h('div', { class: 'field' }, h('label', { for: 'username' }, t('login.username')), Object.assign(username, { id: 'username' })),
   h('div', { class: 'field' }, h('label', { for: 'password' }, t('login.password')), Object.assign(password, { id: 'password' })),
   codeField,
@@ -100,7 +106,10 @@ function passwordForm({ onSignedIn, onPin }) {
   const demoBlock = h('div', { hidden: true }, h('div', { class: 'divider' }, `${t('login.demo')} — ${t('login.demoHint')}`), demo);
   const foot = h('p', { class: 'login-foot', hidden: true });
   const subtitle = h('p', { class: 'muted', style: { marginTop: '6px' } }, t('login.subtitle'));
+  const trial = h('p', { class: 'login-foot', hidden: true }, h('a', { href: '#/signup', 'data-testid': 'try-free' }, t('login.tryFree')));
   publicConfig().then((config) => {
+    if (config.businessCodeNeeded) businessField.hidden = false;
+    if (config.signupEnabled) trial.hidden = false;
     if (config.demo) {
       demoBlock.hidden = false;
       foot.hidden = false;
@@ -118,6 +127,7 @@ function passwordForm({ onSignedIn, onPin }) {
     currentDevice() ? h('button', { class: 'btn ghost sm lock-alt', type: 'button', onclick: onPin }, icon('lock', 'sm'), t('lock.usePin')) : null,
     demoBlock,
     foot,
+    trial,
   ];
 }
 
