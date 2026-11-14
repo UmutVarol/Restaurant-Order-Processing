@@ -1,0 +1,20 @@
+{
+  "appId": "app.sofra.restaurant",
+  "appName": "Sofra",
+  "webDir": "www",
+  "server": {
+    "url": "https://app.sofra.app/?app=ios",
+    "allowNavigation": ["*.sofra.app"],
+    "errorPath": "index.html"
+  },
+  "ios": {
+    "appendUserAgent": "SofraApp/1.0",
+    "contentInset": "always"
+  },
+  "android": {
+    "appendUserAgent": "SofraApp/1.0"
+  },
+  "plugins": {
+    "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] }
+  }
+}

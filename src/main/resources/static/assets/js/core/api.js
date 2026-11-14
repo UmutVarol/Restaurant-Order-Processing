@@ -152,6 +152,19 @@ export function setBusinessCode(code) {
   try { if (code) localStorage.setItem(BUSINESS_KEY, code); else localStorage.removeItem(BUSINESS_KEY); } catch { /* storage blocked */ }
 }
 
+// Inside the App Store / Google Play apps (a native shell around this web app) nothing may sell the subscription.
+// The apps open Sofra with ?app=ios or ?app=android; the device remembers it.
+const STORE_KEY = 'sofra.storeApp';
+try {
+  const from = new URLSearchParams(location.search).get('app');
+  if (from === 'ios' || from === 'android') localStorage.setItem(STORE_KEY, from);
+} catch { /* storage blocked */ }
+export function storeApp() {
+  try {
+    return Boolean(window.Capacitor?.isNativePlatform?.()) || /\bSofraApp\//.test(navigator.userAgent) || Boolean(localStorage.getItem(STORE_KEY));
+  } catch { return false; }
+}
+
 // A chain's manager who works in all branches picks the one this device works in (or none: all of them at once);
 // someone who works in one branch always works there, whatever the device says.
 const BRANCH_KEY = 'sofra.branch';
@@ -326,6 +339,9 @@ export const api = {
   updateStaff: (id, member) => request('PUT', `/staff/${id}`, member),
   resetStaffPassword: (id) => request('POST', `/staff/${id}/reset-password`),
   clearStaffPin: (id) => request('DELETE', `/staff/${id}/pin`),
+  billing: () => request('GET', '/billing'),
+  billingCheckout: (choice) => request('POST', '/billing/checkout', choice),
+  billingPortal: () => request('POST', '/billing/portal'),
   branches: () => request('GET', '/branches'),
   openBranch: (branch) => request('POST', '/branches', branch),
   updateBranch: (id, branch) => request('PUT', `/branches/${id}`, branch),

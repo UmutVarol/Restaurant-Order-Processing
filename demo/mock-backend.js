@@ -604,6 +604,22 @@
   const devices = () => (state.devices ??= []);
   // the demo keeps one set of data: a second branch shows the screens for chains, it does not split the floor
   const branches = () => (state.branches ??= [{ id: 1, code: 'merkez', name: 'Merkez', active: true }]);
+  const PLAN_OFFERS = {
+    STARTER: { monthlyCentsPerBranch: 1900, minimumBranches: 1, limits: { branches: 1, activeStaff: 5, tables: 15 }, features: [] },
+    BUSINESS: { monthlyCentsPerBranch: 3900, minimumBranches: 1, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
+    CHAIN: { monthlyCentsPerBranch: 2900, minimumBranches: 3, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
+  };
+  const billing = () => (state.billing ??= { plan: 'BUSINESS', status: 'TRIAL', trialEndsAt: Date.now() + 10 * 86_400_000, interval: null, periodEndsAt: null });
+  function billingView() {
+    const b = billing();
+    const open = branches().filter((x) => x.active).length;
+    const usage = { openBranches: open, activeStaff: Object.values(USERS).filter((u) => u.enabled !== false).length, tables: TABLES.length };
+    return { plan: b.plan, status: b.status, trialEndsAt: b.trialEndsAt ? iso(b.trialEndsAt) : null, periodEndsAt: b.periodEndsAt ? iso(b.periodEndsAt) : null,
+      interval: b.interval, billedBranches: Math.max(PLAN_OFFERS[b.plan].minimumBranches, open), pastDueSince: null, graceDays: 14, writable: true, usage,
+      limits: PLAN_OFFERS[b.plan].limits, billingEnabled: true, portal: false,
+      offers: Object.entries(PLAN_OFFERS).map(([plan, o]) => ({ plan, monthlyCentsPerBranch: o.monthlyCentsPerBranch, yearlyCentsPerBranch: o.monthlyCentsPerBranch * 10,
+        minimumBranches: o.minimumBranches, limits: o.limits, features: o.features, billedBranches: Math.max(o.minimumBranches, open) })) };
+  }
   const staffView = (username, u, id) => ({ id, username, displayName: u.displayName, role: u.role, enabled: u.enabled !== false,
     hasPin: Boolean(pins()[username]), totpEnabled: Boolean(totpState()[username]?.enabled), mustChangePassword: Boolean(u.mustChangePassword), createdAt: null, branchId: u.branchId ?? null });
   const userView = (username, method) => ({ username, displayName: USERS[username].displayName, role: USERS[username].role, hasPin: Boolean(pins()[username]), method,
@@ -1961,7 +1977,18 @@
       save();
       return staffTime().pools[body.date];
     }],
-    ['GET', /^public\/config$/, 'public', () => ({ restaurantName: 'Sofra Bistro', demo: true })],
+    ['GET', /^public\/config$/, 'public', () => ({ restaurantName: 'Sofra Bistro', demo: true, billing: true })],
+    // the demo shows Sofra Cloud's plan screen with a simulated provider: choosing a plan charges nothing
+    ['GET', /^billing$/, 'manager', () => billingView()],
+    ['POST', /^billing\/checkout$/, 'manager', (_, body) => {
+      const offer = PLAN_OFFERS[body.plan];
+      if (!offer || !['MONTHLY', 'YEARLY'].includes(body.interval)) throw new Problem(400, 'VALIDATION_FAILED', 'Choose a plan');
+      const view = billingView();
+      if (offer.limits.tables >= 0 && view.usage.tables > offer.limits.tables) throw new Problem(422, 'PLAN_TOO_SMALL', 'This business uses more than the plan includes');
+      Object.assign(billing(), { plan: body.plan, status: 'ACTIVE', interval: body.interval, periodEndsAt: Date.now() + (body.interval === 'YEARLY' ? 365 : 30) * 86_400_000 });
+      return { url: `${location.origin}${location.pathname}#/billing` };
+    }],
+    ['POST', /^billing\/portal$/, 'manager', () => { throw new Problem(422, 'NO_PORTAL', 'Manage your subscription from the provider’s e-mails'); }],
     // Setup screen: staff and tables change for this tab only; the demo starts fresh on reload.
     ['GET', /^branches$/, 'staff', () => branches()],
     ['POST', /^branches$/, 'manager', (_, body) => {

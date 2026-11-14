@@ -1,5 +1,7 @@
 # Sofra Cloud: ücretli ürün planı
 
+Yayına alma adımları: [CLOUD.md](CLOUD.md).
+
 Hedef: Sofra'yı restoranların aylık abonelikle kullandığı, kurulum gerektirmeyen bir bulut hizmetine çevirmek.
 Zincirler ve birçok bağımsız işletme aynı sistemde, birbirinin verisini görmeden çalışacak. Kaynak kodu kapalı
 olacak.
@@ -8,13 +10,13 @@ olacak.
 
 | # | İş | Ne zaman |
 |---|---|---|
-| 1 | **S4.3** Vardiya, mesai saati, bahşiş havuzu | şimdi |
-| 2 | **S4.5** Yoğun akşam yük testi (40 masa, 12 telefon, 3 mutfak ekranı) | S4.3'ten sonra |
-| 3 | **S4.6** Çok işletme ve zincir altyapısı: işletme (abonelik birimi) › şubeler; her işletmenin verisi ayrı | S4.5'ten sonra |
-| 4 | **S5.1** Kayıt ol ve 1 dakikada kullanmaya başla (kurulum yok) | S4.6 ile birlikte |
-| 5 | **S5.2** Abonelik ve ödeme, plan sınırları, deneme süresi | S5.1'den sonra |
-| 6 | **S5.3** Android (Google Play) ve iOS (App Store) uygulamaları | S5.2'den sonra |
-| 7 | **S5.4** Kodun kapatılması (aşağıda; bir kısmı sizin yapacağınız ayarlar) | hemen başlanabilir |
+| 1 | **S4.3** Vardiya, mesai saati, bahşiş havuzu | tamamlandı |
+| 2 | **S4.5** Yoğun akşam yük testi (40 masa, 12 telefon, 3 mutfak ekranı) | tamamlandı |
+| 3 | **S4.6** Çok işletme ve zincir altyapısı: işletme (abonelik birimi) › şubeler; her işletmenin verisi ayrı | tamamlandı |
+| 4 | **S5.1** Kayıt ol ve 1 dakikada kullanmaya başla (kurulum yok) | tamamlandı |
+| 5 | **S5.2** Abonelik ve ödeme, plan sınırları, deneme süresi | kodda hazır; Paddle sandbox denemesi bekliyor |
+| 6 | **S5.3** Android (Google Play) ve iOS (App Store) uygulamaları | kabuklar hazır; derleme ve mağaza hesapları sizde |
+| 7 | **S5.4** Kodun kapatılması (aşağıda; bir kısmı sizin yapacağınız ayarlar) | lisans değişti; depoyu gizlemek sizde |
 
 ## Fiyat (dolar, pahalı olmayan)
 

@@ -1,0 +1,21 @@
+{
+  "packageId": "app.sofra.restaurant",
+  "host": "app.sofra.app",
+  "name": "Sofra",
+  "launcherName": "Sofra",
+  "display": "standalone",
+  "orientation": "default",
+  "themeColor": "#C2410C",
+  "navigationColor": "#1C1917",
+  "backgroundColor": "#FAF7F2",
+  "enableNotifications": true,
+  "startUrl": "/?app=android",
+  "iconUrl": "https://app.sofra.app/favicon.svg",
+  "webManifestUrl": "https://app.sofra.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "signingKey": { "path": "./sofra-upload.keystore", "alias": "sofra" },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "minSdkVersion": 24
+}

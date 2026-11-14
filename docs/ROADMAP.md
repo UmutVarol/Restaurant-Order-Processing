@@ -295,6 +295,23 @@ Decision record: [adr/0001-multi-business.md](adr/0001-multi-business.md).
   sign-in; a password policy; client addresses behind the proxy are the real ones; Java and OS versions are no
   longer public; API docs are off on a restaurant's server.
 
+## Sprint 5: Sofra Cloud, the paid product (in progress)
+
+Plan and prices: [SOFRA_CLOUD_PLAN.md](SOFRA_CLOUD_PLAN.md); going live: [CLOUD.md](CLOUD.md).
+
+- **Sign-up** with a 14-day trial, no card (S4.6).
+- **Plans** per open branch and month: Starter $19 (one branch, five staff, fifteen tables), Business $39, Chain
+  $29 from three branches; a year costs ten months. The Starter limits are enforced (`PLAN_LIMIT`).
+- **Subscriptions** through a `BillingProvider`: Paddle (merchant of record, in dollars: checkout, customer portal,
+  signed webhooks, the billed branches follow the open ones) and a simulation for development and the demo.
+- **Never deleted for being unpaid:** an ended trial or a payment late beyond 14 days makes the business read-only
+  (`402 SUBSCRIPTION_INACTIVE`); reading, exporting, signing in and paying keep working, and paying opens it at once.
+- A **Plan and billing** screen and a reminder banner for the owner; inside the store apps nothing sells.
+- **Store apps:** a Capacitor shell for the App Store and a Trusted Web Activity for Google Play (`mobile/`), with
+  Digital Asset Links served by the app.
+- A `cloud` profile: platform health and metrics on a private port, per-restaurant integrations off.
+- **Closed source from now on:** a proprietary licence; versions published before stay MIT.
+
 ## Later
 
 Smaller items that came up in the research, not yet scheduled:
@@ -341,6 +358,11 @@ işletme kimliği, işletmeler arası yalıtım testleri, 14 gün denemeli kayı
 siparişler, adisyonlar, yazıcılar, rezervasyonlar, vardiyalar, gün sonu ve bahşiş havuzu şubeye ait; menü, stok ve
 personel hesapları işletmenin. Personel tek şubede ya da tüm şubelerde çalışır; tüm şubelerin yöneticisi cihazın
 çalıştığı şubeyi üstten seçer. Şubeler Kurulum ekranından açılır ve kapatılır.
+
+**Sprint 5 (sürüyor): Sofra Cloud, ücretli ürün.** Planlar (şube başına aylık Başlangıç $19, İşletme $39, 3+
+şubede Zincir $29; yıllıkta 2 ay bedava), Başlangıç sınırları, Paddle ile abonelik (ödeme sayfası, kart/fatura
+sayfası, imzalı webhook), deneme bitince ya da ödeme 14 günden fazla gecikince yalnızca okuma (veri silinmez),
+Plan ve ödeme ekranı, mağaza uygulaması kabukları ve kapalı lisans. Yayına alma: [CLOUD.md](CLOUD.md).
 
 **Sprint 2 (plan), sırasıyla:**
 

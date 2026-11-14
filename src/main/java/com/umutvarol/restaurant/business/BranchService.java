@@ -10,6 +10,8 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,10 +27,14 @@ public class BranchService {
 
     private final BranchRepository branches;
     private final Clock clock;
+    private final ObjectProvider<UsageLimits> limits;
+    private final ApplicationEventPublisher events;
 
-    BranchService(BranchRepository branches, Clock clock) {
+    BranchService(BranchRepository branches, Clock clock, ObjectProvider<UsageLimits> limits, ApplicationEventPublisher events) {
         this.branches = branches;
         this.clock = clock;
+        this.limits = limits;
+        this.events = events;
     }
 
     /** Every branch for those who work in all of them; their own for everyone else. */
@@ -44,7 +50,9 @@ public class BranchService {
         if (branches.findByCode(code).isPresent()) {
             throw new InvalidStateException("BRANCH_CODE_TAKEN", "There is already a branch " + code, Map.of("code", code));
         }
+        limits.ifAvailable(plan -> plan.allowOneMore(UsageLimits.Resource.BRANCHES));
         Branch branch = branches.save(new Branch(code, name.strip(), clock.instant()));
+        changed();
         audit.info("branch.opened id={} code={} by={}", branch.getId(), branch.getCode(), actor);
         return branch;
     }
@@ -55,10 +63,21 @@ public class BranchService {
         if (branch.isActive() && !active && branches.findAllByOrderByIdAsc().stream().filter(Branch::isActive).count() <= 1) {
             throw new BusinessRuleException("LAST_BRANCH", "A business needs at least one open branch");
         }
+        if (!branch.isActive() && active) {
+            limits.ifAvailable(plan -> plan.allowOneMore(UsageLimits.Resource.BRANCHES));
+        }
+        boolean opensOrCloses = branch.isActive() != active;
         branch.rename(name.strip());
         branch.setActive(active);
+        if (opensOrCloses) {
+            changed();
+        }
         audit.info("branch.changed id={} name=\"{}\" active={} by={}", id, branch.getName(), branch.isActive(), actor);
         return branch;
+    }
+
+    private void changed() {
+        events.publishEvent(new BranchesChangedEvent(java.util.Optional.ofNullable(BusinessContext.current()).orElse(1L)));
     }
 
     private static void requireChainManager(@Nullable Long home) {

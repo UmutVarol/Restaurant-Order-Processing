@@ -1,0 +1,36 @@
+# Sofra Cloud: many businesses on one server, sign-up and subscriptions (docs/CLOUD.md). Turned on with
+# SPRING_PROFILES_ACTIVE=postgres,cloud. A restaurant's own server never uses this profile.
+restaurant:
+  cloud:
+    enabled: true
+    signup-enabled: ${CLOUD_SIGNUP_ENABLED:true}
+    # businesses are reached at <address>.<base-domain>; the app itself at app.<base-domain>
+    base-domain: ${CLOUD_BASE_DOMAIN:sofra.app}
+  billing:
+    provider: ${BILLING_PROVIDER:PADDLE}
+    api-key: ${BILLING_API_KEY:}
+    webhook-secret: ${BILLING_WEBHOOK_SECRET:}
+    base-url: ${BILLING_BASE_URL:https://api.paddle.com}
+    grace-days: 14
+    prices:
+      STARTER_MONTHLY: ${PRICE_STARTER_MONTHLY:}
+      STARTER_YEARLY: ${PRICE_STARTER_YEARLY:}
+      BUSINESS_MONTHLY: ${PRICE_BUSINESS_MONTHLY:}
+      BUSINESS_YEARLY: ${PRICE_BUSINESS_YEARLY:}
+      CHAIN_MONTHLY: ${PRICE_CHAIN_MONTHLY:}
+      CHAIN_YEARLY: ${PRICE_CHAIN_YEARLY:}
+  stores:
+    android-sha256: ${ANDROID_CERT_SHA256:}
+  # the per-restaurant integrations (iyzico merchant keys, e-Arşiv, delivery platforms) are server-wide settings
+  # today; they stay off in the cloud until each business can enter its own
+  payments:
+    provider: ${PAYMENT_PROVIDER:NONE}
+
+server:
+  forward-headers-strategy: native
+
+# Health, metrics and Prometheus are the platform's, not a business's: they move to a port that is never published
+# (the load balancer and Prometheus reach it on the private network), so no business manager can read them.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:9090}

@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -32,7 +33,7 @@ public class BusinessRegistry {
     }
 
     /** A new business on a 14-day trial of the full product. Runs on its own, outside any business. */
-    public Business open(String name, String slug, String timeZone) {
+    public Business open(String name, String slug, String timeZone, @Nullable String ownerEmail) {
         String address = slug.strip().toLowerCase(Locale.ROOT);
         if (!address.matches("[a-z0-9](?:[a-z0-9-]{1,38})[a-z0-9]") || RESERVED.contains(address)) {
             throw new BusinessRuleException("BUSINESS_ADDRESS_INVALID",
@@ -42,8 +43,10 @@ public class BusinessRegistry {
             if (businesses.findBySlug(address).isPresent()) {
                 throw new InvalidStateException("BUSINESS_ADDRESS_TAKEN", "That address is already taken", Map.of("slug", address));
             }
-            return businesses.save(new Business(address, name.strip(), timeZone, Business.Plan.BUSINESS,
-                    Business.Status.TRIAL, clock.instant().plus(TRIAL), clock.instant()));
+            Business business = new Business(address, name.strip(), timeZone, Business.Plan.BUSINESS,
+                    Business.Status.TRIAL, clock.instant().plus(TRIAL), clock.instant());
+            business.setOwnerEmail(ownerEmail);
+            return businesses.save(business);
         }));
     }
 

@@ -13,4 +13,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     List<AppUser> findAllByOrderByEnabledDescDisplayNameAsc();
 
     long countByRoleAndEnabledTrue(Role role);
+
+    long countByEnabledTrue();
 }

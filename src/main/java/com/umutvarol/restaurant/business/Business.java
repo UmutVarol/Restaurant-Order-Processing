@@ -48,6 +48,37 @@ public class Business {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** Where the provider's receipts and Sofra's notices about the subscription go. */
+    @Column(name = "owner_email", length = 120)
+    private String ownerEmail;
+
+    @Column(name = "billing_provider", length = 20)
+    private String billingProvider;
+
+    @Column(name = "billing_customer_ref", length = 100)
+    private String billingCustomerRef;
+
+    @Column(name = "billing_subscription_ref", length = 100)
+    private String billingSubscriptionRef;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_interval", length = 10)
+    private BillingInterval billingInterval;
+
+    @Column(name = "billed_branches")
+    private Integer billedBranches;
+
+    @Column(name = "period_ends_at")
+    private Instant periodEndsAt;
+
+    /** Since when a payment is late; the business turns read-only once the grace period has passed. */
+    @Column(name = "past_due_since")
+    private Instant pastDueSince;
+
+    /** When the last provider event applied happened; older ones arriving late are ignored. */
+    @Column(name = "billing_event_at")
+    private Instant billingEventAt;
+
     protected Business() {
         // for JPA
     }
@@ -64,6 +95,63 @@ public class Business {
 
     void rename(String name) {
         this.name = name;
+    }
+
+    public void setOwnerEmail(@Nullable String ownerEmail) {
+        this.ownerEmail = ownerEmail;
+    }
+
+    /**
+     * What the billing provider says about the subscription. Paying (again) opens a read-only business at once;
+     * a late payment starts the grace period; a cancelled subscription makes the business read-only. An event that
+     * happened before the last one applied is ignored (providers may deliver them out of order); whether it applied.
+     */
+    public boolean subscribed(String provider, String customerRef, String subscriptionRef, Plan plan, BillingInterval interval,
+                              int branches, Status status, @Nullable Instant periodEndsAt, @Nullable Instant occurredAt,
+                              Instant now) {
+        if (occurredAt != null && billingEventAt != null && occurredAt.isBefore(billingEventAt)) {
+            return false;
+        }
+        if (occurredAt != null) {
+            this.billingEventAt = occurredAt;
+        }
+        this.billingProvider = provider;
+        this.billingCustomerRef = customerRef;
+        this.billingSubscriptionRef = subscriptionRef;
+        this.plan = plan;
+        this.billingInterval = interval;
+        this.billedBranches = branches;
+        this.periodEndsAt = periodEndsAt;
+        if (status == Status.PAST_DUE) {
+            if (this.status != Status.PAST_DUE && this.status != Status.READ_ONLY) {
+                this.pastDueSince = now;
+                this.status = Status.PAST_DUE;
+            }
+            return true;
+        }
+        this.pastDueSince = null;
+        this.status = status == Status.ACTIVE ? Status.ACTIVE : Status.CANCELLED;
+        return true;
+    }
+
+    /** Ends a trial that ran out, or a grace period that passed: read-only until paid. Whether anything changed. */
+    public boolean lapse(Instant now, java.time.Duration grace) {
+        boolean trialOver = status == Status.TRIAL && trialEndsAt != null && !trialEndsAt.isAfter(now);
+        boolean graceOver = status == Status.PAST_DUE && pastDueSince != null && !pastDueSince.plus(grace).isAfter(now);
+        if (trialOver || graceOver) {
+            status = Status.READ_ONLY;
+            return true;
+        }
+        return false;
+    }
+
+    /** Whether the business may change anything now; reading, exporting and paying always work. */
+    public boolean writable(Instant now) {
+        return switch (status) {
+            case ACTIVE, PAST_DUE -> true;
+            case TRIAL -> trialEndsAt == null || trialEndsAt.isAfter(now);
+            case READ_ONLY, CANCELLED -> false;
+        };
     }
 
     public Long getId() {
@@ -96,5 +184,37 @@ public class Business {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public @Nullable String getOwnerEmail() {
+        return ownerEmail;
+    }
+
+    public @Nullable String getBillingProvider() {
+        return billingProvider;
+    }
+
+    public @Nullable String getBillingCustomerRef() {
+        return billingCustomerRef;
+    }
+
+    public @Nullable String getBillingSubscriptionRef() {
+        return billingSubscriptionRef;
+    }
+
+    public @Nullable BillingInterval getBillingInterval() {
+        return billingInterval;
+    }
+
+    public @Nullable Integer getBilledBranches() {
+        return billedBranches;
+    }
+
+    public @Nullable Instant getPeriodEndsAt() {
+        return periodEndsAt;
+    }
+
+    public @Nullable Instant getPastDueSince() {
+        return pastDueSince;
     }
 }

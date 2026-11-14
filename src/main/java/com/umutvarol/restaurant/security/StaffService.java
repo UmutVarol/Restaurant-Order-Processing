@@ -3,6 +3,8 @@ package com.umutvarol.restaurant.security;
 import com.umutvarol.restaurant.business.Branch;
 import com.umutvarol.restaurant.business.BranchRepository;
 import com.umutvarol.restaurant.business.BusinessFilter;
+import com.umutvarol.restaurant.business.UsageLimits;
+import org.springframework.beans.factory.ObjectProvider;
 import com.umutvarol.restaurant.common.error.AccessRefusedException;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
@@ -45,9 +47,12 @@ public class StaffService {
     private final JwtTokenService tokens;
     private final SecurityAuditLog audit;
     private final Clock clock;
+    private final ObjectProvider<UsageLimits> limits;
 
     StaffService(BranchRepository branches, AppUserRepository users, PasswordEncoder encoder, SessionGuard sessions, StepUpAuthentication stepUp,
-                 PasswordConfirmation confirmation, JwtTokenService tokens, SecurityAuditLog audit, Clock clock) {
+                 PasswordConfirmation confirmation, JwtTokenService tokens, SecurityAuditLog audit, Clock clock,
+                 ObjectProvider<UsageLimits> limits) {
+        this.limits = limits;
         this.users = users;
         this.branches = branches;
         this.encoder = encoder;
@@ -76,6 +81,9 @@ public class StaffService {
             throw new InvalidStateException("USERNAME_TAKEN", "That username is already in use",
                     Map.of("username", request.username()));
         }
+        if (!Boolean.FALSE.equals(request.enabled())) {
+            limits.ifAvailable(plan -> plan.allowOneMore(UsageLimits.Resource.STAFF));
+        }
         String temporary = PasswordPolicy.temporary();
         AppUser user = users.save(AppUser.withTemporaryPassword(request.username(), encoder.encode(temporary),
                 request.displayName().strip(), request.role(), clock.instant()));
@@ -103,6 +111,9 @@ public class StaffService {
             if (losesManager && users.countByRoleAndEnabledTrue(Role.ADMIN) <= 1) {
                 throw new BusinessRuleException("LAST_MANAGER", "The restaurant needs at least one active manager");
             }
+        }
+        if (request.enabled() && !user.isEnabled()) {
+            limits.ifAvailable(plan -> plan.allowOneMore(UsageLimits.Resource.STAFF));
         }
         if (self && !Objects.equals(user.getBranchId(), branch(request.branchId(), actor))) {
             throw new BusinessRuleException("STAFF_SELF_LOCKOUT", "You cannot move yourself to another branch");

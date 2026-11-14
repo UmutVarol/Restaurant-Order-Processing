@@ -17,6 +17,17 @@ public final class BranchContext {
         return CURRENT.get();
     }
 
+    /** Runs {@code work} over all branches of the business (counting what a whole business uses, say). */
+    public static <T> T acrossBranches(java.util.function.Supplier<T> work) {
+        Long previous = CURRENT.get();
+        CURRENT.remove();
+        try {
+            return work.get();
+        } finally {
+            set(previous);
+        }
+    }
+
     static void set(@Nullable Long branch) {
         if (branch == null) {
             CURRENT.remove();

@@ -1,8 +1,8 @@
 // Sofra web client: boots the session, renders the app shell and routes between screens.
 import { h, initials, mount } from './core/dom.js';
 import { icon, logoMark } from './core/icons.js';
-import { languageName, onLangChange, ready as languageReady, t } from './core/i18n.js';
-import { api, branchChoice, clearSession, currentDevice, currentSession, saveSession, setBranchChoice } from './core/api.js';
+import { languageName, onLangChange, ready as languageReady, t, tn } from './core/i18n.js';
+import { api, branchChoice, clearSession, currentDevice, currentSession, saveSession, setBranchChoice, storeApp } from './core/api.js';
 import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { clearOutbox, entries as outboxEntries, flush, isOnline, registerServiceWorker } from './core/offline.js';
@@ -26,6 +26,8 @@ const ROUTES = [
   { id: 'setup', icon: 'users', roles: ['ADMIN'], section: 'manage', load: () => import('./views/setup.js') },
   // reached from the user card, not the navigation
   { id: 'settings', icon: 'settings', roles: ALL, section: null, load: () => import('./views/settings.js') },
+  // Sofra Cloud only, for whoever manages all branches
+  { id: 'billing', icon: 'card', roles: ['ADMIN'], section: 'manage', when: () => serverConfig?.billing && user.branchId == null, load: () => import('./views/billing.js') },
 ];
 const HOME = { ADMIN: 'dashboard', WAITER: 'pos', KITCHEN: 'kitchen' };
 // On a phone the screens each role uses all shift sit in the tab bar; the rest are one tap away under "More".
@@ -64,8 +66,12 @@ export function navigate(route, params) {
 }
 
 function allowedRoutes() {
-  return ROUTES.filter((route) => route.roles.includes(user.role));
+  return ROUTES.filter((route) => route.roles.includes(user.role) && (route.when ? route.when() : true));
 }
+
+// what this server offers (subscriptions, sign-up), asked once
+let serverConfig = null;
+const serverConfigReady = api.publicConfig().then((config) => { serverConfig = config; }).catch(() => { serverConfig = {}; });
 
 async function render() {
   const token = ++renderToken;
@@ -108,6 +114,8 @@ async function render() {
     return;
   }
 
+  await serverConfigReady;
+  if (token !== renderToken) return;
   const { route: requested, params } = parseHash();
   const route = allowedRoutes().find((r) => r.id === requested);
   if (!route) {
@@ -137,6 +145,26 @@ async function render() {
 
 // A chain's branches, for whoever works in all of them: which one this device works in, or all at once. Someone who
 // works in one branch has nothing to choose. Changing it reloads, so every screen and the live stream follow it.
+// The owner hears when the trial is ending, a payment is late or the business can only read. Inside the store apps
+// the banner informs and sells nothing.
+let billingState = null;
+function planBanner(current) {
+  const holder = h('div', { class: 'plan-banner-slot' });
+  if (!serverConfig?.billing || user.role !== 'ADMIN' || user.branchId != null || current.id === 'billing') return holder;
+  (billingState ? Promise.resolve(billingState) : api.billing().then((state) => { billingState = state; return state; })).then((state) => {
+    const daysLeft = state.trialEndsAt ? Math.ceil((new Date(state.trialEndsAt) - Date.now()) / 86_400_000) : null;
+    let text = null;
+    if (!state.writable) text = t('billing.banner.readOnly');
+    else if (state.status === 'PAST_DUE') text = t('billing.banner.pastDue');
+    else if (state.status === 'TRIAL' && daysLeft != null && daysLeft <= 7) text = tn('billing.banner.trial', Math.max(0, daysLeft));
+    if (!text) return;
+    holder.replaceChildren(h('div', { class: ['plan-banner', state.writable ? '' : 'lapsed'], role: 'status', 'data-testid': 'plan-banner' },
+      icon(state.writable ? 'clock' : 'alert', 'sm'), h('span', null, text),
+      storeApp() ? null : h('a', { class: 'btn sm primary', href: '#/billing' }, t('billing.choosePlan'))));
+  }).catch(() => { /* the banner is a reminder; the billing screen has the facts */ });
+  return holder;
+}
+
 let branchList = null;
 function branchPicker() {
   const holder = h('span', { class: 'branch-picker' });
@@ -236,7 +264,7 @@ function renderShell(current) {
       themeButton()));
 
   const skip = h('a', { class: 'skip-link', href: '#view', onclick: (event) => { event.preventDefault(); content.focus(); } }, t('common.skip'));
-  const element = h('div', { class: 'shell' }, skip, sidebar, h('main', { class: 'main' }, topbar, content), tabbar);
+  const element = h('div', { class: 'shell' }, skip, sidebar, h('main', { class: 'main' }, topbar, planBanner(current), content), tabbar);
   return {
     element,
     content,
@@ -407,6 +435,7 @@ async function onSignedIn(tokenResponse) {
 function signOut() {
   stopRealtime();
   branchList = null;
+  billingState = null;
   // Revoke the token on the server too; the local sign-out does not wait for it or depend on it.
   if (currentSession()) api.logout().catch(() => {});
   clearSession();

@@ -60,6 +60,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.FORBIDDEN, "Access refused", ex);
     }
 
+    @ExceptionHandler(SubscriptionRequiredException.class)
+    ProblemDetail handleSubscriptionRequired(SubscriptionRequiredException ex) {
+        return problem(HttpStatus.PAYMENT_REQUIRED, "Subscription required", ex);
+    }
+
     @ExceptionHandler(UpstreamServiceException.class)
     ProblemDetail handleUpstream(UpstreamServiceException ex) {
         return problem(HttpStatus.BAD_GATEWAY, "Upstream service failed", ex);

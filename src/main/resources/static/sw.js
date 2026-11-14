@@ -39,6 +39,7 @@ const SHELL = [
   'assets/js/vendor/qrcode.mjs',
   'assets/js/views/adjust.js',
   'assets/js/views/bill.js',
+  'assets/js/views/billing.js',
   'assets/js/views/cashier.js',
   'assets/js/views/channels.js',
   'assets/js/views/dashboard.js',

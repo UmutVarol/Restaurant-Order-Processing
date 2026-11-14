@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.floor;
 
+import com.umutvarol.restaurant.business.UsageLimits;
 import com.umutvarol.restaurant.business.WorkingBranch;
 import org.jspecify.annotations.Nullable;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
@@ -38,9 +39,12 @@ public class TableAdminService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final WorkingBranch branch;
+    private final ObjectProvider<UsageLimits> limits;
 
     public TableAdminService(DiningTableRepository tables, OrderRepository orders, ObjectProvider<TableBookings> bookings,
-                             ApplicationEventPublisher events, Clock clock, WorkingBranch branch) {
+                             ApplicationEventPublisher events, Clock clock, WorkingBranch branch,
+                             ObjectProvider<UsageLimits> limits) {
+        this.limits = limits;
         this.branch = branch;
         this.tables = tables;
         this.orders = orders;
@@ -57,6 +61,7 @@ public class TableAdminService {
     public TableResponse add(TableRequest request, String actor) {
         String code = request.code().strip();
         Optional<DiningTable> existing = tables.findByCodeAndBranchId(code, branch.forNew());
+        limits.ifAvailable(plan -> plan.allowOneMore(UsageLimits.Resource.TABLES));
         DiningTable table;
         if (existing.isPresent()) {
             if (existing.get().isActive()) {

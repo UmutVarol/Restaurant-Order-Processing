@@ -1905,3 +1905,33 @@ button.rota-shift { cursor: pointer; }
 .rota-empty { margin: 0; }
 .rota-add { align-self: flex-start; }
 .form-error-text { color: var(--red); font-size: 12.5px; }
+
+/* ------------------------------------------------------------------ plan and billing */
+.billing { display: grid; gap: 16px; max-width: 1100px; }
+.billing-current.lapsed { border-color: var(--red, #c0392b); }
+.billing-usage { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.billing-meter-label { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.billing-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.billing-head h3 { margin: 0; }
+.billing-interval { min-width: 220px; }
+.billing-plans { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); align-items: stretch; }
+.billing-plan .card-body { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+.billing-plan h3 { margin: 0; }
+.billing-plan.mine { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.billing-plan .btn, .billing-plan > .card-body > .pill { margin-top: auto; align-self: flex-start; }
+.billing-price { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.billing-price b { font-size: 30px; letter-spacing: -.02em; }
+.billing-price span { color: var(--text-2); font-size: 13px; }
+.billing-features { list-style: none; padding: 0; margin: 4px 0 8px; display: grid; gap: 6px; font-size: 13px; }
+.billing-features li { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
+.billing-features li .icon { flex: none; color: var(--brand); margin-top: 1px; }
+.billing-features li.off { color: var(--text-3, var(--text-2)); text-decoration: line-through; }
+.billing-features li.off .icon { color: inherit; }
+.pill.b-TRIAL { background: var(--blue-soft); color: var(--blue); }
+.pill.b-ACTIVE { background: var(--green-soft, var(--blue-soft)); color: var(--green, var(--blue)); }
+.pill.b-PAST_DUE { background: var(--amber-soft); color: var(--amber); }
+.pill.b-READ_ONLY, .pill.b-CANCELLED { background: var(--red-soft, var(--amber-soft)); color: var(--red, var(--amber)); }
+.plan-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin: 0 0 12px; border-radius: 12px;
+  background: var(--amber-soft); color: var(--text); font-size: 14px; }
+.plan-banner.lapsed { background: var(--red-soft, var(--amber-soft)); }
+.plan-banner > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }

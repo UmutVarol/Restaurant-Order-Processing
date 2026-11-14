@@ -138,7 +138,8 @@ class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**", "/favicon.svg",
-                                "/manifest.webmanifest", "/sw.js", "/robots.txt", "/.well-known/security.txt").permitAll()
+                                "/manifest.webmanifest", "/sw.js", "/robots.txt", "/.well-known/security.txt",
+                                "/.well-known/assetlinks.json").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/csp-reports").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
@@ -147,6 +148,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/pin-staff").permitAll()
                         .requestMatchers("/api/v1/devices", "/api/v1/devices/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/staff", "/api/v1/staff/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers("/api/v1/billing", "/api/v1/billing/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/branches").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/branches/*").hasRole(Role.ADMIN.name())
                         // everyone clocks themselves in and reads the rota; managers see and fix everyone's time

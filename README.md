@@ -12,7 +12,7 @@ the floor plan tracks every open check, and the manager watches it all on a live
 ![Java 21](https://img.shields.io/badge/Java-21-E4572E?logo=openjdk&logoColor=white)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![Coverage](https://img.shields.io/badge/coverage-95%25-2F9E6B)
-![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![License: proprietary](https://img.shields.io/badge/license-proprietary-lightgrey)
 
 <img src="docs/demo.gif" alt="Sofra tour: a waiter places an order, it appears live on the kitchen display, then the manager dashboard" width="880">
 
@@ -439,4 +439,4 @@ and `double` arithmetic. Version 2 rebuilds it as a production-style full-stack 
 
 ## License
 
-[MIT](LICENSE) © Muhammed Umut Varol
+Proprietary, all rights reserved ([LICENSE](LICENSE)) © Muhammed Umut Varol. Versions published before 14 November 2026 were MIT-licensed and stay so for whoever obtained them.

@@ -15,19 +15,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 class PublicConfigController {
 
-    /** {@code businessCodeNeeded}: several businesses share this server and the address names none of them. */
-    record PublicConfig(String restaurantName, boolean demo, boolean businessCodeNeeded, boolean signupEnabled) {
+    /**
+     * {@code businessCodeNeeded}: several businesses share this server and the address names none of them;
+     * {@code billing}: this server sells subscriptions (Sofra Cloud).
+     */
+    record PublicConfig(String restaurantName, boolean demo, boolean businessCodeNeeded, boolean signupEnabled, boolean billing) {
     }
 
     private final RestaurantProperties restaurant;
     private final DemoProperties demo;
     private final com.umutvarol.restaurant.business.BusinessProfile profile;
     private final boolean signup;
+    private final boolean billing;
 
     PublicConfigController(RestaurantProperties restaurant, DemoProperties demo,
                            com.umutvarol.restaurant.business.BusinessProfile profile,
-                           @org.springframework.beans.factory.annotation.Value("${restaurant.cloud.signup-enabled:false}") boolean signup) {
+                           @org.springframework.beans.factory.annotation.Value("${restaurant.cloud.signup-enabled:false}") boolean signup,
+                           @org.springframework.beans.factory.annotation.Value("${restaurant.billing.provider:NONE}") String billing) {
         this.signup = signup;
+        this.billing = !"NONE".equalsIgnoreCase(billing);
         this.restaurant = restaurant;
         this.demo = demo;
         this.profile = profile;
@@ -39,6 +45,6 @@ class PublicConfigController {
     PublicConfig config() {
         // the business the address or business code names; without one, nobody's name is given away
         boolean known = com.umutvarol.restaurant.business.BusinessContext.current() != null;
-        return new PublicConfig(known ? profile.name(restaurant.name()) : null, demo.enabled(), !known, signup);
+        return new PublicConfig(known ? profile.name(restaurant.name()) : null, demo.enabled(), !known, signup, billing);
     }
 }

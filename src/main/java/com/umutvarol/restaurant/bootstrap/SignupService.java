@@ -105,7 +105,7 @@ public class SignupService {
                     Duration.ofHours(1));
         }
         String address = request.address() != null ? request.address() : BusinessRegistry.suggestAddress(request.businessName());
-        Business business = registry.open(request.businessName(), address, "Europe/Istanbul");
+        Business business = registry.open(request.businessName(), address, "Europe/Istanbul", request.email().strip());
         try {
             TokenResponse session = BusinessContext.call(business.getId(), () -> tx.execute(status -> {
                 branches.save(new Branch("merkez", "Merkez", Instant.now()));
