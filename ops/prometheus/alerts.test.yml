@@ -19,7 +19,7 @@ tests:
         exp_alerts:
           - exp_labels: { severity: critical, job: sofra }
             exp_annotations:
-              summary: "1 legal documents not issued; the oldest has waited 23m 20s"
+              summary: "1 legal documents not issued; the oldest has waited 23m 40s"
               runbook: "docs/OPERATIONS.md#sofralegaldocumentsnotissued"
 
   - name: one failed ticket is enough
@@ -56,10 +56,11 @@ tests:
               runbook: "docs/OPERATIONS.md#sofradown"
 
   - name: a day without a backup
-    interval: 1h
+    # a sample every minute: with hourly ones the 5-minute lookback finds nothing in between and "for" never completes
+    interval: 1m
     input_series:
       - series: 'sofra_backup_last_success_timestamp_seconds'
-        values: '0x30'
+        values: '0x1700'
     alert_rule_test:
       - eval_time: 20h
         alertname: SofraBackupMissing
