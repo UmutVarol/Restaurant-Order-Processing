@@ -1,5 +1,10 @@
 package com.umutvarol.restaurant.staff;
 
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
 import com.umutvarol.restaurant.security.AppUser;
 import jakarta.persistence.Column;
@@ -21,7 +26,9 @@ import org.jspecify.annotations.Nullable;
 /** Time actually worked: from clocking in to clocking out. A manager can correct it, with a reason. */
 @Entity
 @Table(name = "time_entries")
-public class TimeEntry {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class TimeEntry implements BranchOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,6 +38,10 @@ public class TimeEntry {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id")
@@ -136,5 +147,15 @@ public class TimeEntry {
 
     public @Nullable String getCorrectionReason() {
         return correctionReason;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
     }
 }

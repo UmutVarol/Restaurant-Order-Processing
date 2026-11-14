@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.payment;
 
+import com.umutvarol.restaurant.business.WorkingBranch;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
 import com.umutvarol.restaurant.common.money.Money;
@@ -31,9 +32,11 @@ public class DayReportService {
     private final DayClosingRepository closings;
     private final PaymentAuditLog audit;
     private final Clock clock;
+    private final WorkingBranch branch;
 
     public DayReportService(PaymentRepository payments, RefundRepository refunds, DayClosingRepository closings,
-                            PaymentAuditLog audit, Clock clock) {
+                            PaymentAuditLog audit, Clock clock, WorkingBranch branch) {
+        this.branch = branch;
         this.payments = payments;
         this.refunds = refunds;
         this.closings = closings;
@@ -43,7 +46,9 @@ public class DayReportService {
 
     @Transactional(readOnly = true)
     public DayReportResponse report(LocalDate date) {
-        return new DayReportResponse(summarise(date), closings.findByBusinessDate(date).map(Closing::from).orElse(null));
+        long here = branch.require();
+        return new DayReportResponse(summarise(date, here),
+                closings.findByBusinessDateAndBranchId(date, here).map(Closing::from).orElse(null));
     }
 
     public DayReportResponse close(LocalDate date, BigDecimal countedCash, @Nullable String note, String actor) {
@@ -51,24 +56,28 @@ public class DayReportService {
             throw new BusinessRuleException("DAY_NOT_OVER", "A day can only be closed once it has started",
                     Map.of("date", date.toString()));
         }
-        if (closings.findByBusinessDate(date).isPresent()) {
+        long here = branch.require();
+        if (closings.findByBusinessDateAndBranchId(date, here).isPresent()) {
             throw new InvalidStateException("DAY_ALREADY_CLOSED", "%s has already been closed".formatted(date),
                     Map.of("date", date.toString()));
         }
-        DaySummary summary = summarise(date);
+        DaySummary summary = summarise(date, here);
         DayClosing closing = closings.save(new DayClosing(date, summary, Money.normalize(countedCash),
                 note == null || note.isBlank() ? null : note.strip(), clock.instant(), actor));
         audit.dayClosed(date.toString(), summary.expectedCash(), closing.getCountedCash(), actor);
         return new DayReportResponse(summary, Closing.from(closing));
     }
 
-    DaySummary summarise(LocalDate date) {
+    /** A branch's day: the money taken on its bills. */
+    DaySummary summarise(LocalDate date, long here) {
         Instant from = date.atStartOfDay(clock.getZone()).toInstant();
         Instant to = date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
         List<Payment> taken = payments.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(from, to)
-                .stream().filter(payment -> payment.getStatus() == PaymentStatus.SUCCEEDED).toList();
+                .stream().filter(payment -> payment.getStatus() == PaymentStatus.SUCCEEDED)
+                .filter(payment -> Long.valueOf(here).equals(payment.getBill().getBranchId())).toList();
         List<Refund> given = refunds.findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to).stream()
                 .filter(refund -> refund.getStatus() != RefundStatus.FAILED)
+                .filter(refund -> Long.valueOf(here).equals(refund.getPayment().getBill().getBranchId()))
                 .toList();
 
         List<MethodTotal> methods = new ArrayList<>();

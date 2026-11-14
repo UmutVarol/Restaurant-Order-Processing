@@ -231,6 +231,10 @@ p { margin: 0; }
 .page-sub { color: var(--muted); font-size: 13px; }
 .topbar .spacer { flex: 1; }
 .topbar-tools { display: flex; align-items: center; gap: 8px; }
+.branch-picker { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2, inherit); }
+.branch-picker:empty { display: none; }
+.branch-picker .select { max-width: 180px; min-width: 0; }
+@media (max-width: 600px) { .branch-picker > svg { display: none; } .branch-picker .select { max-width: 120px; } }
 .clock { font-variant-numeric: tabular-nums; color: var(--text-2); font-weight: 500; padding: 0 6px; }
 .live {
   display: inline-flex; align-items: center; gap: 8px;

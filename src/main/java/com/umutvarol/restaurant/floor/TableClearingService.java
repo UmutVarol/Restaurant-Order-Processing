@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.floor;
 
+import org.jspecify.annotations.Nullable;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.order.Order;
 import com.umutvarol.restaurant.order.OrderChangedEvent;
@@ -66,7 +67,7 @@ public class TableClearingService {
         Instant now = clock.instant();
         if (table.cleared()) {
             audit.info("table.cleared table={} by={}", table.getCode(), actor);
-            events.publishEvent(new TableChangedEvent(table.getId(), table.getCode(), null, now));
+            events.publishEvent(new TableChangedEvent(table.getId(), table.getCode(), null, now, table.getBranchId()));
         }
         return floor.table(table);
     }

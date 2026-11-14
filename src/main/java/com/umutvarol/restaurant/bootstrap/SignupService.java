@@ -2,6 +2,8 @@ package com.umutvarol.restaurant.bootstrap;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.umutvarol.restaurant.business.Branch;
+import com.umutvarol.restaurant.business.BranchRepository;
 import com.umutvarol.restaurant.business.Business;
 import com.umutvarol.restaurant.business.BusinessContext;
 import com.umutvarol.restaurant.business.BusinessRegistry;
@@ -70,6 +72,7 @@ public class SignupService {
     private final StaffService staff;
     private final DiningTableRepository tables;
     private final MenuItemRepository menu;
+    private final BranchRepository branches;
     private final TransactionTemplate tx;
     private final boolean enabled;
     private final String baseDomain;
@@ -78,7 +81,8 @@ public class SignupService {
             .maximumSize(100_000).build();
 
     SignupService(BusinessRegistry registry, BusinessRepository businesses, StaffService staff,
-                  DiningTableRepository tables, MenuItemRepository menu, PlatformTransactionManager transactions,
+                  DiningTableRepository tables, MenuItemRepository menu, BranchRepository branches,
+                  PlatformTransactionManager transactions,
                   @Value("${restaurant.cloud.signup-enabled:false}") boolean enabled,
                   @Value("${restaurant.cloud.base-domain:}") String baseDomain,
                   @Value("${restaurant.cloud.signups-per-client-per-hour:5}") int perClientPerHour) {
@@ -88,6 +92,7 @@ public class SignupService {
         this.staff = staff;
         this.tables = tables;
         this.menu = menu;
+        this.branches = branches;
         this.tx = new TransactionTemplate(transactions);
         this.enabled = enabled;
         this.baseDomain = baseDomain;
@@ -103,6 +108,7 @@ public class SignupService {
         Business business = registry.open(request.businessName(), address, "Europe/Istanbul");
         try {
             TokenResponse session = BusinessContext.call(business.getId(), () -> tx.execute(status -> {
+                branches.save(new Branch("merkez", "Merkez", Instant.now()));
                 TokenResponse owner = staff.createOwner(request.username(), request.ownerName(), request.password());
                 sampleTables();
                 sampleMenu();

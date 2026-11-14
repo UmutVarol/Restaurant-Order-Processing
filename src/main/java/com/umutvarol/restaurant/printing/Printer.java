@@ -1,5 +1,10 @@
 package com.umutvarol.restaurant.printing;
 
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -17,7 +22,9 @@ import org.jspecify.annotations.Nullable;
 /** A ticket printer on the restaurant's network, and which kitchen stations it prints for (kitchen, bar, desserts). */
 @Entity
 @Table(name = "printers")
-public class Printer {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class Printer implements BranchOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,6 +34,10 @@ public class Printer {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @Column(nullable = false, unique = true, length = 40)
     private String name;
@@ -130,5 +141,15 @@ public class Printer {
 
     public @Nullable String getLastError() {
         return lastError;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
     }
 }

@@ -1,5 +1,10 @@
 package com.umutvarol.restaurant.printing;
 
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -22,7 +27,9 @@ import org.jspecify.annotations.Nullable;
  */
 @Entity
 @Table(name = "print_jobs")
-public class PrintJob {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class PrintJob implements BranchOwned {
 
     /** The first ticket, a reprint, a test page, a course fired later, or a void slip. */
     public enum Kind { TICKET, REPRINT, TEST, FIRE, VOID }
@@ -37,6 +44,10 @@ public class PrintJob {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "printer_id")
@@ -177,5 +188,20 @@ public class PrintJob {
 
     public @Nullable Instant getPrintedAt() {
         return printedAt;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
+    }
+
+    @Override
+    public @Nullable Long branchHint() {
+        return printer == null ? null : printer.getBranchId();
     }
 }

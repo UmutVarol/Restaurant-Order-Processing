@@ -1,6 +1,6 @@
 // Live order and payment updates over Server-Sent Events. EventSource cannot send an Authorization header, so the stream is
 // read with fetch() and parsed here; the connection is re-established with exponential back-off.
-import { authHeader, backendFetch, currentSession, EVENTS_URL, isCurrentSession } from './api.js';
+import { authHeader, backendFetch, branchHeader, currentSession, EVENTS_URL, isCurrentSession } from './api.js';
 import { bus } from './store.js';
 
 let controller = null;
@@ -34,7 +34,7 @@ async function run(signal) {
     const sentWith = currentSession();
     try {
       const response = await backendFetch(EVENTS_URL, {
-        headers: { Accept: 'text/event-stream', ...authHeader() },
+        headers: { Accept: 'text/event-stream', ...authHeader(), ...branchHeader() },
         cache: 'no-store',
         signal,
       });

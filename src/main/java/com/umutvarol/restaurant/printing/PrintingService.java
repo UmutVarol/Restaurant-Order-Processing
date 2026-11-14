@@ -241,7 +241,7 @@ public class PrintingService {
 
     private void announce(PrintJob job, @Nullable String error, Instant at) {
         events.publishEvent(new PrintJobChangedEvent(job.getId(), job.getPrinter().getId(), job.getPrinter().getName(),
-                job.getOrderId(), job.getStatus(), error, at));
+                job.getOrderId(), job.getStatus(), error, at, job.getBranchId()));
     }
 
     private KitchenTicket ticketFor(Printer printer, Order order, KitchenTicket.Mode mode, int course) {

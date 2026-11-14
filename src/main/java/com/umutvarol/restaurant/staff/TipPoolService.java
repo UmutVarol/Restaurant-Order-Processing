@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.staff;
 
+import com.umutvarol.restaurant.business.WorkingBranch;
 import com.umutvarol.restaurant.common.config.RestaurantProperties;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
@@ -44,15 +45,18 @@ public class TipPoolService {
     private final TimeEntryRepository entries;
     private final PaymentRepository payments;
     private final Clock clock;
+    private final WorkingBranch branch;
     private final ZoneId zone;
     private final Map<Role, BigDecimal> weights;
 
     public TipPoolService(TipPoolRepository pools, TimeEntryRepository entries, PaymentRepository payments, Clock clock,
+                          WorkingBranch branch,
                           RestaurantProperties restaurant,
                           @Value("${restaurant.tips.weight.waiter:1.0}") BigDecimal waiter,
                           @Value("${restaurant.tips.weight.kitchen:0.5}") BigDecimal kitchen,
                           @Value("${restaurant.tips.weight.manager:0}") BigDecimal manager) {
         this.pools = pools;
+        this.branch = branch;
         this.entries = entries;
         this.payments = payments;
         this.clock = clock;
@@ -62,17 +66,19 @@ public class TipPoolService {
 
     @Transactional(readOnly = true)
     public TipPoolResponse day(LocalDate date) {
-        return pools.findByBusinessDate(date).map(TipPoolService::toResponse).orElseGet(() -> preview(date));
+        long here = branch.require();
+        return pools.findByBusinessDateAndBranchId(date, here).map(TipPoolService::toResponse).orElseGet(() -> preview(date, here));
     }
 
     public TipPoolResponse close(LocalDate date, String actor) {
         if (date.isAfter(LocalDate.now(clock.withZone(zone)))) {
             throw new BusinessRuleException("TIP_POOL_FUTURE", "That day has not happened yet");
         }
-        if (pools.findByBusinessDate(date).isPresent()) {
+        long here = branch.require();
+        if (pools.findByBusinessDateAndBranchId(date, here).isPresent()) {
             throw new InvalidStateException("TIP_POOL_CLOSED", "The tips of that day are already shared out", Map.of());
         }
-        TipPoolResponse preview = preview(date);
+        TipPoolResponse preview = preview(date, here);
         if (!preview.stillClockedIn().isEmpty()) {
             throw new InvalidStateException("TIP_POOL_STAFF_CLOCKED_IN",
                     "Still clocked in: " + String.join(", ", preview.stillClockedIn()),
@@ -101,16 +107,17 @@ public class TipPoolService {
                 .toList();
     }
 
-    private TipPoolResponse preview(LocalDate date) {
+    /** How a branch's tips of a day would be shared: its tips, among those who clocked in there. */
+    private TipPoolResponse preview(LocalDate date, long here) {
         Instant start = date.atStartOfDay(zone).toInstant();
         Instant end = date.plusDays(1).atStartOfDay(zone).toInstant();
         Instant now = clock.instant();
-        BigDecimal total = Money.normalize(payments.sumTips(start, end));
+        BigDecimal total = Money.normalize(payments.sumTips(start, end, here));
 
         Map<Long, AppUser> people = new LinkedHashMap<>();
         Map<Long, Long> minutes = new LinkedHashMap<>();
         List<String> open = new ArrayList<>();
-        for (TimeEntry e : entries.overlapping(start, end)) {
+        for (TimeEntry e : entries.overlapping(start, end).stream().filter(e -> Long.valueOf(here).equals(e.getBranchId())).toList()) {
             AppUser u = e.getUser();
             people.putIfAbsent(u.getId(), u);
             minutes.merge(u.getId(), e.within(start, end, now).toMinutes(), Long::sum);

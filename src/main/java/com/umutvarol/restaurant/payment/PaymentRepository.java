@@ -30,6 +30,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("""
             select coalesce(sum(p.tip), 0) from Payment p
             where p.status = com.umutvarol.restaurant.payment.PaymentStatus.SUCCEEDED
-              and p.completedAt >= :from and p.completedAt < :to""")
-    BigDecimal sumTips(@Param("from") Instant from, @Param("to") Instant to);
+              and p.completedAt >= :from and p.completedAt < :to and p.bill.branchId = :branch""")
+    BigDecimal sumTips(@Param("from") Instant from, @Param("to") Instant to, @Param("branch") Long branch);
 }

@@ -17,7 +17,8 @@ public interface DiningTableRepository extends JpaRepository<DiningTable, Long> 
 
     Optional<DiningTable> findByQrTokenHash(String qrTokenHash);
 
-    Optional<DiningTable> findByCode(String code);
+    /** Table numbers are unique within a branch. */
+    Optional<DiningTable> findByCodeAndBranchId(String code, Long branchId);
 
     /** Holds the table's row until the transaction ends, so two hosts cannot give it to two parties at once. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

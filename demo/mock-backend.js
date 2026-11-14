@@ -602,10 +602,12 @@
 
   const pins = () => (state.pins ??= { admin: '2468', waiter: '1357', chef: '9024' });
   const devices = () => (state.devices ??= []);
+  // the demo keeps one set of data: a second branch shows the screens for chains, it does not split the floor
+  const branches = () => (state.branches ??= [{ id: 1, code: 'merkez', name: 'Merkez', active: true }]);
   const staffView = (username, u, id) => ({ id, username, displayName: u.displayName, role: u.role, enabled: u.enabled !== false,
-    hasPin: Boolean(pins()[username]), totpEnabled: Boolean(totpState()[username]?.enabled), mustChangePassword: Boolean(u.mustChangePassword), createdAt: null });
+    hasPin: Boolean(pins()[username]), totpEnabled: Boolean(totpState()[username]?.enabled), mustChangePassword: Boolean(u.mustChangePassword), createdAt: null, branchId: u.branchId ?? null });
   const userView = (username, method) => ({ username, displayName: USERS[username].displayName, role: USERS[username].role, hasPin: Boolean(pins()[username]), method,
-    totpEnabled: Boolean(state.totp?.[username]?.enabled), mfaSetupRequired: false, mustChangePassword: Boolean(USERS[username].mustChangePassword) });
+    totpEnabled: Boolean(state.totp?.[username]?.enabled), mfaSetupRequired: false, mustChangePassword: Boolean(USERS[username].mustChangePassword), branchId: null });
   const deviceView = (d) => ({ id: d.id, name: d.name, createdBy: d.createdBy, createdAt: iso(d.createdAt), lastSeenAt: d.lastSeenAt ? iso(d.lastSeenAt) : null, active: !d.revokedAt });
 
   function deviceFor(headers) {
@@ -1961,6 +1963,22 @@
     }],
     ['GET', /^public\/config$/, 'public', () => ({ restaurantName: 'Sofra Bistro', demo: true })],
     // Setup screen: staff and tables change for this tab only; the demo starts fresh on reload.
+    ['GET', /^branches$/, 'staff', () => branches()],
+    ['POST', /^branches$/, 'manager', (_, body) => {
+      const code = String(body.code || '');
+      requireFields({ code: /^[a-z0-9-]{2,20}$/.test(code) ? null : 'must match "^[a-z0-9-]{2,20}$"', name: blank(body.name) ? 'must not be blank' : null });
+      if (branches().some((b) => b.code === code)) throw new Problem(409, 'BRANCH_CODE_TAKEN', `There is already a branch ${code}`);
+      const branch = { id: Math.max(...branches().map((b) => b.id)) + 1, code, name: String(body.name).trim(), active: true };
+      branches().push(branch);
+      return [201, branch];
+    }],
+    ['PUT', /^branches\/(\d+)$/, 'manager', ({ params }, body) => {
+      const branch = branches().find((b) => b.id === Number(params[0]));
+      if (!branch) throw new Problem(404, 'BRANCH_NOT_FOUND', 'Branch not found');
+      if (branch.active && body.active === false && branches().filter((b) => b.active).length <= 1) throw new Problem(422, 'LAST_BRANCH', 'A business needs at least one open branch');
+      Object.assign(branch, { name: String(body.name).trim(), active: body.active !== false });
+      return branch;
+    }],
     ['GET', /^staff$/, 'manager', () => Object.entries(USERS).map(([username, u], i) => staffView(username, u, i + 1))],
     ['POST', /^staff$/, 'manager', (_, body) => {
       const username = String(body.username || '');
@@ -1968,14 +1986,14 @@
         displayName: blank(body.displayName) ? 'must not be blank' : null });
       if (USERS[username]) throw new Problem(409, 'USERNAME_TAKEN', 'That username is already in use');
       const temporaryPassword = Array.from({ length: 3 }, () => Math.random().toString(36).slice(2, 6)).join('-');
-      USERS[username] = { password: temporaryPassword, displayName: String(body.displayName).trim(), role: body.role, enabled: true, mustChangePassword: true };
+      USERS[username] = { password: temporaryPassword, displayName: String(body.displayName).trim(), role: body.role, enabled: true, mustChangePassword: true, branchId: body.branchId ?? null };
       return [201, { staff: staffView(username, USERS[username], Object.keys(USERS).length), temporaryPassword }];
     }],
     ['PUT', /^staff\/(\d+)$/, 'manager', ({ params, user }, body) => {
       const [username, u] = Object.entries(USERS)[Number(params[0]) - 1] ?? [];
       if (!u) throw new Problem(404, 'STAFF_NOT_FOUND', 'Staff not found');
       if (username === user.username && (body.role !== u.role || body.enabled === false)) throw new Problem(422, 'STAFF_SELF_LOCKOUT', 'You cannot change your own role or switch off your own account');
-      Object.assign(u, { displayName: String(body.displayName).trim(), role: body.role, enabled: body.enabled !== false });
+      Object.assign(u, { displayName: String(body.displayName).trim(), role: body.role, enabled: body.enabled !== false, branchId: body.branchId ?? null });
       return staffView(username, u, Number(params[0]));
     }],
     ['POST', /^staff\/(\d+)\/reset-password$/, 'manager', ({ params }) => {

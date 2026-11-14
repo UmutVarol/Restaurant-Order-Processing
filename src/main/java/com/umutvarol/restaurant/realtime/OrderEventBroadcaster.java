@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.realtime;
 
+import com.umutvarol.restaurant.business.BranchContext;
+import com.umutvarol.restaurant.business.BranchScoped;
 import com.umutvarol.restaurant.common.error.TooManyRequestsException;
 import com.umutvarol.restaurant.fiscal.FiscalDocumentChangedEvent;
 import com.umutvarol.restaurant.guest.GuestRequestChangedEvent;
@@ -15,6 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.ContextClosedEvent;
@@ -37,8 +40,11 @@ public class OrderEventBroadcaster {
 
     private static final Duration RETRY_AFTER_LIMIT = Duration.ofSeconds(30);
 
-    /** Who holds a stream: an event goes only to streams of its own business (docs/adr/0001-multi-business.md). */
-    private record Subscriber(String user, long business) {
+    /**
+     * Who holds a stream: an event goes only to streams of its own business (docs/adr/0001-multi-business.md), and
+     * of its own branch unless the stream watches all of them.
+     */
+    private record Subscriber(String user, long business, @Nullable Long branch) {
     }
 
     /** Open streams and who each belongs to. */
@@ -62,8 +68,9 @@ public class OrderEventBroadcaster {
                 throw new TooManyRequestsException("TOO_MANY_STREAMS",
                         "The server has reached its limit of live connections. Try again shortly.", RETRY_AFTER_LIMIT);
             }
-            Subscriber subscriber = new Subscriber(user, currentBusiness());
-            long mine = emitters.values().stream().filter(subscriber::equals).count();
+            Subscriber subscriber = new Subscriber(user, currentBusiness(), BranchContext.current());
+            long mine = emitters.values().stream()
+                    .filter(other -> other.user().equals(user) && other.business() == subscriber.business()).count();
             if (mine >= limits.maxSubscribersPerUser()) {
                 throw new TooManyRequestsException("TOO_MANY_STREAMS",
                         "Too many live connections for this account. Close another screen or tab.", RETRY_AFTER_LIMIT);
@@ -84,49 +91,49 @@ public class OrderEventBroadcaster {
     @TransactionalEventListener
     public void onOrderChanged(OrderChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
-        broadcast(() -> SseEmitter.event().id(id).name("order").data(event, MediaType.APPLICATION_JSON));
+        broadcast(event, () -> SseEmitter.event().id(id).name("order").data(event, MediaType.APPLICATION_JSON));
     }
 
     @TransactionalEventListener
     public void onGuestRequest(GuestRequestChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
-        broadcast(() -> SseEmitter.event().id(id).name("guest").data(event, MediaType.APPLICATION_JSON));
+        broadcast(event, () -> SseEmitter.event().id(id).name("guest").data(event, MediaType.APPLICATION_JSON));
     }
 
     @TransactionalEventListener
     public void onPrintJob(PrintJobChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
-        broadcast(() -> SseEmitter.event().id(id).name("print").data(event, MediaType.APPLICATION_JSON));
+        broadcast(event, () -> SseEmitter.event().id(id).name("print").data(event, MediaType.APPLICATION_JSON));
     }
 
     @TransactionalEventListener
     public void onPaymentChanged(PaymentChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
-        broadcast(() -> SseEmitter.event().id(id).name("payment").data(event, MediaType.APPLICATION_JSON));
+        broadcast(event, () -> SseEmitter.event().id(id).name("payment").data(event, MediaType.APPLICATION_JSON));
     }
 
     @TransactionalEventListener
     public void onFiscalDocument(FiscalDocumentChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
-        broadcast(() -> SseEmitter.event().id(id).name("fiscal").data(event, MediaType.APPLICATION_JSON));
+        broadcast(event, () -> SseEmitter.event().id(id).name("fiscal").data(event, MediaType.APPLICATION_JSON));
     }
 
     @TransactionalEventListener
     public void onTableChanged(TableChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
-        broadcast(() -> SseEmitter.event().id(id).name("table").data(event, MediaType.APPLICATION_JSON));
+        broadcast(event, () -> SseEmitter.event().id(id).name("table").data(event, MediaType.APPLICATION_JSON));
     }
 
     @TransactionalEventListener
     public void onReservationChanged(ReservationChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
-        broadcast(() -> SseEmitter.event().id(id).name("reservation").data(event, MediaType.APPLICATION_JSON));
+        broadcast(event, () -> SseEmitter.event().id(id).name("reservation").data(event, MediaType.APPLICATION_JSON));
     }
 
     @TransactionalEventListener
     public void onStockChanged(StockChangedEvent event) {
         String id = Long.toString(sequence.incrementAndGet());
-        broadcast(() -> SseEmitter.event().id(id).name("stock").data(event, MediaType.APPLICATION_JSON));
+        broadcast(event, () -> SseEmitter.event().id(id).name("stock").data(event, MediaType.APPLICATION_JSON));
     }
 
     /** Keeps idle connections alive through proxies and lets us detect clients that went away. */
@@ -151,12 +158,16 @@ public class OrderEventBroadcaster {
         }
     }
 
-    /** Builders are single-use, so a fresh one is created for every subscriber. */
-    /** To the screens of the business the event happened in, and no other. */
-    private void broadcast(Supplier<SseEmitter.SseEventBuilder> event) {
+    /**
+     * To the screens of the business the event happened in, and of the branch it happened in (screens watching all
+     * branches get every branch's). Builders are single-use, so a fresh one is created for every subscriber.
+     */
+    private void broadcast(Object happened, Supplier<SseEmitter.SseEventBuilder> event) {
         long business = currentBusiness();
+        Long branch = happened instanceof BranchScoped scoped ? scoped.branchId() : null;
         emitters.forEach((emitter, subscriber) -> {
-            if (subscriber.business() == business) {
+            if (subscriber.business() == business
+                    && (branch == null || subscriber.branch() == null || branch.equals(subscriber.branch()))) {
                 send(emitter, event.get());
             }
         });

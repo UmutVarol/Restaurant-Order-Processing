@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.payment;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.umutvarol.restaurant.business.BranchScoped;
 import com.umutvarol.restaurant.order.PaymentMethod;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -19,7 +21,8 @@ public record PaymentChangedEvent(
         @Nullable PaymentStatus paymentStatus,
         @Nullable BigDecimal amount,
         @Nullable String tableCode,
-        Instant occurredAt) {
+        Instant occurredAt,
+        @JsonIgnore @Nullable Long branchId) implements BranchScoped {
 
     public enum Kind {
         PAYMENT,
@@ -30,19 +33,19 @@ public record PaymentChangedEvent(
     static PaymentChangedEvent payment(Payment payment, Instant at) {
         Bill bill = payment.getBill();
         return new PaymentChangedEvent(Kind.PAYMENT, bill.getId(), bill.getStatus(), bill.balance(), payment.getId(),
-                payment.getMethod(), payment.getStatus(), payment.getAmount(), tableCode(bill), at);
+                payment.getMethod(), payment.getStatus(), payment.getAmount(), tableCode(bill), at, bill.getBranchId());
     }
 
     static PaymentChangedEvent refund(Refund refund, Instant at) {
         Payment payment = refund.getPayment();
         Bill bill = payment.getBill();
         return new PaymentChangedEvent(Kind.REFUND, bill.getId(), bill.getStatus(), bill.balance(), payment.getId(),
-                payment.getMethod(), payment.getStatus(), refund.getAmount(), tableCode(bill), at);
+                payment.getMethod(), payment.getStatus(), refund.getAmount(), tableCode(bill), at, bill.getBranchId());
     }
 
     static PaymentChangedEvent bill(Bill bill, Instant at) {
         return new PaymentChangedEvent(Kind.BILL, bill.getId(), bill.getStatus(), bill.balance(), null, null, null,
-                null, tableCode(bill), at);
+                null, tableCode(bill), at, bill.getBranchId());
     }
 
     private static @Nullable String tableCode(Bill bill) {

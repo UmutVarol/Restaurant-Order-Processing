@@ -15,5 +15,6 @@ public record StaffRequest(
         @NotBlank @Pattern(regexp = "^[a-z0-9._-]{3,50}$") String username,
         @NotBlank @Size(max = 80) String displayName,
         @NotNull Role role,
-        @Nullable Boolean enabled) {
+        @Nullable Boolean enabled,
+        @Nullable Long branchId) {
 }

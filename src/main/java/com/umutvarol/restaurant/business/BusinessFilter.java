@@ -24,13 +24,19 @@ public class BusinessFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Business";
     public static final String CLAIM = "bid";
+    public static final String BRANCH_HEADER = "X-Branch";
+    /** The branch a person works in; absent for those who work in all of them (an owner, a chain manager). */
+    public static final String BRANCH_CLAIM = "br";
 
     private final BusinessRepository businesses;
+    private final BranchRepository branches;
     private final List<BusinessLocator> locators;
     private final String baseDomain;
 
-    public BusinessFilter(BusinessRepository businesses, List<BusinessLocator> locators, String baseDomain) {
+    public BusinessFilter(BusinessRepository businesses, BranchRepository branches, List<BusinessLocator> locators,
+                          String baseDomain) {
         this.businesses = businesses;
+        this.branches = branches;
         this.locators = locators;
         this.baseDomain = baseDomain.toLowerCase(Locale.ROOT);
     }
@@ -46,14 +52,32 @@ public class BusinessFilter extends OncePerRequestFilter {
         Long previous = BusinessContext.current();
         BusinessContext.set(business.get());
         try {
+            BranchContext.set(branch(request));
             chain.doFilter(request, response);
         } finally {
+            BranchContext.set(null);
             if (previous == null) {
                 BusinessContext.clear();
             } else {
                 BusinessContext.set(previous);
             }
         }
+    }
+
+    /**
+     * Someone who works in one branch always works there; someone who works in all of them picks one (or none: all
+     * of them at once). A branch is only ever accepted from this business: the lookup runs inside it.
+     */
+    private Long branch(HttpServletRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof JwtAuthenticationToken jwt && jwt.getToken().getClaim(BRANCH_CLAIM) instanceof Number home) {
+            return home.longValue();
+        }
+        String chosen = request.getHeader(BRANCH_HEADER);
+        if (chosen == null || !chosen.matches("\\d{1,18}")) {
+            return null;
+        }
+        return branches.findById(Long.parseLong(chosen)).filter(Branch::isActive).map(Branch::getId).orElse(null);
     }
 
     private static Optional<Long> signedIn() {

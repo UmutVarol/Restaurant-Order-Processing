@@ -67,6 +67,10 @@ public class AppUser {
     @Column(name = "created_at")
     private Instant createdAt;
 
+    /** The branch this person works in; none for those who work in all of them. */
+    @Column(name = "branch_id")
+    private Long branchId;
+
     protected AppUser() {
         // for JPA
     }
@@ -139,6 +143,20 @@ public class AppUser {
 
     public Long getId() {
         return id;
+    }
+
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    /** Moving someone to another branch (or to all of them) changes their token: their sessions end. */
+    boolean moveTo(@Nullable Long branch) {
+        if (java.util.Objects.equals(branchId, branch)) {
+            return false;
+        }
+        this.branchId = branch;
+        this.sessionVersion++;
+        return true;
     }
 
     public Long getBusinessId() {

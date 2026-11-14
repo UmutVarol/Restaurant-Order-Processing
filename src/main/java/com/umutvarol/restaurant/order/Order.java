@@ -1,5 +1,10 @@
 package com.umutvarol.restaurant.order;
 
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
@@ -41,7 +46,9 @@ import org.jspecify.annotations.Nullable;
  */
 @Entity
 @Table(name = "orders")
-public class Order {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class Order implements BranchOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -51,6 +58,10 @@ public class Order {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -469,5 +480,20 @@ public class Order {
 
     public long getVersion() {
         return version;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
+    }
+
+    @Override
+    public @Nullable Long branchHint() {
+        return table == null ? null : table.getBranchId();
     }
 }

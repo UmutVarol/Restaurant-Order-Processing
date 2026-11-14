@@ -1,5 +1,10 @@
 package com.umutvarol.restaurant.reservation;
 
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
 import com.umutvarol.restaurant.table.DiningTable;
 import jakarta.persistence.Column;
@@ -27,7 +32,9 @@ import org.jspecify.annotations.Nullable;
  */
 @Entity
 @Table(name = "reservations")
-public class Reservation {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class Reservation implements BranchOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,6 +44,10 @@ public class Reservation {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
@@ -251,5 +262,20 @@ public class Reservation {
 
     public @Nullable Instant getClosedAt() {
         return closedAt;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
+    }
+
+    @Override
+    public @Nullable Long branchHint() {
+        return table == null ? null : table.getBranchId();
     }
 }

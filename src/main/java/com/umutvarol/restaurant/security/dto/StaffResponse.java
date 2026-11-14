@@ -4,5 +4,5 @@ import com.umutvarol.restaurant.security.Role;
 import java.time.Instant;
 
 public record StaffResponse(Long id, String username, String displayName, Role role, boolean enabled, boolean hasPin,
-                            boolean totpEnabled, boolean mustChangePassword, Instant createdAt) {
+                            boolean totpEnabled, boolean mustChangePassword, Instant createdAt, Long branchId) {
 }

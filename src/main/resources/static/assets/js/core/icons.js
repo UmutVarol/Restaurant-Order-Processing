@@ -55,6 +55,7 @@ const PATHS = {
   timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>',
   trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
   basket: '<path d="M3 10h18l-2 10H5L3 10Z"/><path d="m8 10 4-6 4 6M9 14v3M15 14v3"/>',
+  store: '<path d="M4 9.5 5.5 4h13L20 9.5"/><path d="M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0"/><path d="M5.5 12v8h13v-8"/><path d="M10 20v-4.5h4V20"/>',
   table: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M6 12v8M18 12v8"/>',
   flash: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>',
   lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.5v2.5"/>',

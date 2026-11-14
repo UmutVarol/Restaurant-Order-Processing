@@ -77,6 +77,11 @@ public class JwtTokenService {
                 .claim(PASSWORD_CHANGE_CLAIM, user.isMustChangePassword())
                 .claim(SESSION_VERSION_CLAIM, user.getSessionVersion())
                 .claim(com.umutvarol.restaurant.business.BusinessFilter.CLAIM, user.getBusinessId())
+                .claims(c -> {
+                    if (user.getBranchId() != null) {
+                        c.put(com.umutvarol.restaurant.business.BusinessFilter.BRANCH_CLAIM, user.getBranchId());
+                    }
+                })
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type(TOKEN_TYPE).build();
         String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
@@ -85,6 +90,7 @@ public class JwtTokenService {
 
     public UserResponse userResponse(AppUser user, String method) {
         return new UserResponse(user.getUsername(), user.getDisplayName(), user.getRole(), user.hasPin(), method,
-                user.isTotpEnabled(), TwoFactorService.setupRequired(totp, user), user.isMustChangePassword());
+                user.isTotpEnabled(), TwoFactorService.setupRequired(totp, user), user.isMustChangePassword(),
+                user.getBranchId());
     }
 }

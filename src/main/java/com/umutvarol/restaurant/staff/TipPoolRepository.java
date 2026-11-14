@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface TipPoolRepository extends JpaRepository<TipPool, Long> {
 
     @EntityGraph(attributePaths = {"shares", "shares.user"})
-    Optional<TipPool> findByBusinessDate(LocalDate date);
+    Optional<TipPool> findByBusinessDateAndBranchId(LocalDate date, Long branchId);
 
     @EntityGraph(attributePaths = {"shares", "shares.user"})
     List<TipPool> findByBusinessDateBetweenOrderByBusinessDateDesc(LocalDate from, LocalDate to);

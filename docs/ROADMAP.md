@@ -219,7 +219,7 @@ finished in code.
 | 3 | S4.3 | **Staff shifts, time clock and tip pooling** | Payroll and tips are a weekly argument without them; PINs and tip data already exist | done |
 | 4 | S4.4 | **First-run setup and one-command install** | Today a new restaurant enters menu, tables and staff by hand through several screens | done |
 | 5 | S4.5 | **Load test of a busy evening** | 40 tables, 12 phones and 3 kitchen screens at once have never been measured | done |
-| 6 | S4.6 | **Multi-branch foundation (design)** | Every table assumes one restaurant; the change is cheap now and expensive later. Decision record first, code after | planned |
+| 6 | S4.6 | **Many businesses and chains of branches** | Every table assumed one restaurant; the change is cheap now and expensive later. Decision record first, code after | done |
 | — | — | **Live partners** (iyzico merchant, e-Arşiv integrator, ÖKC bridge, delivery platforms) | Needs contracts and credentials from the owner; adapters and simulations already exist | waiting on the owner |
 
 ### S4.1 Operations
@@ -274,6 +274,20 @@ finished in code.
 - It found a deadlock between virtual threads and the connection pool (a database call inside a cache's lock
   pinned every carrier thread); fixed.
 
+### S4.6 Many businesses and chains of branches
+
+Decision record: [adr/0001-multi-business.md](adr/0001-multi-business.md).
+
+- **Businesses (V24):** a `business_id` on 35 tables through Hibernate's `@TenantId`, uniqueness per business, the
+  business taken from the signed token, the address or the business code; background jobs run once per business;
+  live events, caches and settings per business. Sign-up for Sofra Cloud with a 14-day trial. Isolation tests
+  prove, endpoint by endpoint, that one business cannot read or change another's data.
+- **Branches (V26):** tables, orders, bills, printers, tills, reservations, shifts, time entries, day closings and
+  tip pools belong to a branch; the menu, stock and staff accounts to the business. A person works in one branch
+  or in all; a device of an owner picks the branch at the top. Queries see only the request's branch (a Hibernate
+  filter), records fetched by id from another branch are not found, live events go to their own branch. The day
+  report, its closing and the tip pool are per branch. Branches are opened and closed from Setup.
+
 ### Security review (with S4.4)
 
 - Sessions end at once when an account is switched off, changes role or has its password reset or changed.
@@ -288,9 +302,8 @@ Smaller items that came up in the research, not yet scheduled:
 - Reservations and a waitlist with SMS.
 - Loyalty: points and stamp cards on the guest's phone number.
 - Happy-hour and time-based pricing.
-- Tips pooled and shared by hours worked.
 - A customer-facing display at the till.
-- Multi-branch: menus and reports across locations.
+- Chains: per-branch menu availability and prices, and reports comparing branches.
 
 ## Türkçe özet
 
@@ -322,6 +335,12 @@ devreye girer. Bu sprintte:
 Canlıya almak için: telefondan ödeme için iyzico üye işyeri hesabı, fatura için e-Arşiv entegratörü; alerjenleri
 restoran kendi tariflerine göre girmeli; Almanca, Fransızca, Rusça ve Arapça metinler ana dili bu diller olan biri
 tarafından gözden geçirilmeli.
+
+**Sprint 4 – S4.6 (tamamlandı): birden çok işletme ve zincirler.** Tek sunucuda birçok işletme (her kayıtta
+işletme kimliği, işletmeler arası yalıtım testleri, 14 gün denemeli kayıt) ve işletme içinde şubeler: masalar,
+siparişler, adisyonlar, yazıcılar, rezervasyonlar, vardiyalar, gün sonu ve bahşiş havuzu şubeye ait; menü, stok ve
+personel hesapları işletmenin. Personel tek şubede ya da tüm şubelerde çalışır; tüm şubelerin yöneticisi cihazın
+çalıştığı şubeyi üstten seçer. Şubeler Kurulum ekranından açılır ve kapatılır.
 
 **Sprint 2 (plan), sırasıyla:**
 

@@ -1,5 +1,9 @@
 package com.umutvarol.restaurant.security;
 
+import com.umutvarol.restaurant.business.Branch;
+import com.umutvarol.restaurant.business.BranchRepository;
+import com.umutvarol.restaurant.business.BusinessFilter;
+import com.umutvarol.restaurant.common.error.AccessRefusedException;
 import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
@@ -12,7 +16,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,12 +30,14 @@ import org.springframework.transaction.annotation.Transactional;
  * shown once, which the employee replaces at the first sign-in. Anything that changes what an account may do ends
  * its sessions at once. A manager cannot lock themselves out, and the restaurant always keeps one active manager.
  * Granting or touching manager accounts and resetting passwords need a recent password sign-in (step-up).
+ * A manager of one branch only sees and manages that branch's people, and only adds people to it.
  */
 @Service
 @Transactional
 public class StaffService {
 
     private final AppUserRepository users;
+    private final BranchRepository branches;
     private final PasswordEncoder encoder;
     private final SessionGuard sessions;
     private final StepUpAuthentication stepUp;
@@ -36,9 +46,10 @@ public class StaffService {
     private final SecurityAuditLog audit;
     private final Clock clock;
 
-    StaffService(AppUserRepository users, PasswordEncoder encoder, SessionGuard sessions, StepUpAuthentication stepUp,
+    StaffService(BranchRepository branches, AppUserRepository users, PasswordEncoder encoder, SessionGuard sessions, StepUpAuthentication stepUp,
                  PasswordConfirmation confirmation, JwtTokenService tokens, SecurityAuditLog audit, Clock clock) {
         this.users = users;
+        this.branches = branches;
         this.encoder = encoder;
         this.sessions = sessions;
         this.stepUp = stepUp;
@@ -50,7 +61,11 @@ public class StaffService {
 
     @Transactional(readOnly = true)
     public List<StaffResponse> list() {
-        return users.findAllByOrderByEnabledDescDisplayNameAsc().stream().map(StaffService::toResponse).toList();
+        Long home = home(SecurityContextHolder.getContext().getAuthentication());
+        return users.findAllByOrderByEnabledDescDisplayNameAsc().stream()
+                .filter(user -> home == null || home.equals(user.getBranchId()))
+                .map(StaffService::toResponse)
+                .toList();
     }
 
     public StaffCredentials create(StaffRequest request, Authentication actor) {
@@ -67,12 +82,13 @@ public class StaffService {
         if (Boolean.FALSE.equals(request.enabled())) {
             user.update(user.getDisplayName(), user.getRole(), false, clock.instant());
         }
+        user.moveTo(branch(request.branchId(), actor));
         audit.staffChanged("created", user.getUsername(), "role=" + user.getRole(), actor.getName());
         return new StaffCredentials(toResponse(user), temporary);
     }
 
     public StaffResponse update(Long id, StaffUpdateRequest request, Authentication actor) {
-        AppUser user = find(id);
+        AppUser user = find(id, actor);
         boolean self = user.getUsername().equalsIgnoreCase(actor.getName());
         if (self && (request.role() != user.getRole() || !request.enabled())) {
             throw new BusinessRuleException("STAFF_SELF_LOCKOUT",
@@ -88,7 +104,11 @@ public class StaffService {
                 throw new BusinessRuleException("LAST_MANAGER", "The restaurant needs at least one active manager");
             }
         }
-        boolean access = user.update(request.displayName().strip(), request.role(), request.enabled(), clock.instant());
+        if (self && !Objects.equals(user.getBranchId(), branch(request.branchId(), actor))) {
+            throw new BusinessRuleException("STAFF_SELF_LOCKOUT", "You cannot move yourself to another branch");
+        }
+        boolean access = user.update(request.displayName().strip(), request.role(), request.enabled(), clock.instant())
+                | user.moveTo(branch(request.branchId(), actor));
         if (access) {
             sessions.forget(user.getUsername());
             audit.staffChanged("access_changed", user.getUsername(),
@@ -100,7 +120,7 @@ public class StaffService {
     /** A new temporary password; every session of the account ends. */
     public StaffCredentials resetPassword(Long id, Authentication actor) {
         stepUp.requireRecentSignIn(actor);
-        AppUser user = find(id);
+        AppUser user = find(id, actor);
         if (user.getUsername().equalsIgnoreCase(actor.getName())) {
             throw new BusinessRuleException("STAFF_RESET_SELF", "Change your own password in Settings instead");
         }
@@ -113,7 +133,7 @@ public class StaffService {
 
     /** For a lost or shared PIN: they set a new one in Settings. */
     public StaffResponse clearPin(Long id, Authentication actor) {
-        AppUser user = find(id);
+        AppUser user = find(id, actor);
         user.clearPin();
         audit.staffChanged("pin_cleared", user.getUsername(), "", actor.getName());
         return toResponse(user);
@@ -145,12 +165,43 @@ public class StaffService {
         return tokens.issue(user);
     }
 
-    private AppUser find(Long id) {
-        return users.findById(id).orElseThrow(() -> new ResourceNotFoundException("staff", id));
+    /**
+     * The branch someone is to work in: one of this business's (the lookup runs inside it), or none, all branches.
+     * A manager of one branch only puts people in their own branch; leaving it out means theirs.
+     */
+    private @Nullable Long branch(@Nullable Long id, Authentication actor) {
+        Long home = home(actor);
+        if (home != null) {
+            if (id != null && !home.equals(id)) {
+                throw new AccessRefusedException("STAFF_OTHER_BRANCH", "You manage the people of your own branch only");
+            }
+            return home;
+        }
+        if (id == null) {
+            return null;
+        }
+        return branches.findById(id).filter(Branch::isActive)
+                .map(Branch::getId)
+                .orElseThrow(() -> new ResourceNotFoundException("branch", id));
+    }
+
+    /** Someone of this business; for a manager of one branch, someone of that branch. */
+    private AppUser find(Long id, Authentication actor) {
+        Long home = home(actor);
+        return users.findById(id)
+                .filter(user -> home == null || home.equals(user.getBranchId()))
+                .orElseThrow(() -> new ResourceNotFoundException("staff", id));
+    }
+
+    /** The branch the signed-in manager works in; none for those who work in all of them. */
+    private static @Nullable Long home(@Nullable Authentication actor) {
+        return actor instanceof JwtAuthenticationToken jwt && jwt.getToken().getClaim(BusinessFilter.BRANCH_CLAIM) instanceof Number id
+                ? id.longValue() : null;
     }
 
     static StaffResponse toResponse(AppUser user) {
         return new StaffResponse(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole(),
-                user.isEnabled(), user.hasPin(), user.isTotpEnabled(), user.isMustChangePassword(), user.getCreatedAt());
+                user.isEnabled(), user.hasPin(), user.isTotpEnabled(), user.isMustChangePassword(), user.getCreatedAt(),
+                user.getBranchId());
     }
 }

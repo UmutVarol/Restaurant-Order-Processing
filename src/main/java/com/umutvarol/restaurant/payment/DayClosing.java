@@ -1,5 +1,10 @@
 package com.umutvarol.restaurant.payment;
 
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import com.umutvarol.restaurant.order.PaymentMethod;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,7 +21,9 @@ import org.jspecify.annotations.Nullable;
 /** The end-of-day close (Z report): what the cash drawer should hold, what was counted, and the difference. */
 @Entity
 @Table(name = "day_closings")
-public class DayClosing {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class DayClosing implements BranchOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,6 +33,10 @@ public class DayClosing {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @Column(name = "business_date", nullable = false)
     private LocalDate businessDate;
@@ -105,5 +116,20 @@ public class DayClosing {
 
     public String getClosedBy() {
         return closedBy;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
+    }
+
+    @Override
+    public Long getId() {
+        return id;
     }
 }

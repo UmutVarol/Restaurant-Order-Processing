@@ -40,6 +40,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import com.umutvarol.restaurant.business.BranchRepository;
 import com.umutvarol.restaurant.business.BusinessFilter;
 import com.umutvarol.restaurant.business.BusinessLocator;
 import com.umutvarol.restaurant.business.BusinessRepository;
@@ -124,9 +125,9 @@ class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ProblemDetailsSecurityHandler problemHandler,
                                             JwtAuthenticationConverter jwtAuthenticationConverter,
-                                            BusinessRepository businesses, List<BusinessLocator> locators,
+                                            BusinessRepository businesses, BranchRepository branches, List<BusinessLocator> locators,
                                             @Value("${restaurant.cloud.base-domain:}") String baseDomain) throws Exception {
-        BusinessFilter business = new BusinessFilter(businesses, locators, baseDomain);
+        BusinessFilter business = new BusinessFilter(businesses, branches, locators, baseDomain);
         http
                 .addFilterAfter(business, BearerTokenAuthenticationFilter.class)
                 .addFilterAfter(new PasswordChangeRequiredFilter(problemHandler), BusinessFilter.class)
@@ -146,6 +147,8 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/pin-staff").permitAll()
                         .requestMatchers("/api/v1/devices", "/api/v1/devices/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/staff", "/api/v1/staff/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.POST, "/api/v1/branches").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/branches/*").hasRole(Role.ADMIN.name())
                         // everyone clocks themselves in and reads the rota; managers see and fix everyone's time
                         .requestMatchers("/api/v1/time-clock/me", "/api/v1/time-clock/in", "/api/v1/time-clock/out").authenticated()
                         .requestMatchers("/api/v1/time-clock/**").hasRole(Role.ADMIN.name())

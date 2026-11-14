@@ -1,5 +1,10 @@
 package com.umutvarol.restaurant.staff;
 
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import com.umutvarol.restaurant.security.AppUser;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,7 +22,9 @@ import org.jspecify.annotations.Nullable;
 /** A planned shift on the rota. */
 @Entity
 @Table(name = "shifts")
-public class Shift {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class Shift implements BranchOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,6 +34,10 @@ public class Shift {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id")
@@ -86,5 +97,15 @@ public class Shift {
 
     public @Nullable String getNote() {
         return note;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
     }
 }

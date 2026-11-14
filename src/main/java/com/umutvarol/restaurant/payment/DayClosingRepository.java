@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DayClosingRepository extends JpaRepository<DayClosing, Long> {
 
-    Optional<DayClosing> findByBusinessDate(LocalDate businessDate);
+    Optional<DayClosing> findByBusinessDateAndBranchId(LocalDate businessDate, Long branchId);
 }

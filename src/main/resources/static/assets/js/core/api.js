@@ -152,10 +152,24 @@ export function setBusinessCode(code) {
   try { if (code) localStorage.setItem(BUSINESS_KEY, code); else localStorage.removeItem(BUSINESS_KEY); } catch { /* storage blocked */ }
 }
 
+// A chain's manager who works in all branches picks the one this device works in (or none: all of them at once);
+// someone who works in one branch always works there, whatever the device says.
+const BRANCH_KEY = 'sofra.branch';
+export function branchChoice() {
+  try { return Number(localStorage.getItem(BRANCH_KEY)) || null; } catch { return null; }
+}
+export function setBranchChoice(id) {
+  try { if (id) localStorage.setItem(BRANCH_KEY, String(id)); else localStorage.removeItem(BRANCH_KEY); } catch { /* storage blocked */ }
+}
+export function branchHeader() {
+  const id = branchChoice();
+  return id ? { 'X-Branch': String(id) } : {};
+}
+
 async function request(method, path, body, { auth = true, headers: extra = {} } = {}) {
   const sentWith = auth ? session : null;
   const code = businessCode();
-  const headers = { Accept: 'application/json', ...(code ? { 'X-Business': code } : {}), ...(auth ? authHeader() : {}), ...extra };
+  const headers = { Accept: 'application/json', ...(code ? { 'X-Business': code } : {}), ...(auth ? { ...authHeader(), ...branchHeader() } : {}), ...extra };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   let response;
@@ -312,6 +326,9 @@ export const api = {
   updateStaff: (id, member) => request('PUT', `/staff/${id}`, member),
   resetStaffPassword: (id) => request('POST', `/staff/${id}/reset-password`),
   clearStaffPin: (id) => request('DELETE', `/staff/${id}/pin`),
+  branches: () => request('GET', '/branches'),
+  openBranch: (branch) => request('POST', '/branches', branch),
+  updateBranch: (id, branch) => request('PUT', `/branches/${id}`, branch),
   diningTables: () => request('GET', '/tables'),
   addTable: (table) => request('POST', '/tables', table),
   updateTable: (id, table) => request('PUT', `/tables/${id}`, table),

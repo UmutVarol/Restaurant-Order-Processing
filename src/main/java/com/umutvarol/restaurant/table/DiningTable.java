@@ -1,5 +1,10 @@
 package com.umutvarol.restaurant.table;
 
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,7 +20,9 @@ import org.jspecify.annotations.Nullable;
 /** A physical table in the dining room that dine-in orders are served to. */
 @Entity
 @Table(name = "dining_tables")
-public class DiningTable {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class DiningTable implements BranchOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,6 +32,10 @@ public class DiningTable {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @Column(nullable = false, unique = true, length = 10)
     private String code;
@@ -130,5 +141,15 @@ public class DiningTable {
 
     public @Nullable Instant getNeedsClearingSince() {
         return needsClearingSince;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
     }
 }

@@ -17,10 +17,14 @@ export default {
     let staff = null;
     let tables = null;
     let facts = null;
+    let branches = null;
+    // only a manager of all branches opens and closes them, and puts people in one or another
+    const chainManager = user.branchId == null;
     const checklistCard = h('section', { class: 'card setup-card', 'data-testid': 'setup-checklist' });
     const staffCard = h('section', { class: 'card setup-card', 'data-testid': 'setup-staff' });
     const tablesCard = h('section', { class: 'card setup-card', 'data-testid': 'setup-tables' });
-    mount(container, h('div', { class: 'setup-grid' }, checklistCard, staffCard, tablesCard));
+    const branchesCard = h('section', { class: 'card setup-card', 'data-testid': 'setup-branches', hidden: !chainManager });
+    mount(container, h('div', { class: 'setup-grid' }, checklistCard, staffCard, tablesCard, branchesCard));
 
     const head = (iconName, title, sub, action) => h('div', { class: 'card-head' },
       h('span', { class: 'settings-ic' }, icon(iconName, 'sm')),
@@ -74,6 +78,7 @@ export default {
             h('div', { class: 'setup-main' },
               h('b', { dir: 'auto' }, member.displayName),
               h('small', { class: 'faint' }, member.username, ' · ', t(`role.${member.role}`),
+                (branches?.length ?? 0) > 1 ? ` · ${branchName(member.branchId)}` : '',
                 member.username === user.username ? ` · ${t('setup.you')}` : '',
                 !member.enabled ? ` · ${t('setup.disabled')}` : member.mustChangePassword ? ` · ${t('setup.awaitingFirstSignIn')}` : '')),
             h('div', { class: 'setup-actions' },
@@ -85,6 +90,7 @@ export default {
       const username = h('input', { class: 'input', id: 'staff-username', maxlength: 50, autocomplete: 'off', autocapitalize: 'none', spellcheck: false, placeholder: 'ayse' });
       const name = h('input', { class: 'input', id: 'staff-name', maxlength: 80, autocomplete: 'off' });
       const role = h('select', { class: 'select', id: 'staff-role' }, ROLES.map((r) => h('option', { value: r }, t(`role.${r}`))));
+      const branch = branchSelect(null);
       const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
       const save = h('button', { class: 'btn primary', 'data-testid': 'staff-save' }, icon('check', 'sm'), t('setup.create'));
       // a username from the name, the way people write it on a till: "Ayşe Kaya" -> "ayse.kaya"
@@ -98,7 +104,8 @@ export default {
         title: t('setup.addStaff'),
         size: 'sm',
         body: [field('staff-name', t('setup.name'), name), field('staff-username', t('login.username'), username, t('setup.usernameHint')),
-          field('staff-role', t('setup.role'), role, t('setup.roleHint')), problem],
+          field('staff-role', t('setup.role'), role, t('setup.roleHint')),
+          branch ? field('staff-branch', t('branch.worksIn'), branch, t('branch.worksInHint')) : null, problem],
         footer: (handle) => [h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')), save],
       });
       name.focus();
@@ -106,7 +113,7 @@ export default {
         save.disabled = true;
         problem.hidden = true;
         try {
-          const result = await withRecentSignIn(() => api.addStaff({ username: username.value.trim(), displayName: name.value.trim(), role: role.value }));
+          const result = await withRecentSignIn(() => api.addStaff({ username: username.value.trim(), displayName: name.value.trim(), role: role.value, branchId: branch ? Number(branch.value) || null : null }));
           if (!result) { save.disabled = false; return; }
           modal.close();
           showCredentials(result, 'setup.createdTitle');
@@ -124,6 +131,7 @@ export default {
       const name = h('input', { class: 'input', id: 'staff-name', maxlength: 80, value: member.displayName });
       const role = h('select', { class: 'select', id: 'staff-role', disabled: self }, ROLES.map((r) => h('option', { value: r, selected: member.role === r }, t(`role.${r}`))));
       const enabled = h('input', { type: 'checkbox', checked: member.enabled, disabled: self, 'data-testid': 'staff-enabled' });
+      const branch = self ? null : branchSelect(member.branchId);
       const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
       const save = h('button', { class: 'btn primary', 'data-testid': 'staff-save' }, icon('check', 'sm'), t('common.save'));
       const fail = (error) => { problem.replaceChildren(icon('alert', 'sm'), errorMessage(error)); problem.hidden = false; };
@@ -135,6 +143,7 @@ export default {
           field('staff-name', t('setup.name'), name),
           field('staff-role', t('setup.role'), role, self ? t('setup.selfHint') : t('setup.roleChangeHint')),
           h('label', { class: 'checkbox' }, enabled, t('setup.canSignIn')),
+          branch ? field('staff-branch', t('branch.worksIn'), branch, t('branch.moveHint')) : null,
           self ? null : h('div', { class: 'setup-more' },
             h('button', { class: 'btn sm ghost', 'data-testid': 'staff-reset', onclick: () => reset() }, icon('refresh', 'sm'), t('setup.resetPassword')),
             member.hasPin ? h('button', { class: 'btn sm ghost', onclick: () => clearPin() }, icon('x', 'sm'), t('setup.clearPin')) : null),
@@ -145,7 +154,7 @@ export default {
       save.addEventListener('click', async () => {
         save.disabled = true;
         try {
-          const updated = await withRecentSignIn(() => api.updateStaff(member.id, { displayName: name.value.trim(), role: role.value, enabled: enabled.checked }));
+          const updated = await withRecentSignIn(() => api.updateStaff(member.id, { displayName: name.value.trim(), role: role.value, enabled: enabled.checked, branchId: branch ? Number(branch.value) || null : member.branchId }));
           if (!updated) { save.disabled = false; return; }
           modal.close();
           toast({ title: t('setup.savedStaff', { name: updated.displayName }) });
@@ -259,6 +268,84 @@ export default {
       }
     }
 
+    // ------------------------------------------------------------------ branches
+    function branchName(id) {
+      return id == null ? t('branch.all') : branches?.find((b) => b.id === id)?.name ?? '—';
+    }
+
+    /** Where someone works, for a manager of all branches once there is more than one; null otherwise. */
+    function branchSelect(current) {
+      if (!chainManager || (branches?.length ?? 0) < 2) return null;
+      return h('select', { class: 'select', id: 'staff-branch', 'data-testid': 'staff-branch' },
+        h('option', { value: '' }, t('branch.all')),
+        branches.filter((b) => b.active || b.id === current).map((b) => h('option', { value: String(b.id), selected: b.id === current }, b.name)));
+    }
+
+    function renderBranches() {
+      if (!chainManager) return;
+      mount(branchesCard,
+        head('store', t('branch.title'), branches ? tn('branch.count', branches.filter((b) => b.active).length) : t('branch.sub'),
+          h('button', { class: 'btn sm primary', 'data-testid': 'branch-add', onclick: () => editBranch(null) }, icon('plus', 'sm'), h('span', null, t('branch.add')))),
+        branches == null ? skeleton()
+          : h('div', { class: 'card-body setup-list' },
+            branches.length === 1 ? h('p', { class: 'faint' }, t('branch.single')) : null,
+            branches.map((b) => h('div', { class: ['setup-row', b.active ? '' : 'muted-row'], 'data-testid': `branch-${b.code}` },
+              h('div', { class: 'setup-main' }, h('b', { dir: 'auto' }, b.name),
+                h('small', { class: 'faint' }, b.code, b.active ? '' : ` · ${t('branch.closed')}`)),
+              h('div', { class: 'setup-actions' },
+                h('button', { class: 'icon-btn sm', title: t('common.edit'), 'aria-label': t('common.edit'), 'data-testid': `branch-edit-${b.code}`, onclick: () => editBranch(b) }, icon('edit', 'sm')))))));
+    }
+
+    function editBranch(branch) {
+      const name = h('input', { class: 'input', id: 'branch-name', maxlength: 80, value: branch?.name ?? '', autocomplete: 'off' });
+      const code = h('input', { class: 'input', id: 'branch-code', maxlength: 20, value: branch?.code ?? '', autocomplete: 'off', autocapitalize: 'none', spellcheck: false, disabled: !!branch });
+      const open = h('input', { type: 'checkbox', checked: branch ? branch.active : true, 'data-testid': 'branch-open' });
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const save = h('button', { class: 'btn primary', 'data-testid': 'branch-save' }, icon('check', 'sm'), branch ? t('common.save') : t('branch.add'));
+      // a code from the name: "Kadıköy" -> "kadikoy"
+      name.addEventListener('input', () => {
+        if (branch || code.dataset.touched) return;
+        code.value = name.value.toLocaleLowerCase('tr').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i')
+          .trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 20);
+      });
+      code.addEventListener('input', () => { code.dataset.touched = '1'; });
+      const modal = openModal({
+        title: branch ? branch.name : t('branch.add'),
+        size: 'sm',
+        body: [
+          field('branch-name', t('branch.name'), name),
+          field('branch-code', t('branch.code'), code, branch ? null : t('branch.codeHint')),
+          branch ? h('label', { class: 'checkbox' }, open, t('branch.isOpen')) : null,
+          branch ? null : h('p', { class: 'faint' }, t('branch.addHint')),
+          problem,
+        ],
+        footer: (handle) => [h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')), save],
+      });
+      name.focus();
+      save.addEventListener('click', async () => {
+        save.disabled = true;
+        problem.hidden = true;
+        try {
+          const saved = branch
+            ? await api.updateBranch(branch.id, { name: name.value.trim(), active: open.checked })
+            : await api.openBranch({ code: code.value.trim(), name: name.value.trim() });
+          modal.close();
+          toast({ title: t('branch.saved', { name: saved.name }) });
+          loadBranches();
+        } catch (error) {
+          problem.replaceChildren(icon('alert', 'sm'), errorMessage(error));
+          problem.hidden = false;
+          save.disabled = false;
+        }
+      });
+    }
+
+    async function loadBranches() {
+      try { branches = await api.branches(); } catch { branches = []; }
+      renderBranches();
+      renderStaff();
+    }
+
     function field(id, label, control, hint) {
       return h('div', { class: 'field' }, h('label', { for: id }, label), control, hint ? h('small', { class: 'faint' }, hint) : null);
     }
@@ -287,6 +374,8 @@ export default {
     renderChecklist();
     renderStaff();
     renderTables();
+    renderBranches();
+    loadBranches();
     loadStaff();
     loadTables();
     loadFacts();

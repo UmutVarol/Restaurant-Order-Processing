@@ -1,5 +1,10 @@
 package com.umutvarol.restaurant.security;
 
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -16,7 +21,9 @@ import org.jspecify.annotations.Nullable;
  */
 @Entity
 @Table(name = "pos_devices")
-public class PosDevice {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class PosDevice implements BranchOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,6 +33,10 @@ public class PosDevice {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @Column(nullable = false, length = 60)
     private String name;
@@ -96,5 +107,15 @@ public class PosDevice {
 
     public @Nullable Instant getRevokedAt() {
         return revokedAt;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
     }
 }

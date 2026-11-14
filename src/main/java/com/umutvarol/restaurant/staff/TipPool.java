@@ -1,5 +1,11 @@
 package com.umutvarol.restaurant.staff;
 
+import org.jspecify.annotations.Nullable;
+import org.hibernate.annotations.Filter;
+import jakarta.persistence.EntityListeners;
+import com.umutvarol.restaurant.business.BranchStamp;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.Branch;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -18,7 +24,9 @@ import java.util.List;
 /** A day's tips, shared out among the staff who worked it. Fixed once made: it is what payroll pays. */
 @Entity
 @Table(name = "tip_pools")
-public class TipPool {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class TipPool implements BranchOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,6 +36,10 @@ public class TipPool {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch this happened in (BranchOwned); lists are limited to it when a request works in one branch. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @Column(name = "business_date", nullable = false, unique = true)
     private LocalDate businessDate;
@@ -81,5 +93,15 @@ public class TipPool {
 
     public List<TipShare> getShares() {
         return shares;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
     }
 }

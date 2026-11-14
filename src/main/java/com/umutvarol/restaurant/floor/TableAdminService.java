@@ -1,5 +1,7 @@
 package com.umutvarol.restaurant.floor;
 
+import com.umutvarol.restaurant.business.WorkingBranch;
+import org.jspecify.annotations.Nullable;
 import com.umutvarol.restaurant.common.error.InvalidStateException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.floor.dto.TableRequest;
@@ -35,9 +37,11 @@ public class TableAdminService {
     private final ObjectProvider<TableBookings> bookings;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final WorkingBranch branch;
 
     public TableAdminService(DiningTableRepository tables, OrderRepository orders, ObjectProvider<TableBookings> bookings,
-                             ApplicationEventPublisher events, Clock clock) {
+                             ApplicationEventPublisher events, Clock clock, WorkingBranch branch) {
+        this.branch = branch;
         this.tables = tables;
         this.orders = orders;
         this.bookings = bookings;
@@ -52,7 +56,7 @@ public class TableAdminService {
 
     public TableResponse add(TableRequest request, String actor) {
         String code = request.code().strip();
-        Optional<DiningTable> existing = tables.findByCode(code);
+        Optional<DiningTable> existing = tables.findByCodeAndBranchId(code, branch.forNew());
         DiningTable table;
         if (existing.isPresent()) {
             if (existing.get().isActive()) {
@@ -72,7 +76,7 @@ public class TableAdminService {
         DiningTable table = find(id);
         String code = request.code().strip();
         if (!code.equals(table.getCode())) {
-            if (tables.findByCode(code).isPresent()) {
+            if (tables.findByCodeAndBranchId(code, table.getBranchId()).isPresent()) {
                 throw taken(code);
             }
             // printed QR cards and the kitchen's tickets carry the number: not while guests are there
@@ -102,7 +106,7 @@ public class TableAdminService {
     }
 
     private void changed(DiningTable table) {
-        events.publishEvent(new TableChangedEvent(table.getId(), table.getCode(), null, clock.instant()));
+        events.publishEvent(new TableChangedEvent(table.getId(), table.getCode(), null, clock.instant(), table.getBranchId()));
     }
 
     private DiningTable find(Long id) {

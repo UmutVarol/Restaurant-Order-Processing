@@ -2,7 +2,7 @@
 import { h, initials, mount } from './core/dom.js';
 import { icon, logoMark } from './core/icons.js';
 import { languageName, onLangChange, ready as languageReady, t } from './core/i18n.js';
-import { api, clearSession, currentDevice, currentSession, saveSession } from './core/api.js';
+import { api, branchChoice, clearSession, currentDevice, currentSession, saveSession, setBranchChoice } from './core/api.js';
 import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { clearOutbox, entries as outboxEntries, flush, isOnline, registerServiceWorker } from './core/offline.js';
@@ -135,6 +135,26 @@ async function render() {
 
 // ------------------------------------------------------------------------------- shell
 
+// A chain's branches, for whoever works in all of them: which one this device works in, or all at once. Someone who
+// works in one branch has nothing to choose. Changing it reloads, so every screen and the live stream follow it.
+let branchList = null;
+function branchPicker() {
+  const holder = h('span', { class: 'branch-picker' });
+  if (user.branchId != null) return holder;
+  (branchList ? Promise.resolve(branchList) : api.branches().then((list) => { branchList = list; return list; })).then((list) => {
+    const open = list.filter((b) => b.active);
+    if (branchChoice() && !open.some((b) => b.id === branchChoice())) setBranchChoice(null);
+    if (open.length < 2) return;
+    const select = h('select', {
+      class: 'select sm', 'aria-label': t('branch.choose'), title: t('branch.choose'), 'data-testid': 'branch-picker',
+      onchange: () => { setBranchChoice(Number(select.value) || null); location.reload(); },
+    }, h('option', { value: '' }, t('branch.all')),
+    open.map((b) => h('option', { value: String(b.id), selected: b.id === branchChoice() }, b.name)));
+    holder.replaceChildren(icon('store', 'sm'), select);
+  }).catch(() => { /* a convenience: without it the device works in all branches */ });
+  return holder;
+}
+
 function renderShell(current) {
   const title = h('h1', { class: 'page-title' });
   const subtitle = h('div', { class: 'page-sub' });
@@ -211,6 +231,7 @@ function renderShell(current) {
       inbox,
       live,
       clock,
+      branchPicker(),
       langButton(),
       themeButton()));
 
@@ -385,6 +406,7 @@ async function onSignedIn(tokenResponse) {
 
 function signOut() {
   stopRealtime();
+  branchList = null;
   // Revoke the token on the server too; the local sign-out does not wait for it or depend on it.
   if (currentSession()) api.logout().catch(() => {});
   clearSession();

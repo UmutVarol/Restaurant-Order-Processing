@@ -167,7 +167,7 @@ public class ReservationService {
         party.seat(table, now);
         // new guests at a table that still waited to be cleared: it was cleared for them
         if (table.cleared()) {
-            events.publishEvent(new TableChangedEvent(table.getId(), table.getCode(), null, now));
+            events.publishEvent(new TableChangedEvent(table.getId(), table.getCode(), null, now, table.getBranchId()));
         }
         audit.info("reservation.seated id={} table={} party={} override={} by={}", id, table.getCode(),
                 party.getPartySize(), booked != null, actor);
@@ -219,7 +219,7 @@ public class ReservationService {
         if (event.orderType() != OrderType.DINE_IN || event.tableCode() == null || event.status() != OrderStatus.COMPLETED) {
             return;
         }
-        tables.findByCode(event.tableCode())
+        orders.findById(event.orderId()).map(order -> order.getTable())
                 .filter(table -> !orders.existsByTableIdAndStatusIn(table.getId(), OrderStatus.activeStatuses()))
                 .ifPresent(table -> reservations.findByTableIdAndStatusIn(table.getId(), Set.of(ReservationStatus.SEATED))
                         .forEach(party -> {
@@ -297,7 +297,7 @@ public class ReservationService {
     private ReservationResponse changed(Reservation reservation, Instant now) {
         DiningTable table = reservation.getTable();
         events.publishEvent(new ReservationChangedEvent(reservation.getId(), reservation.getStatus(),
-                table == null ? null : table.getId(), now));
+                table == null ? null : table.getId(), now, reservation.getBranchId()));
         return toResponse(reservation);
     }
 
