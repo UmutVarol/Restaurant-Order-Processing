@@ -247,7 +247,7 @@ public class OrderService {
     }
 
     private DiningTable findTable(Long tableId) {
-        return tables.findById(tableId).orElseThrow(() -> new BusinessRuleException("TABLE_NOT_FOUND",
+        return tables.findById(tableId).filter(DiningTable::isActive).orElseThrow(() -> new BusinessRuleException("TABLE_NOT_FOUND",
                 "Table %d does not exist".formatted(tableId), Map.of("tableId", tableId)));
     }
 

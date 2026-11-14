@@ -279,7 +279,8 @@ public class GuestService {
 
     /** A new QR code for a table; the one printed before stops working at once. */
     public TableQrResponse issueQr(Long tableId, String actor) {
-        DiningTable table = tables.findById(tableId).orElseThrow(() -> new ResourceNotFoundException("table", tableId));
+        DiningTable table = tables.findById(tableId).filter(DiningTable::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("table", tableId));
         String token = SecretTokens.newToken();
         Instant now = clock.instant();
         table.issueQrToken(SecretTokens.hash(token), now);
@@ -296,6 +297,7 @@ public class GuestService {
             throw new ResourceNotFoundException("table", "?");
         }
         return tables.findByQrTokenHash(SecretTokens.hash(token))
+                .filter(DiningTable::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("table", "?"));
     }
 

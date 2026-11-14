@@ -34,6 +34,10 @@ public class JwtTokenService {
     static final String MFA_CLAIM = "mfa";
     /** Set when a manager still has to turn on two-step sign-in that the restaurant requires. */
     static final String MFA_SETUP_CLAIM = "mfa_setup";
+    /** Set while the user still signs in with a password someone else chose; see PasswordChangeRequiredFilter. */
+    static final String PASSWORD_CHANGE_CLAIM = "pwd_change";
+    /** The account's session version when the token was issued; see SessionGuard. */
+    static final String SESSION_VERSION_CLAIM = "sv";
 
     private final JwtEncoder encoder;
     private final JwtProperties properties;
@@ -70,6 +74,8 @@ public class JwtTokenService {
                 .claim(AMR_CLAIM, List.copyOf(methods))
                 .claim(MFA_CLAIM, user.isTotpEnabled())
                 .claim(MFA_SETUP_CLAIM, TwoFactorService.setupRequired(totp, user))
+                .claim(PASSWORD_CHANGE_CLAIM, user.isMustChangePassword())
+                .claim(SESSION_VERSION_CLAIM, user.getSessionVersion())
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type(TOKEN_TYPE).build();
         String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
@@ -78,6 +84,6 @@ public class JwtTokenService {
 
     public UserResponse userResponse(AppUser user, String method) {
         return new UserResponse(user.getUsername(), user.getDisplayName(), user.getRole(), user.hasPin(), method,
-                user.isTotpEnabled(), TwoFactorService.setupRequired(totp, user));
+                user.isTotpEnabled(), TwoFactorService.setupRequired(totp, user), user.isMustChangePassword());
     }
 }

@@ -37,6 +37,11 @@ spring:
 
 server:
   port: ${PORT:8080}
+  # Behind a reverse proxy (deploy/: Caddy) set FORWARD_HEADERS_STRATEGY=native, so rate limits, lockouts and the
+  # audit log see each client's address instead of the proxy's. Only proxies on private addresses are trusted
+  # (Tomcat's internal-proxies); never publish the app's own port next to the proxy, or a client on the same
+  # network could claim any address.
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
   compression:
     enabled: true
     mime-types: application/json,application/problem+json,text/html,text/css,application/javascript,image/svg+xml
@@ -73,18 +78,22 @@ management:
         order: down, out-of-service, degraded, up, unknown
         http-mapping:
           degraded: 200
+  # /actuator/info is public: the build version only, never the Java or OS versions an attacker would look up.
   info:
     build:
       enabled: true
     java:
-      enabled: true
+      enabled: false
     os:
-      enabled: true
+      enabled: false
 
 springdoc:
+  # The interactive API description; the installer turns it off on a restaurant's server (API_DOCS_ENABLED=false).
   api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
     path: /v3/api-docs
   swagger-ui:
+    enabled: ${API_DOCS_ENABLED:true}
     path: /swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha
@@ -92,8 +101,8 @@ springdoc:
   paths-to-match: /api/**
 
 restaurant:
-  name: Sofra Bistro
-  time-zone: Europe/Istanbul
+  name: ${RESTAURANT_NAME:Sofra Bistro}
+  time-zone: ${RESTAURANT_TIME_ZONE:Europe/Istanbul}
   pricing:
     tax-rate: 0.10
     delivery-fee: 39.90

@@ -110,7 +110,7 @@ public class SeatingService {
     }
 
     private DiningTable table(long id) {
-        return tables.findById(id).orElseThrow(() -> new ResourceNotFoundException("table", id));
+        return tables.findById(id).filter(DiningTable::isActive).orElseThrow(() -> new ResourceNotFoundException("table", id));
     }
 
     private static void requireDifferent(DiningTable a, DiningTable b) {

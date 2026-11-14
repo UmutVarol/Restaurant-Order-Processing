@@ -22,6 +22,7 @@ const ROUTES = [
   { id: 'menu', icon: 'menu', roles: ['ADMIN'], section: 'manage', load: () => import('./views/menu.js') },
   { id: 'stock', icon: 'box', roles: ['ADMIN'], section: 'manage', load: () => import('./views/stock.js') },
   { id: 'channels', icon: 'delivery', roles: ['ADMIN'], section: 'manage', load: () => import('./views/channels.js') },
+  { id: 'setup', icon: 'users', roles: ['ADMIN'], section: 'manage', load: () => import('./views/setup.js') },
   // reached from the user card, not the navigation
   { id: 'settings', icon: 'settings', roles: ALL, section: null, load: () => import('./views/settings.js') },
 ];
@@ -91,6 +92,12 @@ async function render() {
     const { default: login } = await import('./views/login.js');
     if (token !== renderToken) return;
     mount(root, login({ onSignedIn }));
+    return;
+  }
+  if (user.mustChangePassword) {
+    const { default: passwordScreen } = await import('./views/password.js');
+    if (token !== renderToken) return;
+    mount(root, passwordScreen({ user, onChanged: onSignedIn, onSignOut: signOut }));
     return;
   }
 
@@ -351,6 +358,11 @@ async function onSignedIn(tokenResponse) {
   lastActivity = Date.now();
   saveSession(tokenResponse);
   user = tokenResponse.user;
+  if (user.mustChangePassword) {
+    // nothing else works until they choose their own password
+    render();
+    return;
+  }
   startRealtime();
   refreshKitchenBadge();
   refreshGuestBadge();
@@ -412,10 +424,12 @@ async function boot() {
   if (session) {
     try {
       user = await api.me();
-      startRealtime();
-      refreshKitchenBadge();
-      refreshGuestBadge();
-      flush();
+      if (!user.mustChangePassword) {
+        startRealtime();
+        refreshKitchenBadge();
+        refreshGuestBadge();
+        flush();
+      }
     } catch (error) {
       if (error?.status === 0 && session.user) {
         // the server is out of reach, not the session: keep working offline as the signed-in user

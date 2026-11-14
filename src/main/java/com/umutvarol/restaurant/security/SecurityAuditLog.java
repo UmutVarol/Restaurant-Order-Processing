@@ -66,6 +66,19 @@ class SecurityAuditLog {
         audit.warn("pin.cleared user={} reason=repeated_lockouts", clean(username));
     }
 
+    void staffChanged(String action, String username, String detail, String by) {
+        audit.info("staff.{} user={} {} by={}", clean(action), clean(username), clean(detail), clean(by));
+    }
+
+    void passwordChanged(String username, String client) {
+        audit.info("password.changed user={} client={}", clean(username), clean(client));
+    }
+
+    void staleSessionRejected(String username) {
+        meters.counter("sofra.security.stale_session").increment();
+        audit.info("session.rejected user={} reason=revoked_by_account_change", clean(username));
+    }
+
     void totpEnabled(String username) {
         audit.info("totp.enabled user={}", clean(username));
     }

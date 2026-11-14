@@ -3,6 +3,7 @@ package com.umutvarol.restaurant.security;
 import com.umutvarol.restaurant.common.error.AccessRefusedException;
 import com.umutvarol.restaurant.common.error.ResourceNotFoundException;
 import com.umutvarol.restaurant.common.error.TooManyRequestsException;
+import com.umutvarol.restaurant.security.dto.ChangePasswordRequest;
 import com.umutvarol.restaurant.security.dto.LoginRequest;
 import com.umutvarol.restaurant.security.dto.PinLoginRequest;
 import com.umutvarol.restaurant.security.dto.RecoveryCodesResponse;
@@ -55,10 +56,12 @@ class AuthController {
     private final SecurityAuditLog audit;
     private final StaffPinService pins;
     private final TwoFactorService twoFactor;
+    private final StaffService staff;
 
     AuthController(AuthenticationManager authenticationManager, AppUserRepository users, JwtTokenService tokens,
                    LoginAttemptService attempts, TokenDenylist denylist, SecurityAuditLog audit, StaffPinService pins,
-                   TwoFactorService twoFactor) {
+                   TwoFactorService twoFactor, StaffService staff) {
+        this.staff = staff;
         this.authenticationManager = authenticationManager;
         this.users = users;
         this.tokens = tokens;
@@ -141,6 +144,16 @@ class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void setPin(Authentication authentication, @Valid @RequestBody SetPinRequest request, HttpServletRequest http) {
         pins.setPin(authentication.getName(), request.password(), request.pin(), http.getRemoteAddr());
+    }
+
+    @Operation(summary = "Change my password", description = """
+            Needs the current password. Every other session of the account ends; the answer carries a new token
+            for this one.""")
+    @PostMapping("/password")
+    TokenResponse changePassword(Authentication authentication, @Valid @RequestBody ChangePasswordRequest request,
+                                 HttpServletRequest http) {
+        return staff.changeOwnPassword(authentication.getName(), request.currentPassword(), request.newPassword(),
+                http.getRemoteAddr());
     }
 
     @Operation(summary = "Two-step sign-in status")

@@ -96,18 +96,35 @@ function passwordForm({ onSignedIn, onPin }) {
   h('div', null, h('b', null, account.name), h('small', null, `${account.username} · ${account.password}`)),
   h('span', { class: 'pill plain role-tag' }, t(`role.${account.role}`)))));
 
+  // The one-tap demo accounts exist only in the demo; a restaurant's own server never offers them.
+  const demoBlock = h('div', { hidden: true }, h('div', { class: 'divider' }, `${t('login.demo')} — ${t('login.demoHint')}`), demo);
+  const foot = h('p', { class: 'login-foot', hidden: true });
+  const subtitle = h('p', { class: 'muted', style: { marginTop: '6px' } }, t('login.subtitle'));
+  publicConfig().then((config) => {
+    if (config.demo) {
+      demoBlock.hidden = false;
+      foot.hidden = false;
+      mount(foot, window.SOFRA_BACKEND?.demo
+        ? [t('login.demoMode'), ' · ', h('a', { href: 'https://github.com/UmutVarol/Restaurant-Order-Processing', target: '_blank', rel: 'noopener' }, t('login.source'))]
+        : [h('a', { href: 'swagger-ui.html', target: '_blank', rel: 'noopener' }, t('login.api')), ' · Spring Boot 4 · Java 21']);
+    } else if (config.restaurantName) {
+      subtitle.textContent = config.restaurantName;
+    }
+  });
+
   return [
-    h('div', null, h('h2', null, t('login.title')), h('p', { class: 'muted', style: { marginTop: '6px' } }, t('login.subtitle'))),
+    h('div', null, h('h2', null, t('login.title')), subtitle),
     form,
     currentDevice() ? h('button', { class: 'btn ghost sm lock-alt', type: 'button', onclick: onPin }, icon('lock', 'sm'), t('lock.usePin')) : null,
-    h('div', { class: 'divider' }, `${t('login.demo')} — ${t('login.demoHint')}`),
-    demo,
-    window.SOFRA_BACKEND?.demo
-      ? h('p', { class: 'login-foot' }, t('login.demoMode'), ' · ',
-        h('a', { href: 'https://github.com/UmutVarol/Restaurant-Order-Processing', target: '_blank', rel: 'noopener' }, t('login.source')))
-      : h('p', { class: 'login-foot' }, h('a', { href: 'swagger-ui.html', target: '_blank', rel: 'noopener' }, t('login.api')),
-        ' · Spring Boot 4 · Java 21'),
+    demoBlock,
+    foot,
   ];
+}
+
+let configRequest = null;
+function publicConfig() {
+  configRequest ??= api.publicConfig().catch(() => { configRequest = null; return { demo: false, restaurantName: null }; });
+  return configRequest;
 }
 
 function stat(value, label) {

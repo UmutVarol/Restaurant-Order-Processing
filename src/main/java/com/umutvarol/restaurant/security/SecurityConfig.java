@@ -37,6 +37,7 @@ import org.springframework.security.oauth2.jwt.JwtTypeValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
@@ -119,6 +120,7 @@ class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http, ProblemDetailsSecurityHandler problemHandler,
                                             JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
         http
+                .addFilterAfter(new PasswordChangeRequiredFilter(problemHandler), BearerTokenAuthenticationFilter.class)
                 // Bearer tokens are sent explicitly in a header, never automatically by the browser,
                 // so cross-site request forgery is not possible and CSRF tokens are unnecessary.
                 .csrf(AbstractHttpConfigurer::disable)
@@ -134,6 +136,11 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/pin-login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/pin-staff").permitAll()
                         .requestMatchers("/api/v1/devices", "/api/v1/devices/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers("/api/v1/staff", "/api/v1/staff/**").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.GET, "/api/v1/tables").hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
+                        .requestMatchers(HttpMethod.POST, "/api/v1/tables").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/tables/*").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/tables/*").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/auth/totp", "/api/v1/auth/totp/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/stations", "/api/v1/stations/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/stations/**").hasRole(Role.ADMIN.name())
@@ -227,10 +234,11 @@ class SecurityConfig {
 
     /**
      * Verifies every incoming token: HS256 only (the algorithm is fixed here, never read from the token), then
-     * expiry, issuer, audience, explicit type {@code at+jwt}, a token ID, and that the token was not signed out.
+     * expiry, issuer, audience, explicit type {@code at+jwt}, a token ID, that the token was not signed out, and that
+     * its account still exists, is enabled and has not changed since (role, password).
      */
     @Bean
-    JwtDecoder jwtDecoder(JwtProperties properties, Clock clock, TokenDenylist denylist) {
+    JwtDecoder jwtDecoder(JwtProperties properties, Clock clock, TokenDenylist denylist, SessionGuard sessions) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey(properties))
                 .macAlgorithm(MacAlgorithm.HS256)
                 .validateType(false)
@@ -243,7 +251,8 @@ class SecurityConfig {
                 new JwtAudienceValidator(properties.audience()),
                 new JwtTypeValidator(JwtTokenService.TOKEN_TYPE),
                 new JwtClaimValidator<String>("jti", jti -> jti != null && !jti.isBlank()),
-                notRevoked(denylist)));
+                notRevoked(denylist),
+                sessions));
         return decoder;
     }
 

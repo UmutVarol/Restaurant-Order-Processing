@@ -36,6 +36,9 @@ public class DiningTable {
     @Column(name = "qr_issued_at")
     private Instant qrIssuedAt;
 
+    @Column(nullable = false)
+    private boolean active = true;
+
     /** Since when the table waits to be cleared after its guests left; null while it is laid or in use. */
     @Column(name = "needs_clearing_since")
     private Instant needsClearingSince;
@@ -64,6 +67,31 @@ public class DiningTable {
 
     public TableZone getZone() {
         return zone;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    /** A manager changed the table's number, size or area. */
+    public void describe(String code, int seats, TableZone zone) {
+        this.code = code;
+        this.seats = seats;
+        this.zone = zone;
+    }
+
+    /** Leaves the floor; orders, bills and reservations keep pointing at it. Its QR code stops working. */
+    public void remove() {
+        this.active = false;
+        this.qrTokenHash = null;
+        this.needsClearingSince = null;
+    }
+
+    /** Back on the floor, under the same number. */
+    public void restore(int seats, TableZone zone) {
+        this.active = true;
+        this.seats = seats;
+        this.zone = zone;
     }
 
     /** Replaces the table's QR code: the old printed code stops working. */

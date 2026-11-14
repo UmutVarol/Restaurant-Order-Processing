@@ -62,7 +62,8 @@ jobs:
   e2e:
     name: Browser tests
     needs: build
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which the pinned Playwright cannot install Chromium's system libraries on.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 

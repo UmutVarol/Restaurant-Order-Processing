@@ -8,6 +8,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 
 /** A staff account that can sign in to the point-of-sale. */
 @Entity
@@ -49,6 +51,16 @@ public class AppUser {
     @Column(name = "totp_last_step", nullable = false)
     private long totpLastStep;
 
+    /** Tokens carrying an older version no longer work (see SessionGuard). */
+    @Column(name = "session_version", nullable = false)
+    private int sessionVersion;
+
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
+
+    @Column(name = "created_at")
+    private Instant createdAt;
+
     protected AppUser() {
         // for JPA
     }
@@ -58,6 +70,65 @@ public class AppUser {
         this.passwordHash = passwordHash;
         this.displayName = displayName;
         this.role = role;
+    }
+
+    /** An account whose password someone else chose: it has to be replaced at the first sign-in. */
+    public static AppUser withTemporaryPassword(String username, String passwordHash, String displayName, Role role,
+                                         Instant now) {
+        AppUser user = new AppUser(username, passwordHash, displayName, role);
+        user.mustChangePassword = true;
+        user.createdAt = now;
+        return user;
+    }
+
+    /** The owner chose a new password: every other session ends. */
+    void changePassword(String newHash, Instant now) {
+        this.passwordHash = newHash;
+        this.mustChangePassword = false;
+        endSessions(now);
+    }
+
+    /** A manager set a temporary password: the owner must replace it, and every session ends. */
+    void resetPassword(String temporaryHash, Instant now) {
+        this.passwordHash = temporaryHash;
+        this.mustChangePassword = true;
+        endSessions(now);
+    }
+
+    /** @return whether anything that a signed-in token carries (role, being allowed in) changed */
+    boolean update(String displayName, Role role, boolean enabled, Instant now) {
+        boolean access = this.role != role || this.enabled != enabled;
+        this.displayName = displayName;
+        this.role = role;
+        this.enabled = enabled;
+        if (access) {
+            endSessions(now);
+            if (!enabled) {
+                this.pinHash = null;
+            }
+        }
+        return access;
+    }
+
+    void clearPin() {
+        this.pinHash = null;
+        this.pinLockouts = 0;
+    }
+
+    private void endSessions(Instant now) {
+        this.sessionVersion++;
+    }
+
+    public int getSessionVersion() {
+        return sessionVersion;
+    }
+
+    public boolean isMustChangePassword() {
+        return mustChangePassword;
+    }
+
+    public @Nullable Instant getCreatedAt() {
+        return createdAt;
     }
 
     public Long getId() {

@@ -45,7 +45,7 @@ public class FloorService {
 
         Map<Long, Party> seated = bookings().seated();
         Map<Long, Party> next = bookings().nextBookings();
-        return tables.findAllByOrderByIdAsc().stream()
+        return tables.findByActiveTrueOrderByIdAsc().stream()
                 .map(table -> toResponse(table, openByTable.getOrDefault(table.getId(), List.of()),
                         seated.get(table.getId()), next.get(table.getId())))
                 .toList();

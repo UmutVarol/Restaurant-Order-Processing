@@ -36,6 +36,12 @@ class ReservationTableBookings implements TableBookings {
     }
 
     @Override
+    public boolean holdsTable(Long tableId) {
+        return !reservations.findByTableIdAndStatusIn(tableId,
+                java.util.Set.of(ReservationStatus.BOOKED, ReservationStatus.SEATED)).isEmpty();
+    }
+
+    @Override
     public Map<Long, Party> nextBookings() {
         Instant now = clock.instant();
         Map<Long, Party> byTable = new LinkedHashMap<>();

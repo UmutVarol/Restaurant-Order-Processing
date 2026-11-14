@@ -34,4 +34,9 @@ class ProblemDetailsSecurityHandler implements AuthenticationEntryPoint, AccessD
     public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException ex) {
         resolver.resolveException(request, response, null, ex);
     }
+
+    /** Answers with the problem body for a domain error raised by a security filter. */
+    void refuse(HttpServletRequest request, HttpServletResponse response, RuntimeException ex) {
+        resolver.resolveException(request, response, null, ex);
+    }
 }

@@ -31,9 +31,11 @@ class UserBootstrap implements ApplicationRunner {
     private final DemoProperties demo;
     private final String adminPassword;
     private final StaffPinService pins;
+    private final java.time.Clock clock;
 
     UserBootstrap(AppUserRepository users, PasswordEncoder passwordEncoder, DemoProperties demo, StaffPinService pins,
-                  @Value("${restaurant.bootstrap.admin-password:}") String adminPassword) {
+                  java.time.Clock clock, @Value("${restaurant.bootstrap.admin-password:}") String adminPassword) {
+        this.clock = clock;
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.demo = demo;
@@ -54,10 +56,12 @@ class UserBootstrap implements ApplicationRunner {
             pins.demoPins(Map.of("admin", "2468", "waiter", "1357", "chef", "9024"));
             log.info("Demo accounts created: admin/admin123, waiter/waiter123, chef/chef123 (PINs 2468, 1357, 9024)");
         } else if (StringUtils.hasText(adminPassword)) {
-            create("admin", adminPassword, "Administrator", Role.ADMIN);
-            log.info("Initial administrator account 'admin' created");
+            // the installer chose this password, so the manager replaces it at the first sign-in
+            users.save(AppUser.withTemporaryPassword("admin", passwordEncoder.encode(adminPassword), "Administrator",
+                    Role.ADMIN, clock.instant()));
+            log.info("Initial manager account 'admin' created; its password must be changed at the first sign-in");
         } else {
-            log.warn("No user accounts exist. Set RESTAURANT_BOOTSTRAP_ADMIN_PASSWORD to create an administrator.");
+            log.warn("No user accounts exist. Set RESTAURANT_BOOTSTRAP_ADMIN_PASSWORD to create a manager account.");
         }
     }
 

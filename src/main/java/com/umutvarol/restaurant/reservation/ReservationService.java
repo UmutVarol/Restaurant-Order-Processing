@@ -206,7 +206,7 @@ public class ReservationService {
                                         @Nullable Long exceptReservation) {
         Instant ends = startsAt.plus(Duration.ofMinutes(duration(durationMinutes)));
         boolean soon = startsAt.isBefore(clock.instant().plus(Duration.ofMinutes(30)));
-        return tables.findAllByOrderByIdAsc().stream()
+        return tables.findByActiveTrueOrderByIdAsc().stream()
                 .filter(table -> table.getSeats() >= partySize)
                 .filter(table -> conflicts(table.getId(), startsAt, ends, exceptReservation).isEmpty())
                 .filter(table -> !soon || !orders.existsByTableIdAndStatusIn(table.getId(), OrderStatus.activeStatuses()))
@@ -280,7 +280,7 @@ public class ReservationService {
     }
 
     private DiningTable lockTable(Long tableId) {
-        return tables.lockById(tableId).orElseThrow(() -> new ResourceNotFoundException("table", tableId));
+        return tables.lockById(tableId).filter(DiningTable::isActive).orElseThrow(() -> new ResourceNotFoundException("table", tableId));
     }
 
     private static BusinessRuleException tooSmall(DiningTable table, int partySize) {

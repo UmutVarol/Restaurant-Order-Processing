@@ -107,7 +107,7 @@ class DemoDataSeeder implements ApplicationRunner {
             return;
         }
         Generator generator = new Generator(new Random(properties.seed()), clock.instant(), clock.getZone(),
-                menuItems.findByArchivedFalse(), tables.findAllByOrderByIdAsc(), redeemableCoupons());
+                menuItems.findByArchivedFalse(), tables.findByActiveTrueOrderByIdAsc(), redeemableCoupons());
         List<Order> generated = generator.generate(properties.historyDays());
         orders.saveAll(generated);
         Random tips = new Random(properties.seed() + 1);

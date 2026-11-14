@@ -602,8 +602,10 @@
 
   const pins = () => (state.pins ??= { admin: '2468', waiter: '1357', chef: '9024' });
   const devices = () => (state.devices ??= []);
+  const staffView = (username, u, id) => ({ id, username, displayName: u.displayName, role: u.role, enabled: u.enabled !== false,
+    hasPin: Boolean(pins()[username]), totpEnabled: Boolean(totpState()[username]?.enabled), mustChangePassword: Boolean(u.mustChangePassword), createdAt: null });
   const userView = (username, method) => ({ username, displayName: USERS[username].displayName, role: USERS[username].role, hasPin: Boolean(pins()[username]), method,
-    totpEnabled: Boolean(state.totp?.[username]?.enabled), mfaSetupRequired: false });
+    totpEnabled: Boolean(state.totp?.[username]?.enabled), mfaSetupRequired: false, mustChangePassword: Boolean(USERS[username].mustChangePassword) });
   const deviceView = (d) => ({ id: d.id, name: d.name, createdBy: d.createdBy, createdAt: iso(d.createdAt), lastSeenAt: d.lastSeenAt ? iso(d.lastSeenAt) : null, active: !d.revokedAt });
 
   function deviceFor(headers) {
@@ -1836,9 +1838,68 @@
       save();
       return { codes: entry.recovery.map((c) => `${c.slice(0, 5)}-${c.slice(5)}`) };
     }],
+    ['GET', /^public\/config$/, 'public', () => ({ restaurantName: 'Sofra Bistro', demo: true })],
+    // Setup screen: staff and tables change for this tab only; the demo starts fresh on reload.
+    ['GET', /^staff$/, 'manager', () => Object.entries(USERS).map(([username, u], i) => staffView(username, u, i + 1))],
+    ['POST', /^staff$/, 'manager', (_, body) => {
+      const username = String(body.username || '');
+      requireFields({ username: /^[a-z0-9._-]{3,50}$/.test(username) ? null : 'must match "^[a-z0-9._-]{3,50}$"',
+        displayName: blank(body.displayName) ? 'must not be blank' : null });
+      if (USERS[username]) throw new Problem(409, 'USERNAME_TAKEN', 'That username is already in use');
+      const temporaryPassword = Array.from({ length: 3 }, () => Math.random().toString(36).slice(2, 6)).join('-');
+      USERS[username] = { password: temporaryPassword, displayName: String(body.displayName).trim(), role: body.role, enabled: true, mustChangePassword: true };
+      return [201, { staff: staffView(username, USERS[username], Object.keys(USERS).length), temporaryPassword }];
+    }],
+    ['PUT', /^staff\/(\d+)$/, 'manager', ({ params, user }, body) => {
+      const [username, u] = Object.entries(USERS)[Number(params[0]) - 1] ?? [];
+      if (!u) throw new Problem(404, 'STAFF_NOT_FOUND', 'Staff not found');
+      if (username === user.username && (body.role !== u.role || body.enabled === false)) throw new Problem(422, 'STAFF_SELF_LOCKOUT', 'You cannot change your own role or switch off your own account');
+      Object.assign(u, { displayName: String(body.displayName).trim(), role: body.role, enabled: body.enabled !== false });
+      return staffView(username, u, Number(params[0]));
+    }],
+    ['POST', /^staff\/(\d+)\/reset-password$/, 'manager', ({ params }) => {
+      const [username, u] = Object.entries(USERS)[Number(params[0]) - 1] ?? [];
+      if (!u) throw new Problem(404, 'STAFF_NOT_FOUND', 'Staff not found');
+      const temporaryPassword = Array.from({ length: 3 }, () => Math.random().toString(36).slice(2, 6)).join('-');
+      Object.assign(u, { password: temporaryPassword, mustChangePassword: true });
+      return { staff: staffView(username, u, Number(params[0])), temporaryPassword };
+    }],
+    ['DELETE', /^staff\/(\d+)\/pin$/, 'manager', ({ params }) => {
+      const [username, u] = Object.entries(USERS)[Number(params[0]) - 1] ?? [];
+      delete pins()[username];
+      save();
+      return staffView(username, u, Number(params[0]));
+    }],
+    ['POST', /^auth\/password$/, 'staff', ({ user }, body) => {
+      const u = USERS[user.username];
+      if (u.password !== body.currentPassword) throw new Problem(403, 'PASSWORD_INCORRECT', 'The password is not correct.');
+      if (String(body.newPassword || '').length < 10) throw new Problem(422, 'PASSWORD_TOO_SHORT', 'Use at least 10 characters.', { parameters: { min: 10 } });
+      Object.assign(u, { password: body.newPassword, mustChangePassword: false });
+      return { accessToken: `demo.${user.username}`, tokenType: 'Bearer', expiresAt: iso(Date.now() + 8 * 60 * MINUTE), user: userView(user.username, 'pwd') };
+    }],
+    ['GET', /^tables$/, 'till', () => TABLES.map((t) => ({ ...t, qrIssuedAt: qr().issued[t.id] ? iso(qr().issued[t.id]) : null }))],
+    ['POST', /^tables$/, 'manager', (_, body) => {
+      const code = String(body.code || '').trim();
+      if (!/^[A-Za-z0-9-]{1,10}$/.test(code)) requireFields({ code: 'must match "^[A-Za-z0-9-]{1,10}$"' });
+      if (TABLES.some((t) => t.code === code)) throw new Problem(409, 'TABLE_CODE_TAKEN', `There is already a table ${code}`, { parameters: { table: code } });
+      const table = { id: Math.max(...TABLES.map((t) => t.id)) + 1, code, seats: Number(body.seats), zone: body.zone };
+      TABLES.push(table);
+      return [201, { ...table, qrIssuedAt: null }];
+    }],
+    ['PUT', /^tables\/(\d+)$/, 'manager', ({ params }, body) => {
+      const table = tableById(params[0]);
+      Object.assign(table, { code: String(body.code).trim(), seats: Number(body.seats), zone: body.zone });
+      return { ...table, qrIssuedAt: null };
+    }],
+    ['DELETE', /^tables\/(\d+)$/, 'manager', ({ params }) => {
+      const table = tableById(params[0]);
+      if (tableBusyNow(table.id, null)) throw new Problem(409, 'TABLE_IN_USE', `Table ${table.code} has guests`, { parameters: { table: table.code } });
+      TABLES.splice(TABLES.indexOf(table), 1);
+      return [204, null];
+    }],
     ['POST', /^auth\/login$/, 'public', async (_, body) => {
       const user = USERS[String(body.username || '').toLowerCase()];
-      if (!user || user.password !== body.password) throw new Problem(401, 'BAD_CREDENTIALS', 'Invalid username or password.');
+      if (!user || user.password !== body.password || user.enabled === false) throw new Problem(401, 'BAD_CREDENTIALS', 'Invalid username or password.');
       const username = String(body.username).toLowerCase();
       const second = totpState()[username];
       if (second?.enabled) {

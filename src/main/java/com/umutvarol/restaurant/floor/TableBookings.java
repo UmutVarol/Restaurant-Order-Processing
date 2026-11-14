@@ -19,6 +19,11 @@ public interface TableBookings {
         public Map<Long, Party> nextBookings() {
             return Map.of();
         }
+
+        @Override
+        public boolean holdsTable(Long tableId) {
+            return false;
+        }
     };
 
     /** The party seated at each table, by table id. */
@@ -26,4 +31,7 @@ public interface TableBookings {
 
     /** Each table's next booking in the coming hours, by table id. */
     Map<Long, Party> nextBookings();
+
+    /** Whether a party is seated at the table or has booked it for later. */
+    boolean holdsTable(Long tableId);
 }

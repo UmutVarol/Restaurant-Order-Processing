@@ -12,6 +12,9 @@ public interface DiningTableRepository extends JpaRepository<DiningTable, Long> 
 
     List<DiningTable> findAllByOrderByIdAsc();
 
+    /** The tables on the floor; removed ones keep their history but leave every list. */
+    List<DiningTable> findByActiveTrueOrderByIdAsc();
+
     Optional<DiningTable> findByQrTokenHash(String qrTokenHash);
 
     Optional<DiningTable> findByCode(String code);
