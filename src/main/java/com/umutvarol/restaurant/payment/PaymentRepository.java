@@ -23,8 +23,10 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     List<Payment> findByLinkIdAndStatus(Long linkId, PaymentStatus status);
 
+    /** A branch's payments in [from, to): only its bills are loaded, never another branch's. */
     @EntityGraph(attributePaths = {"refunds", "bill"})
-    List<Payment> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(Instant from, Instant to);
+    List<Payment> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanAndBillBranchIdOrderByCreatedAtAsc(Instant from, Instant to,
+                                                                                                    Long branchId);
 
     /** Tips on payments that went through in [from, to); refunds give back the amount, never the tip. */
     @Query("""

@@ -25,6 +25,7 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
               AND (r.claimedUntil IS NULL OR r.claimedUntil < :now)""")
     int claim(@Param("id") Long id, @Param("now") Instant now, @Param("until") Instant until);
 
+    /** A branch's refunds in [from, to). */
     @EntityGraph(attributePaths = "payment")
-    List<Refund> findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(Instant from, Instant to);
+    List<Refund> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanAndPaymentBillBranchId(Instant from, Instant to, Long branchId);
 }

@@ -72,12 +72,10 @@ public class DayReportService {
     DaySummary summarise(LocalDate date, long here) {
         Instant from = date.atStartOfDay(clock.getZone()).toInstant();
         Instant to = date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
-        List<Payment> taken = payments.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(from, to)
-                .stream().filter(payment -> payment.getStatus() == PaymentStatus.SUCCEEDED)
-                .filter(payment -> Long.valueOf(here).equals(payment.getBill().getBranchId())).toList();
-        List<Refund> given = refunds.findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to).stream()
+        List<Payment> taken = payments.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanAndBillBranchIdOrderByCreatedAtAsc(from, to, here)
+                .stream().filter(payment -> payment.getStatus() == PaymentStatus.SUCCEEDED).toList();
+        List<Refund> given = refunds.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanAndPaymentBillBranchId(from, to, here).stream()
                 .filter(refund -> refund.getStatus() != RefundStatus.FAILED)
-                .filter(refund -> Long.valueOf(here).equals(refund.getPayment().getBill().getBranchId()))
                 .toList();
 
         List<MethodTotal> methods = new ArrayList<>();

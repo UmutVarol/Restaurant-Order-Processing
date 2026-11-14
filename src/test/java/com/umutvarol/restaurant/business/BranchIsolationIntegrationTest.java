@@ -39,6 +39,16 @@ class BranchIsolationIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("BRANCH_CODE_TAKEN"));
 
+        try {
+            exercise(manager, main, branch);
+        } finally {
+            // closed even when a check fails, so no other test finds a second open branch
+            mvc.perform(with(manager, json(put("/api/v1/branches/{id}", branch), """
+                            {"name": "Kadıköy", "active": false}"""))).andExpect(status().isOk());
+        }
+    }
+
+    private void exercise(String manager, long main, long branch) throws Exception {
         // table 1 exists in the main branch; the new branch has a table 1 of its own
         long table = id(mvc.perform(in(branch, with(manager, json(post("/api/v1/tables"), """
                         {"code": "1", "seats": 2, "zone": "INDOOR"}"""))))
@@ -108,8 +118,6 @@ class BranchIsolationIntegrationTest extends ApiIntegrationTest {
         mvc.perform(with(manager, json(post("/api/v1/orders/{id}/cancel", order), """
                         {"reason": "Test finished"}"""))).andExpect(status().isOk());
         mvc.perform(with(manager, delete("/api/v1/tables/{id}", table))).andExpect(status().isNoContent());
-        mvc.perform(with(manager, json(put("/api/v1/branches/{id}", branch), """
-                        {"name": "Kadıköy", "active": false}"""))).andExpect(status().isOk());
     }
 
     @Test

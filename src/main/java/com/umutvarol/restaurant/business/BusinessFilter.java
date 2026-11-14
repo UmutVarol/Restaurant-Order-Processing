@@ -70,7 +70,11 @@ public class BusinessFilter extends OncePerRequestFilter {
      */
     private Long branch(HttpServletRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication instanceof JwtAuthenticationToken jwt && jwt.getToken().getClaim(BRANCH_CLAIM) instanceof Number home) {
+        if (!(authentication instanceof JwtAuthenticationToken jwt)) {
+            // guests and devices work through their tokens, never in a branch they name
+            return null;
+        }
+        if (jwt.getToken().getClaim(BRANCH_CLAIM) instanceof Number home) {
             return home.longValue();
         }
         String chosen = request.getHeader(BRANCH_HEADER);
