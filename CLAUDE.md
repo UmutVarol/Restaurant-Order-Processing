@@ -53,5 +53,8 @@ Kaynak: kullanıcının notu "UI UX Tasarım Stüdyosu" (14 Kasım 2026). Bağla
 - Hareket adayları sayfası (A1–A4, B1–B2, C1–C2): https://claude.ai/artifact/57HPtoGUCVnQzq38iGbGoB. Kullanıcı
   15 Kasım 2026'da **sekizini de onayladı; hepsi uygulandı** (ayrıntı: `DESIGN.md` → Motion → Patterns in use).
   Sonraki tasarım işleri yine aynı yoldan: aday sayfası → kullanıcı seçer → uygulanır.
+- 2. tur adaylar (D1 işletme rengi, D2 uzaktan okunur mutfak, D3 kategori şeridi, E1 geri al, E2 kaydırarak hazır,
+  E3 hızlı arama, F1 masa bekleme halkası, F2 günün kartı): https://claude.ai/artifact/MAXCSVmBM4LJwjST84UgWa.
+  Kullanıcı seçimini bekliyor; onaylananlar uygulanacak.
 - Sofra'nın kendi tasarım dili: `DESIGN.md` (lokanta sıcaklığı, domates kırmızısı, safran; Fraunces + Inter;
   easing `cubic-bezier(.2,.8,.2,1)`; yalnızca transform/opacity animasyonu).
