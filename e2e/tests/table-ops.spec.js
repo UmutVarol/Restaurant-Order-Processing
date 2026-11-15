@@ -38,6 +38,8 @@ test('a waiter voids, comps with a manager PIN, discounts and moves a table', as
   await modal.getByTestId('adjust-confirm').click();
   await expect(drawer.locator('.line-item')).toContainText('2 × Lahmacun');
   await expect(drawer.locator('.adj-tag.void')).toHaveText('1 voided');
+  // the dialog has finished closing before the next one opens (two open at once would share their buttons)
+  await expect(modal).toHaveCount(0);
 
   // a comp needs the manager's PIN
   await drawer.getByTestId('comp-line').click();
@@ -50,6 +52,7 @@ test('a waiter voids, comps with a manager PIN, discounts and moves a table', as
   await modal.getByTestId('adjust-confirm').click();
   await expect(drawer.locator('.adj-tag.comp')).toHaveText('1 on the house');
   await expect(drawer.locator('.adjustments')).toContainText('approved by admin');
+  await expect(modal).toHaveCount(0);
 
   // a 10% discount; the manager's name is remembered
   await drawer.getByTestId('discount-order').click();
