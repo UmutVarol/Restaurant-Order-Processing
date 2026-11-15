@@ -5,10 +5,13 @@ import { t, tn } from '../core/i18n.js';
 import { elapsed, money, percent, time } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
-import { openModal, toast } from '../core/ui.js';
+import { openModal, reducedMotion, toast } from '../core/ui.js';
 import { canTakeOrders, openOrderDrawer, statusPill } from './shared.js';
 
 const ZONES = ['INDOOR', 'WINDOW', 'TERRACE'];
+
+/** What each table looked like at the last render (A3), kept while the app runs so a state change can be shown. */
+const lastStates = new Map();
 
 export default {
   title: 'floor.title',
@@ -48,8 +51,15 @@ export default {
     function tableCard(table) {
       const order = table.openOrders[0];
       const served = table.occupied && table.openOrders.every((o) => o.status === 'SERVED');
+      // A3: a table whose state changed since the last look fills with its new colour from below, once; one that now
+      // needs someone (served, or to be cleared) also rings once. No endless blinking.
+      const state = served ? 'attention' : table.occupied ? 'occupied' : table.seatedParty ? 'seated' : table.needsClearingSince ? 'dirty' : 'free';
+      const before = lastStates.get(table.id);
+      lastStates.set(table.id, state);
+      const changed = before !== undefined && before !== state && !reducedMotion();
       const card = h('button', {
-        class: ['table-card', table.occupied ? 'occupied' : '', table.seatedParty && !table.occupied ? 'seated' : '', served ? 'attention' : ''], 'data-testid': `table-${table.code}`,
+        class: ['table-card', table.occupied ? 'occupied' : '', table.seatedParty && !table.occupied ? 'seated' : '', served ? 'attention' : '',
+          changed ? `state-changed fill-${state}` : '', changed && (state === 'attention' || state === 'dirty') ? 'ring-once' : ''], 'data-testid': `table-${table.code}`,
         onclick: () => {
           if (order) openOrderDrawer(order.id, user);
           else if (canTakeOrders(user)) navigate('pos', { table: table.id });

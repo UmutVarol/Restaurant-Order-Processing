@@ -59,6 +59,8 @@ test('a guest pays for what they had with an invoice, and the table pays the res
   await guest.getByTestId('guest-pay').click();
   await guest.getByTestId('sim-approve').click();
   await expect(guest.locator('.guest-banner.success')).toContainText(`Thank you! ₺${mine.toFixed(2)} received.`);
+  // the proof of payment: a slip with a PAID stamp
+  await expect(guest.getByTestId('paid-receipt')).toContainText('PAID');
   await expect(guest.getByTestId('invoice-note')).toHaveText('The invoice will be made out to Moda Yazılım Ltd.');
   await expect(guest.getByTestId('want-invoice')).toHaveCount(0);
 

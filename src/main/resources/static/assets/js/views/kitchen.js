@@ -6,7 +6,7 @@ import { t } from '../core/i18n.js';
 import { elapsed, minutesSince, number } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus, chime, prefs } from '../core/store.js';
-import { toast } from '../core/ui.js';
+import { flip, flipNumber, toast } from '../core/ui.js';
 import { optionsText } from './options.js';
 import { advanceLabel, advanceOrder, openOrderDrawer, servedInCourses, STATUS_COLORS, typeBadge } from './shared.js';
 
@@ -88,22 +88,31 @@ export default {
       return fired.length ? fired[fired.length - 1] : order.createdAt;
     }
 
+    let lastStatus = new Map();
+    const lastCounts = new Map();
     function render() {
       if (!orders) {
         mount(board, COLUMNS.map(() => h('div', { class: 'kds-col' },
           [1, 2].map(() => h('div', { class: 'skeleton', style: { height: '180px', borderRadius: '16px' } })))));
         return;
       }
-      mount(board, COLUMNS.map((status) => {
+      // B1: a ticket that changed column slides to its new place and the others close the gap (FLIP);
+      // A4: the column counts roll to their new value
+      const statusNow = new Map(visibleOrders().map((o) => [String(o.id), o.status]));
+      const moved = [...statusNow].filter(([id, status]) => lastStatus.has(id) && lastStatus.get(id) !== status).map(([id]) => id);
+      flip(board, 'order', () => mount(board, COLUMNS.map((status) => {
         const tickets = visibleOrders().filter((o) => o.status === status);
+        const count = flipNumber(h('span', { class: 'count' }), tickets.length, lastCounts.get(status));
+        lastCounts.set(status, tickets.length);
         return h('section', { class: 'kds-col', 'aria-label': t(`status.${status}`) },
           h('div', { class: 'kds-col-head' },
             h('span', { class: 'dot', style: { background: STATUS_COLORS[status] } }),
             h('h3', null, t(`status.${status}`)),
-            h('span', { class: 'count' }, tickets.length)),
+            count),
           tickets.length ? tickets.map(ticket) : h('div', { class: 'empty' }, h('div', { class: 'art', style: { fontSize: '30px' } }, '✨'),
             h('div', null, t('kitchen.allClearHint'))));
-      }));
+      })), moved);
+      lastStatus = statusNow;
       renderSummary();
     }
 

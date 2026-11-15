@@ -49,6 +49,8 @@ export default function signup({ onSignedIn }) {
           ownerName: owner.value.trim(), username: username.value.trim().toLowerCase(), password: password.value,
         });
         setBusinessCode(result.address);
+        // C2: the new restaurant is greeted once, on the setup screen
+        try { sessionStorage.setItem('sofra.justOpened', '1'); } catch { /* private mode */ }
         location.hash = '#/setup';
         onSignedIn(result.session);
       } catch (failure) {

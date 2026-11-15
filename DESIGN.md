@@ -97,7 +97,32 @@ Status is always shown as a dot and a word, never as colour alone.
   pauses its timer.
 - Transitions list their properties explicitly; `transition: all` is never used.
 - On touch screens (`hover: none`), hover lifts are switched off so a tap does not leave a card raised.
-- `prefers-reduced-motion` shortens all animation to a single frame.
+- `prefers-reduced-motion` shortens all animation to a single frame and zeroes every delay.
+
+### Durations and helpers
+
+- Three durations: `--dur-fast` 140ms (taps, small state ticks), `--dur-base` 240ms (cards, fills),
+  `--dur-slow` 420ms (one-off signature moments). Only `transform` and `opacity` animate.
+- `core/ui.js` holds the shared helpers: `countUp`, `reveal`, `flipNumber`, `bump` and `flip` (FLIP list
+  moves). Each one checks `reducedMotion()` and then shows the end state at once; `flip` instead outlines
+  the moved card for a moment so the change is still noticed without movement.
+- Every motion plays once per real change. A re-render, a live refresh or a page revisit never replays it.
+
+### Patterns in use (approved 15 November 2026)
+
+- **Sending an order (A1):** the till's button fills from the reading-start edge while sending (from the right
+  in Arabic), then turns green with a drawn check and "In the kitchen · #id" for 1.8 seconds.
+- **First figures (A2):** the dashboard's revenue, order count and average count up and the cards rise in, only
+  the first time data arrives; the orders table rises in when it replaces its skeleton.
+- **Table state (A3):** a table card that changes state washes once in its new colour; tables that need
+  attention or cleaning also ring once.
+- **Kitchen columns (A4):** column counts flip digit by digit; tickets moving between columns glide to their
+  new place; the sidebar badge bumps when the kitchen count grows.
+- **Order journey (B1, B2):** the order drawer's timeline fills step by step, dots lighting in turn.
+- **Paid receipt (C1):** after a guest pays, a receipt prints out of a slot and a PAID stamp lands, with a
+  short vibration where supported. It plays once per payment.
+- **First table set (C2):** a restaurant that has just signed up is greeted on the setup screen by a table being
+  set, plates and steam included. It plays once, right after sign-up.
 
 ## Accessibility and input
 

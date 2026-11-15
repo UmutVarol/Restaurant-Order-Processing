@@ -129,7 +129,8 @@ function payPage(root, token) {
   function status(bill) {
     const last = bill.lastPayment;
     if (last?.status === 'SUCCEEDED') {
-      return banner('success', 'check', t('guest.thanks', { amount: money(Number(last.amount) + Number(last.tip)) }), time(last.at));
+      return [banner('success', 'check', t('guest.thanks', { amount: money(Number(last.amount) + Number(last.tip)) }), time(last.at)),
+        paidReceipt(bill, last)];
     }
     if (last?.status === 'PENDING') return banner('info', 'clock', t('guest.processing'));
     if (last && ['FAILED', 'EXPIRED'].includes(last.status) && bill.payable) {
@@ -290,6 +291,31 @@ function payPage(root, token) {
   render();
   load();
   return () => clearTimeout(timer);
+}
+
+/**
+ * C1: the proof of payment, as the slip a till would print. It comes out of the printer and gets a PAID stamp the
+ * first time this phone sees this payment; afterwards (a refresh, a poll) it is simply there.
+ */
+function paidReceipt(bill, last) {
+  const key = `sofra.paid.${last.at}`;
+  let seen = false;
+  try { seen = sessionStorage.getItem(key) === '1'; sessionStorage.setItem(key, '1'); } catch { /* private mode */ }
+  const play = !seen && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (play) setTimeout(() => haptic('success'), 1150);
+  const line = (label, value, strong) => h('div', { class: ['receipt-line', strong ? 'strong' : ''] }, h('span', null, label), h('span', { class: 'num' }, value));
+  return h('div', { class: ['paid-receipt', play ? 'print' : ''], 'data-testid': 'paid-receipt' },
+    h('div', { class: 'receipt-slot', 'aria-hidden': 'true' }),
+    h('div', { class: 'receipt-roll' },
+      h('div', { class: 'receipt-paper' },
+        line(bill.restaurant, bill.tableCode ? t('guest.table', { table: bill.tableCode }) : ''),
+        h('hr'),
+        line(t('guest.paidAmount'), money(last.amount)),
+        Number(last.tip) > 0 ? line(t('guest.tip'), money(last.tip)) : null,
+        h('hr'),
+        line(t('bill.total'), money(Number(last.amount) + Number(last.tip)), true),
+        line(time(last.at), ''),
+        h('span', { class: 'receipt-stamp', role: 'img', 'aria-label': t('guest.stampPaid') }, t('guest.stampPaid')))));
 }
 
 function banner(kind, iconName, title, text) {

@@ -64,3 +64,17 @@ test('a manager adds a waiter who chooses their own password at the first sign-i
   await page.getByRole('button', { name: 'Remove table' }).last().click();
   await expect(page.getByTestId(`table-${code}`)).toHaveCount(0);
 });
+
+test('a restaurant that has just signed up sees its table set, once', async ({ page }) => {
+  await signIn(page, 'admin');
+  await page.evaluate(() => sessionStorage.setItem('sofra.justOpened', '1'));
+  await page.goto('/#/setup');
+  const modal = page.locator('.modal');
+  await expect(modal.getByRole('heading', { name: 'The table is set' })).toBeVisible();
+  await modal.getByTestId('welcome-start').click();
+  await expect(modal).toHaveCount(0);
+  // not again
+  await page.reload();
+  await expect(page.getByTestId('setup-checklist')).toBeVisible();
+  await expect(page.locator('.modal')).toHaveCount(0);
+});

@@ -1500,4 +1500,11 @@ export default {
   "bridge.copied": "Скопировано",
   "bridge.copy": "Скопировать команду",
   "bridge.printerVia": "Печатает мост печати (принтер в сети ресторана)",
+  "pos.sentToKitchen": "На кухне · #{id}",
+  "pos.sending": "Отправка…",
+  "guest.paidAmount": "Оплачено",
+  "guest.stampPaid": "ОПЛАЧЕНО",
+  "welcome.setTitle": "Стол накрыт",
+  "welcome.setText": "Примеры столов и блюд готовы. Замените их своими и примите первый заказ.",
+  "welcome.start": "Начнём",
 };

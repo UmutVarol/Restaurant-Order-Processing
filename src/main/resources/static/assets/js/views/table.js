@@ -29,6 +29,7 @@ export function renderTable(root, token) {
   const sentKey = `sofra.table.${token.slice(0, 12)}`;
   const payKey = `sofra.table.pay.${token.slice(0, 12)}`;
   const state = { table: null, menu: null, error: null, category: 'ALL', cart: [], sent: readSent(), calls: new Set(), busy: false, bill: null, orders: [], avoid: readAvoid() };
+  const seenSteps = new Map(); // order number → the step last shown, so only a real change fills in
   let timer = null;
   let stopped = false;
 
@@ -124,6 +125,9 @@ export function renderTable(root, token) {
   /** An order at the table as the kitchen works on it: a four-step bar, when it should be ready, and each dish. */
   function orderCard(order) {
     const step = STEPS.indexOf(order.status);
+    // B2: a step the kitchen has just finished fills in once, as on the staff's order journey
+    const before = seenSteps.get(order.number);
+    seenSteps.set(order.number, step);
     const minutes = order.readyBy ? Math.ceil((new Date(order.readyBy).getTime() - Date.now()) / 60_000) : null;
     return h('article', { class: ['card', 'track-card', `is-${order.status.toLowerCase()}`], 'data-testid': 'order-track' },
       h('div', { class: 'track-head' },
@@ -132,7 +136,10 @@ export function renderTable(root, token) {
           h('small', { class: 'faint' }, t('track.placed', { number: order.number, time: time(order.placedAt) }))),
         h('span', { class: 'track-icon', 'aria-hidden': 'true' }, icon(order.status === 'SERVED' ? 'check' : order.status === 'READY' ? 'bell' : 'flame', 'sm'))),
       h('div', { class: 'track-bar', role: 'img', 'aria-label': t('track.step', { step: step + 1, status: t(`track.status.${order.status}`) }) },
-        STEPS.map((_, i) => h('span', { class: i < step ? 'done' : i === step ? 'now' : '' }))),
+        STEPS.map((_, i) => h('span', {
+          class: [i < step ? 'done' : i === step ? 'now' : '', before != null && i >= before && i < step ? 'fill-in' : ''],
+          style: { '--i': before == null ? 0 : i - before },
+        }))),
       minutes != null ? h('div', { class: 'track-eta', 'data-testid': 'track-eta' }, icon('clock', 'sm'),
         minutes > 1 ? t('track.eta', { minutes }) : t('track.soon')) : null,
       h('ul', { class: 'track-lines' }, order.lines.map((line) => h('li', { class: `is-${line.state.toLowerCase()}` },

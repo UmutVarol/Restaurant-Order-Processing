@@ -268,12 +268,13 @@ function timeline(order) {
   const steps = order.status === 'CANCELLED'
     ? [...order.history.map((change) => change.status)]
     : path;
-  return h('div', { class: 'timeline' }, steps.map((status) => {
+  // B2: the order's journey; on opening, the line between the steps it has reached fills green, one after another
+  return h('div', { class: 'timeline journey', 'data-testid': 'order-journey' }, steps.map((status, index) => {
     const change = reached.get(status);
     const state = status === 'CANCELLED' ? 'cancelled'
       : status === order.status && order.status !== 'COMPLETED' ? 'current'
         : change ? 'done' : 'todo';
-    return h('div', { class: `step ${state}` },
+    return h('div', { class: `step ${state}`, style: { '--i': index } },
       h('div', { class: 'bullet' }, icon(state === 'cancelled' ? 'x' : state === 'todo' ? 'clock' : 'check')),
       h('div', null,
         h('div', { class: 'title' }, t(`status.${status}`)),

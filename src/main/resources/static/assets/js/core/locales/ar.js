@@ -1509,4 +1509,11 @@ export default {
   "bridge.copied": "تم النسخ",
   "bridge.copy": "نسخ الأمر",
   "bridge.printerVia": "يطبعه جسر الطباعة (الطابعة على شبكة المطعم)",
+  "pos.sentToKitchen": "وصل إلى المطبخ · #{id}",
+  "pos.sending": "جارٍ الإرسال…",
+  "guest.paidAmount": "المدفوع",
+  "guest.stampPaid": "مدفوع",
+  "welcome.setTitle": "المائدة جاهزة",
+  "welcome.setText": "الطاولات والأطباق النموذجية جاهزة. استبدلها بقائمتك وخذ أول طلب.",
+  "welcome.start": "لنبدأ",
 };

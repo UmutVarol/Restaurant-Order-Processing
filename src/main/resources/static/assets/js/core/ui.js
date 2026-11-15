@@ -21,6 +21,100 @@ export function haptic(kind = 'tap') {
   try { navigator.vibrate({ tap: 8, success: [10, 40, 14], error: [30, 50, 30] }[kind] ?? 8); } catch { /* not allowed */ }
 }
 
+// ------------------------------------------------------------------ motion (DESIGN.md: transform and opacity only)
+
+/** Whether the person asked for less motion: every helper below then jumps straight to the end state. */
+export const reducedMotion = () => REDUCED_MOTION.matches;
+
+/**
+ * Counts a figure up to its value once, when it first appears (0.6 s, easing out). Digits keep their width
+ * (tabular figures), so nothing around it moves. {@code format} turns the number into its text (money, plain).
+ */
+export function countUp(el, to, format = (v) => String(Math.round(v)), duration = 600) {
+  if (!el) return;
+  const target = Number(to) || 0;
+  if (reducedMotion() || target === 0) { el.textContent = format(target); return; }
+  const start = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - start) / duration);
+    el.textContent = format(target * (1 - Math.pow(1 - p, 3)));
+    if (p < 1 && el.isConnected) requestAnimationFrame(step);
+    else el.textContent = format(target);
+  };
+  el.textContent = format(0);
+  requestAnimationFrame(step);
+}
+
+/** Lets the first rows of a list settle into place one after another (40 ms apart), the rest at once. */
+export function reveal(container, selector, max = 8) {
+  if (!container || reducedMotion()) return;
+  [...container.querySelectorAll(selector)].slice(0, max).forEach((el, i) => {
+    el.style.animationDelay = `${i * 40}ms`;
+    el.classList.add('reveal');
+    el.addEventListener('animationend', () => { el.classList.remove('reveal'); el.style.animationDelay = ''; }, { once: true });
+  });
+}
+
+/**
+ * A number whose changed digits roll (like a station's departure board); the others stay put. Digits read left to
+ * right in every language. Pass the value shown before ({@code from}) to roll from it: the element may be a fresh one
+ * from a re-render.
+ */
+export function flipNumber(el, value, from) {
+  const text = String(value);
+  const before = from == null ? null : String(from);
+  const digit = (d) => h('span', { class: 'flip-digit', 'aria-hidden': 'true' },
+    h('span', { class: 'flip-strip', style: { transform: `translateY(-${d}em)` } }, '0123456789'.split('').map((n) => h('i', null, n))));
+  el.classList.add('flip-number');
+  el.setAttribute('aria-label', text);
+  el.replaceChildren(...[...text].map((ch) => (/\d/.test(ch) ? digit(Number(ch)) : h('span', { 'aria-hidden': 'true' }, ch))));
+  if (before == null || before === text || before.length !== text.length || reducedMotion()) return el;
+  [...text].forEach((ch, i) => {
+    const old = before[i];
+    if (old === ch || !/\d/.test(ch) || !/\d/.test(old)) return;
+    el.children[i].firstElementChild.animate([{ transform: `translateY(-${Number(old)}em)` }, { transform: `translateY(-${Number(ch)}em)` }],
+      { duration: 420, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  });
+  return el;
+}
+
+/** Makes a badge grow in once when its number goes up (no bounce). */
+export function bump(el) {
+  if (!el || reducedMotion()) return;
+  el.classList.remove('bump');
+  void el.offsetWidth;
+  el.classList.add('bump');
+}
+
+/**
+ * Moves items to where a re-render put them by sliding from where they were (FLIP): measure, re-render, then play the
+ * difference. Items that did not move are left alone; with less motion asked for, the moved ones are outlined for a
+ * moment instead.
+ *
+ * @param key data attribute naming each item (the same item keeps the same key across renders)
+ * @param render the re-render
+ * @param changed keys whose items should be pointed out (the one a person just moved)
+ */
+export function flip(container, key, render, changed = []) {
+  const first = new Map([...container.querySelectorAll(`[data-${key}]`)].map((el) => [el.dataset[key], el.getBoundingClientRect()]));
+  render();
+  const marked = new Set(changed.map(String));
+  container.querySelectorAll(`[data-${key}]`).forEach((el) => {
+    if (reducedMotion()) {
+      if (marked.has(el.dataset[key])) { el.classList.add('flip-moved'); setTimeout(() => el.classList.remove('flip-moved'), 1000); }
+      return;
+    }
+    const before = first.get(el.dataset[key]);
+    if (!before) return;
+    const after = el.getBoundingClientRect();
+    const dx = before.left - after.left;
+    const dy = before.top - after.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+      { duration: marked.has(el.dataset[key]) ? 420 : 240, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  });
+}
+
 /**
  * Lets a sheet be dragged down and let go to close it, the way phone sheets behave. Only the sheet's top (its grab
  * handle and heading) starts a drag, so scrolling the content never closes it by accident.

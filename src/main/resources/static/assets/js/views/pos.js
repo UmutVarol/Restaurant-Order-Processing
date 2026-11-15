@@ -78,7 +78,10 @@ export default {
     const deliveryHint = h('div');
     const totalsSection = h('div');
     const paySection = h('div', { class: 'pay-methods' });
-    const placeButton = h('button', { class: 'btn primary lg block', onclick: placeOrder });
+    const placeButton = h('button', { class: 'btn primary lg block place-btn', 'data-testid': 'place-order', onclick: placeOrder });
+    // A1: the button itself confirms that the ticket reached the kitchen, for a moment after sending
+    let sent = null;
+    let sentTimer = null;
     const orderPanel = h('aside', { class: 'card order-panel', 'aria-label': t('pos.current') });
     // On a tablet the ticket sits below the menu and this bar scrolls to it; on a phone the ticket is a sheet the
     // bar opens, so the waiter never scrolls past the menu to send an order.
@@ -488,10 +491,17 @@ export default {
       const total = quote && ticket.lines.length ? ` · ${money(quote.pricing.total)}` : '';
       placeButton.disabled = placing || !ticket.lines.length;
       const count = ticket.lines.reduce((sum, line) => sum + line.quantity, 0);
-      mobileBar.hidden = count === 0 || panelVisible;
-      mount(mobileBar, h('span', { class: 'badge' }, count), h('span', null, t('pos.current')),
+      const check = () => h('svg', { class: 'sent-check', viewBox: '0 0 24 24', width: 18, height: 18, fill: 'none', stroke: 'currentColor',
+        'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }, h('path', { d: 'M5 12.5l4.5 4.5L19 7' }));
+      mobileBar.hidden = (count === 0 && !sent) || panelVisible;
+      mobileBar.classList.toggle('sent', Boolean(sent) && count === 0);
+      if (sent && count === 0) mount(mobileBar, check(), h('span', { role: 'status' }, t('pos.sentToKitchen', { id: sent.id })));
+      else mount(mobileBar, h('span', { class: 'badge' }, count), h('span', null, t('pos.current')),
         h('b', null, quote ? money(quote.pricing.total) : ''), icon('arrowDown', 'sm'));
-      mount(placeButton, placing ? h('span', { class: 'spinner' })
+      placeButton.classList.toggle('sending', placing);
+      placeButton.classList.toggle('sent', Boolean(sent) && !placing && !ticket.lines.length);
+      if (sent && !placing && !ticket.lines.length) mount(placeButton, check(), h('span', { role: 'status' }, t('pos.sentToKitchen', { id: sent.id })));
+      else mount(placeButton, placing ? t('pos.sending')
         : [icon(isOnline() ? 'flash' : 'clock', 'sm'), `${t(isOnline() ? 'pos.place' : 'offline.place')}${total}`, h('span', { class: 'kbd' }, SHORTCUT)]);
     }
 
@@ -603,6 +613,9 @@ export default {
         couponDraft = '';
         quote = null;
         haptic('success');
+        sent = { id: order.id };
+        clearTimeout(sentTimer);
+        sentTimer = setTimeout(() => { sent = null; renderPlaceButton(); }, 1800);
         closeTicket();
         loadTables();
       } catch (error) {

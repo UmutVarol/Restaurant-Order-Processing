@@ -1476,4 +1476,11 @@ export default {
   "bridge.copied": "Copié",
   "bridge.copy": "Copier la commande",
   "bridge.printerVia": "Imprimé par la passerelle (l’imprimante est sur le réseau du restaurant)",
+  "pos.sentToKitchen": "En cuisine · #{id}",
+  "pos.sending": "Envoi…",
+  "guest.paidAmount": "Payé",
+  "guest.stampPaid": "PAYÉ",
+  "welcome.setTitle": "La table est dressée",
+  "welcome.setText": "Des tables et des plats d’exemple sont prêts. Remplacez-les par les vôtres et prenez la première commande.",
+  "welcome.start": "C’est parti",
 };

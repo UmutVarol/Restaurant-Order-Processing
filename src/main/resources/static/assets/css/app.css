@@ -91,6 +91,10 @@
   --sidebar-w: 244px;
   --topbar-h: 68px;
   --ease: cubic-bezier(.2, .8, .2, 1);
+  /* motion tokens (DESIGN.md): quick feedback, a change of place, a moment */
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+  --dur-slow: 420ms;
 }
 
 :root[data-theme="dark"] {
@@ -597,7 +601,7 @@ p { margin: 0; }
 .ticket::before { content: ""; position: absolute; inset-inline-start: 0; top: 14px; bottom: 14px; width: 4px; border-start-end-radius: 4px; border-end-end-radius: 4px; background: var(--accent, var(--slate)); }
 .ticket.fresh { box-shadow: 0 0 0 2px var(--brand), var(--shadow-md); }
 @keyframes ticketIn { from { opacity: 0; transform: translateY(-10px) scale(.98); } to { opacity: 1; transform: none; } }
-.ticket-head { display: flex; align-items: center; gap: 8px; }
+.ticket-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .ticket-no { font-weight: 800; font-size: 15px; letter-spacing: -.01em; }
 .timer { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 5px; font-weight: 700; font-size: 12.5px; font-variant-numeric: tabular-nums; padding: 3px 8px; border-radius: 8px; background: var(--green-soft); color: var(--green); }
 .timer.warn { background: var(--amber-soft); color: var(--amber); }
@@ -895,7 +899,7 @@ body:has(.drawer) .toasts { inset-inline-end: calc(min(480px, 100vw) + 20px); }
 .print-root { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0ms !important; }
 }
 
 /* ---------- Chart internals ---------- */
@@ -1942,3 +1946,87 @@ button.rota-shift { cursor: pointer; }
 .bridge-section { display: grid; gap: 10px; padding-top: 14px; margin-top: 4px; border-top: 1px solid var(--border); }
 .bridge-command { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-3); font-size: 12px;
   white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+
+/* ------------------------------------------------------------------ motion helpers (core/ui.js) */
+.reveal { animation: rise var(--dur-base) var(--ease) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.badge.bump { animation: bump var(--dur-slow) var(--ease); }
+@keyframes bump { from { transform: scale(.6); opacity: .4; } }
+.flip-number { display: inline-flex; font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; line-height: 1; }
+.flip-digit { display: inline-block; height: 1em; overflow: hidden; }
+.flip-strip { display: flex; flex-direction: column; transition: transform var(--dur-slow) var(--ease); }
+.flip-strip > i { font-style: normal; height: 1em; line-height: 1; }
+.flip-moved { outline: 2px solid var(--green); outline-offset: 2px; transition: outline-color var(--dur-slow) var(--ease); }
+
+/* A1: the place button says the ticket reached the kitchen */
+.place-btn { position: relative; isolation: isolate; overflow: hidden; }
+.place-btn.sending::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--brand-strong);
+  transform: scaleX(.85); transform-origin: left; animation: fill-in 900ms var(--ease) both; }
+[dir="rtl"] .place-btn.sending::before { transform-origin: right; }
+@keyframes fill-in { from { transform: scaleX(0); } }
+.place-btn.sent, .mobile-cart.sent { background: var(--green); border-color: var(--green); color: #fff; }
+.sent-check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw var(--dur-slow) var(--ease) forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+/* A3: a table's new state fills it from below, once; a table that needs someone rings once */
+.table-card.state-changed::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: var(--state-fill);
+  animation: state-fill 900ms var(--ease) both; }
+.table-card.fill-occupied { --state-fill: var(--brand-soft); }
+.table-card.fill-seated { --state-fill: var(--saffron-soft); }
+.table-card.fill-attention { --state-fill: var(--teal-soft); }
+.table-card.fill-dirty { --state-fill: var(--slate-soft); }
+.table-card.fill-free { --state-fill: var(--green-soft); }
+@keyframes state-fill { 0% { clip-path: circle(0% at 50% 100%); opacity: 1; } 60% { clip-path: circle(150% at 50% 100%); opacity: 1; } 100% { clip-path: circle(150% at 50% 100%); opacity: 0; } }
+.table-card.ring-once { animation: ring-once 900ms var(--ease) 1; }
+@keyframes ring-once { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--teal) 50%, transparent); } to { box-shadow: 0 0 0 12px transparent; } }
+
+/* B2: the order's journey fills step by step when the drawer opens */
+.timeline.journey .step.done:not(:last-child)::after { content: ""; position: absolute; inset-inline-start: 10px; top: 22px; bottom: 0; width: 2px;
+  background: var(--green); transform-origin: top; animation: journey-fill var(--dur-slow) var(--ease) both; animation-delay: calc(var(--i, 0) * 110ms); }
+.timeline.journey .step.done .bullet, .timeline.journey .step.current .bullet { animation: journey-dot var(--dur-base) var(--ease) both; animation-delay: calc(var(--i, 0) * 110ms); }
+@keyframes journey-fill { from { transform: scaleY(0); } }
+@keyframes journey-dot { from { transform: scale(.7); opacity: .3; } }
+
+/* C1: the guest's proof of payment, a thermal slip with a PAID stamp */
+.paid-receipt { display: grid; justify-items: center; margin-block: 4px 8px; }
+.receipt-slot { width: min(320px, 86%); height: 10px; border-radius: 6px; background: var(--text); opacity: .85; }
+.receipt-roll { width: min(290px, 78%); overflow: hidden; margin-top: -6px; padding-bottom: 10px; }
+.receipt-paper { position: relative; background: #fffdf8; color: #2b2522; font-family: var(--font-mono); font-size: 12.5px; padding: 14px 14px 24px; display: grid; gap: 3px;
+  -webkit-mask: radial-gradient(circle 6px at 50% 100%, transparent 98%, #000) bottom / 14px 100% repeat-x, linear-gradient(#000, #000) top / 100% calc(100% - 6px) no-repeat;
+  mask: radial-gradient(circle 6px at 50% 100%, transparent 98%, #000) bottom / 14px 100% repeat-x, linear-gradient(#000, #000) top / 100% calc(100% - 6px) no-repeat;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
+.receipt-paper hr { border: 0; border-top: 1px dashed currentColor; opacity: .4; margin: 5px 0; width: 100%; }
+.receipt-line { display: flex; justify-content: space-between; gap: 10px; min-width: 0; }
+.receipt-line > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.receipt-line.strong { font-weight: 700; }
+.receipt-stamp { position: absolute; inset-inline-end: 12px; bottom: 26px; border: 2.5px solid #2f9e6b; color: #2f9e6b; font-family: var(--font-sans);
+  font-weight: 800; letter-spacing: .08em; padding: 4px 8px; border-radius: 8px; transform: rotate(-10deg); font-size: 13px; background: rgba(255, 253, 248, .8); }
+.paid-receipt.print .receipt-paper { animation: receipt-print 1100ms var(--ease) both; }
+.paid-receipt.print .receipt-stamp { animation: receipt-stamp 380ms var(--ease) 1150ms both; }
+@keyframes receipt-print { from { transform: translateY(-100%); } }
+@keyframes receipt-stamp { from { transform: rotate(-10deg) scale(1.6); opacity: 0; } }
+
+/* C2: the table is set, once, after signing up */
+.table-set { position: relative; display: grid; place-items: center; padding: 34px 12px; border-radius: var(--radius-lg); background: var(--surface-3); overflow: hidden; }
+.table-set-top { position: relative; width: min(280px, 78%); aspect-ratio: 2 / 1; border-radius: 999px;
+  background: color-mix(in srgb, var(--saffron) 25%, var(--surface)); border: 2px solid color-mix(in srgb, var(--saffron) 45%, var(--border)); }
+.table-set-plate { position: absolute; width: 20%; aspect-ratio: 1; border-radius: 50%; background: var(--surface); border: 2px solid var(--border-strong); box-shadow: inset 0 0 0 6px var(--surface-2); }
+.table-set-plate.p1 { top: -14%; inset-inline-start: 18%; } .table-set-plate.p2 { top: -14%; inset-inline-end: 18%; }
+.table-set-plate.p3 { bottom: -14%; inset-inline-start: 18%; } .table-set-plate.p4 { bottom: -14%; inset-inline-end: 18%; }
+.table-set-bowl { position: absolute; width: 16%; aspect-ratio: 1; border-radius: 50%; inset-inline-start: 42%; top: 18%; background: var(--brand); box-shadow: inset 0 -6px 0 var(--brand-strong); }
+.table-set-steam { position: absolute; inset-inline-start: 50%; top: -6%; width: 3px; height: 18px; border-radius: 3px; background: var(--saffron); opacity: 0; }
+.table-set-steam.s2 { inset-inline-start: 46%; } .table-set-steam.s3 { inset-inline-start: 54%; }
+.table-set.go .table-set-plate { animation: set-down var(--dur-slow) var(--ease) both; }
+.table-set.go .p2 { animation-delay: 90ms; } .table-set.go .p3 { animation-delay: 180ms; } .table-set.go .p4 { animation-delay: 270ms; }
+.table-set.go .table-set-bowl { animation: set-down var(--dur-slow) var(--ease) 380ms both; }
+.table-set.go .table-set-steam { animation: steam 1.4s ease-out 700ms 2; }
+.table-set.go .s2 { animation-delay: 850ms; } .table-set.go .s3 { animation-delay: 1000ms; }
+@keyframes set-down { from { transform: scale(.6); opacity: 0; } }
+@keyframes steam { 0% { opacity: 0; transform: translateY(6px); } 30% { opacity: .9; } 100% { opacity: 0; transform: translateY(-16px); } }
+
+/* B2 on the guest's table page: a step the kitchen has just finished fills in from the reading-start edge, once */
+.track-bar span.fill-in { position: relative; overflow: hidden; background: var(--surface-3); }
+.track-bar span.fill-in::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--brand);
+  transform-origin: left center; animation: track-fill var(--dur-slow) var(--ease) both; animation-delay: calc(var(--i, 0) * 120ms); }
+[dir="rtl"] .track-bar span.fill-in::after { transform-origin: right center; }
+@keyframes track-fill { from { transform: scaleX(0); } }

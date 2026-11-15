@@ -1473,4 +1473,11 @@ export default {
   'bridge.copied': 'Kopyalandı',
   'bridge.copy': 'Komutu kopyala',
   'bridge.printerVia': 'Yazıcı köprüsü yazdırır (yazıcı restoranın ağında)',
+  'pos.sentToKitchen': 'Mutfağa gitti · #{id}',
+  'pos.sending': 'Gönderiliyor…',
+  'guest.paidAmount': 'Ödenen',
+  'guest.stampPaid': 'ÖDENDİ',
+  'welcome.setTitle': 'Sofra kuruldu',
+  'welcome.setText': 'Örnek masalar ve yemekler hazır. Kendi menünüzle değiştirin ve ilk siparişi alın.',
+  'welcome.start': 'Başlayalım',
 };

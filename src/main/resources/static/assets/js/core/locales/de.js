@@ -1475,4 +1475,11 @@ export default {
   "bridge.copied": "Kopiert",
   "bridge.copy": "Befehl kopieren",
   "bridge.printerVia": "Druck über die Druckbrücke (der Drucker steht im Netz des Restaurants)",
+  "pos.sentToKitchen": "In der Küche · #{id}",
+  "pos.sending": "Wird gesendet…",
+  "guest.paidAmount": "Bezahlt",
+  "guest.stampPaid": "BEZAHLT",
+  "welcome.setTitle": "Der Tisch ist gedeckt",
+  "welcome.setText": "Beispieltische und -gerichte sind bereit. Ersetzen Sie sie durch Ihre eigenen und nehmen Sie die erste Bestellung auf.",
+  "welcome.start": "Los geht’s",
 };

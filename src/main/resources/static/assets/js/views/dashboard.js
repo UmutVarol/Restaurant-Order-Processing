@@ -6,7 +6,7 @@ import { dayLabel, durationMinutes, money, moneyShort, number, percent } from '.
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { areaChart, barChart, donutChart, sparkline } from '../core/charts.js';
-import { toast } from '../core/ui.js';
+import { countUp, reveal, toast } from '../core/ui.js';
 import { STATUS_COLORS } from './shared.js';
 
 const CATEGORY_COLORS = { MAIN: 'var(--brand)', STARTER: 'var(--saffron)', DESSERT: 'var(--violet)', DRINK: 'var(--teal)' };
@@ -31,6 +31,8 @@ export default {
     renderSwitcher();
     mount(actions, switcher);
 
+    // A2: the first time the figures arrive they count up and the cards settle in; live refreshes just update them
+    let shown = false;
     function render() {
       if (!data) {
         mount(container,
@@ -61,6 +63,8 @@ export default {
             splitBar(t('orders.col.type'), data.orderTypes.map((x) => ({ key: x.type, label: t(`type.${x.type}`), value: x.orders, revenue: x.revenue, color: TYPE_COLORS[x.type] }))),
             splitBar(t('detail.payment'), data.payments.map((x) => ({ key: x.method, label: t(`pay.${x.method}`), value: x.orders, revenue: x.revenue, color: PAY_COLORS[x.method] }))))),
           card('span-6', t('orders.col.status'), null, statusMix())));
+      if (!shown) settle(container, current);
+      shown = true;
     }
 
     function trendChart() {
@@ -165,6 +169,15 @@ export default {
     };
   },
 };
+
+/** A2: counts the money and order figures up once, the first time the dashboard has data. */
+function settle(container, current) {
+  const values = container.querySelectorAll('.kpi .value');
+  countUp(values[0], Number(current.revenue), (v) => moneyShort(v));
+  countUp(values[1], Number(current.orders), (v) => number(Math.round(v)));
+  countUp(values[2], Number(current.averageOrderValue), (v) => money(v));
+  reveal(container, '.kpi, .dash-grid > .card', 10);
+}
 
 function kpi(iconName, label, value, change, foot, spark) {
   return h('div', { class: 'card kpi' },

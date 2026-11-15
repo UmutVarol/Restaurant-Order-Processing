@@ -20,8 +20,11 @@ test('a waiter holds the mains, fires them later, and the grill ticks them off',
   await chicken.click();
   await expect(chicken).toHaveText('Course 2');
   await page.getByRole('button', { name: /Send to kitchen/ }).click();
+  // the button itself confirms where the ticket went
+  await expect(page.getByTestId('place-order')).toContainText('In the kitchen');
   await page.getByRole('button', { name: 'View' }).click();
   const drawer = page.locator('.drawer');
+  await expect(drawer.getByTestId('order-journey')).toContainText('New');
   await expect(drawer.getByTestId('held-courses')).toContainText('Waiting: course 2');
   await expect(drawer.locator('.line-item', { hasText: 'Izgara Tavuk' }).getByTestId('line-held')).toBeVisible();
   await expect(drawer.locator('.line-item', { hasText: 'Mercimek' }).getByTestId('line-held')).toHaveCount(0);

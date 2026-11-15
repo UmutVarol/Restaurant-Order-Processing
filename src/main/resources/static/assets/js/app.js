@@ -7,7 +7,7 @@ import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { clearOutbox, entries as outboxEntries, flush, isOnline, registerServiceWorker } from './core/offline.js';
 import { time } from './core/format.js';
-import { chooseLanguage, confirmDialog, langButton, openModal, themeButton, toast } from './core/ui.js';
+import { bump, chooseLanguage, confirmDialog, langButton, openModal, themeButton, toast } from './core/ui.js';
 
 const ALL = ['ADMIN', 'WAITER', 'KITCHEN'];
 const ROUTES = [
@@ -392,8 +392,10 @@ async function refreshKitchenBadge() {
     readyCount = active.filter((o) => o.type === 'DINE_IN' && o.status === 'READY' && o.table).length;
     updateServiceBadge();
     document.querySelectorAll('.kitchen-badge').forEach((badge) => {
+      const grew = Number(badge.textContent) < kitchenCount;
       badge.textContent = kitchenCount;
       badge.hidden = kitchenCount === 0;
+      if (grew) bump(badge);
     });
   } catch { /* badge is best effort */ }
 }

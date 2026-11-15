@@ -87,6 +87,8 @@ test('a waiter rings up a takeaway on a phone from the ticket sheet', async ({ p
   await ticket.getByRole('button', { name: /Send to kitchen/ }).click();
   await expect(page.getByRole('status').filter({ hasText: /sent to the kitchen/ })).toBeVisible();
   await expect(ticket).toBeHidden();
+  // the bar says the ticket reached the kitchen for a moment, then goes
+  await expect(bar).toContainText('In the kitchen');
   await expect(bar).toBeHidden();
 
   const placed = (await api(page, 'GET', '/orders/active')).find((o) => o.customerName === guest);

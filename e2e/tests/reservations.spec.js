@@ -20,11 +20,14 @@ test('a booking shows on the floor plan and a walk-in is seated and leaves', asy
   const table = (await freeTables(page, 1, (x) => !x.occupied && !x.seatedParty && !x.nextBooking && x.seats >= 4)).at(-1);
   const booked = uniqueGuest('Booking');
   // about an hour and a half from now, in the browser's (the restaurant's) time zone
-  const { day, hhmm } = await page.evaluate(() => {
-    const soon = new Date(Date.now() + 90 * 60_000);
+  const { day, hhmm, tomorrow } = await page.evaluate(() => {
+    const now = new Date();
+    const soon = new Date(now.getTime() + 90 * 60_000);
     soon.setMinutes(soon.getMinutes() < 30 ? 0 : 30, 0, 0);
     const pad = (n) => String(n).padStart(2, '0');
-    return { day: `${soon.getFullYear()}-${pad(soon.getMonth() + 1)}-${pad(soon.getDate())}`, hhmm: `${pad(soon.getHours())}:${pad(soon.getMinutes())}` };
+    // late in the evening "an hour and a half from now" is already tomorrow
+    return { day: `${soon.getFullYear()}-${pad(soon.getMonth() + 1)}-${pad(soon.getDate())}`, hhmm: `${pad(soon.getHours())}:${pad(soon.getMinutes())}`,
+      tomorrow: soon.getDate() !== now.getDate() };
   });
 
   await page.goto('/#/reservations');
@@ -75,6 +78,7 @@ test('a booking shows on the floor plan and a walk-in is seated and leaves', asy
   await expect(page.getByTestId('resv-seated').locator('.resv-row', { hasText: walkIn })).toHaveCount(0);
 
   // and the booking is cancelled, which frees the table on the floor plan again
+  if (tomorrow) await page.getByRole('button', { name: 'Next day' }).click();
   await page.getByTestId('resv-bookings').locator('.resv-row', { hasText: booked }).getByRole('button', { name: 'Cancel booking' }).click();
   await page.getByRole('button', { name: 'Cancel it' }).click();
   await expect(page.getByTestId('resv-bookings').locator('.resv-row', { hasText: booked })).toContainText('Cancelled');

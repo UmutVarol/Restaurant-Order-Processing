@@ -1489,4 +1489,11 @@ export default {
   'bridge.copied': 'Copied',
   'bridge.copy': 'Copy command',
   'bridge.printerVia': 'Printed by the print bridge (the printer is on the restaurant’s network)',
+  'pos.sentToKitchen': 'In the kitchen · #{id}',
+  'pos.sending': 'Sending…',
+  'guest.paidAmount': 'Paid',
+  'guest.stampPaid': 'PAID',
+  'welcome.setTitle': 'The table is set',
+  'welcome.setText': 'Sample tables and dishes are ready. Replace them with your own and take the first order.',
+  'welcome.start': 'Let’s start',
 };

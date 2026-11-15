@@ -10,6 +10,27 @@ import { withRecentSignIn } from './reauth.js';
 const ROLES = ['WAITER', 'KITCHEN', 'ADMIN'];
 const ZONES = ['INDOOR', 'WINDOW', 'TERRACE'];
 
+/**
+ * C2: a business that has just signed up sees its table being set, once: plates go down one by one and steam rises
+ * from the soup. With less motion asked for, the set table is shown at once.
+ */
+function greetNewRestaurant() {
+  let fresh = false;
+  try { fresh = sessionStorage.getItem('sofra.justOpened') === '1'; sessionStorage.removeItem('sofra.justOpened'); } catch { /* private mode */ }
+  if (!fresh) return;
+  const scene = h('div', { class: 'table-set go', 'aria-hidden': 'true' },
+    h('div', { class: 'table-set-top' },
+      ['p1', 'p2', 'p3', 'p4'].map((p) => h('span', { class: `table-set-plate ${p}` })),
+      h('span', { class: 'table-set-bowl' }),
+      ['s1', 's2', 's3'].map((s) => h('span', { class: `table-set-steam ${s}` }))));
+  openModal({
+    title: t('welcome.setTitle'),
+    size: 'sm',
+    body: [scene, h('p', { class: 'muted', style: { textAlign: 'center' } }, t('welcome.setText'))],
+    footer: (handle) => [h('button', { class: 'btn primary', 'data-testid': 'welcome-start', onclick: handle.close }, t('welcome.start'), icon('arrowRight', 'sm'))],
+  });
+}
+
 export default {
   title: 'setup.title',
   subtitle: 'setup.sub',
@@ -371,6 +392,7 @@ export default {
       renderChecklist();
     }
 
+    greetNewRestaurant();
     renderChecklist();
     renderStaff();
     renderTables();

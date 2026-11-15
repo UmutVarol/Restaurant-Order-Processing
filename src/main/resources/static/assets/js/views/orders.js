@@ -5,7 +5,7 @@ import { t } from '../core/i18n.js';
 import { dateTime, money, number } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
-import { toast } from '../core/ui.js';
+import { reveal, toast } from '../core/ui.js';
 import { itemsSummary, openOrderDrawer, statusPill, typeBadge } from './shared.js';
 
 const STATUS_FILTERS = {
@@ -53,6 +53,8 @@ export default {
   mount(container, { user, params }) {
     if (Object.keys(params).length) readParams(params);
     let page = null;
+    // A2: rows settle in one after another when they replace the loading skeleton, not on every live refresh
+    let fromSkeleton = true;
     let loading = false;
 
     const search = h('input', {
@@ -93,6 +95,7 @@ export default {
 
     function render() {
       if (!page) {
+        fromSkeleton = true;
         mount(tableCard, h('div', { style: { padding: '16px', display: 'grid', gap: '12px' } },
           Array.from({ length: 6 }, () => h('div', { class: 'skeleton', style: { height: '42px' } }))));
         return;
@@ -103,6 +106,9 @@ export default {
           filtered ? h('button', { class: 'btn sm', onclick: clearFilters }, t('orders.clearFilters')) : null));
         return;
       }
+      const settleRows = fromSkeleton;
+      fromSkeleton = false;
+      queueMicrotask(() => { if (settleRows) reveal(tableCard, 'tbody tr'); });
       const from = page.page * page.size + 1;
       const to = from + page.content.length - 1;
       mount(tableCard,

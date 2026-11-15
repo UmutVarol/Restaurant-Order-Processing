@@ -50,7 +50,8 @@ Kaynak: kullanıcının notu "UI UX Tasarım Stüdyosu" (14 Kasım 2026). Bağla
   haresi, iç içe kart vb. **kalite kapısı olarak kullanılır**), ObsidianUI (MIT; flip-text, skeleton, status-bars,
   sonner, drawer gibi bileşen adları), v0 şablon adresleri (receipt, kitchen menu, order detail), iter0 ve
   designbookmark (site şablonları ve araç listeleri; lisansı belirsiz olanlardan kod alınmaz).
-- Hareket adayları sayfası (A1–A4, B1–B2, C1–C2): https://claude.ai/artifact/57HPtoGUCVnQzq38iGbGoB; kaynak dosya
-  oturumun scratchpad'inde. Kullanıcı seçimlerini bekliyor; onaylananlar uygulanacak.
+- Hareket adayları sayfası (A1–A4, B1–B2, C1–C2): https://claude.ai/artifact/57HPtoGUCVnQzq38iGbGoB. Kullanıcı
+  15 Kasım 2026'da **sekizini de onayladı; hepsi uygulandı** (ayrıntı: `DESIGN.md` → Motion → Patterns in use).
+  Sonraki tasarım işleri yine aynı yoldan: aday sayfası → kullanıcı seçer → uygulanır.
 - Sofra'nın kendi tasarım dili: `DESIGN.md` (lokanta sıcaklığı, domates kırmızısı, safran; Fraunces + Inter;
   easing `cubic-bezier(.2,.8,.2,1)`; yalnızca transform/opacity animasyonu).
