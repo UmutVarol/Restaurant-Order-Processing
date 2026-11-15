@@ -1,7 +1,7 @@
 // Bookings and the walk-in waitlist: a waiter takes a booking for a table, the floor plan shows it, a walk-in is
 // seated at a free table and leaves again.
 const { test, expect } = require('@playwright/test');
-const { signIn, uniqueGuest } = require('./helpers');
+const { signIn, uniqueGuest, freeTables } = require('./helpers');
 
 async function api(page, method, path, body) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -17,8 +17,7 @@ async function api(page, method, path, body) {
 test('a booking shows on the floor plan and a walk-in is seated and leaves', async ({ page }) => {
   await signIn(page, 'waiter');
   // a table nobody sits at and nobody has booked, with room for four
-  const tables = await api(page, 'GET', '/floor/tables');
-  const table = tables.filter((x) => !x.occupied && !x.seatedParty && !x.nextBooking && x.seats >= 4).at(-1);
+  const table = (await freeTables(page, 1, (x) => !x.occupied && !x.seatedParty && !x.nextBooking && x.seats >= 4)).at(-1);
   const booked = uniqueGuest('Booking');
   // about an hour and a half from now, in the browser's (the restaurant's) time zone
   const { day, hhmm } = await page.evaluate(() => {

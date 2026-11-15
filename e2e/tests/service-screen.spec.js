@@ -1,7 +1,7 @@
 // The waiter's service screen: a plate the kitchen has ready is carried and marked served in one tap, and once the
 // guests have paid the table waits there to be cleared. Runs on a desktop and on a phone.
 const { test, expect } = require('@playwright/test');
-const { signIn, uniqueGuest } = require('./helpers');
+const { signIn, uniqueGuest, freeTables } = require('./helpers');
 
 async function api(page, method, path, body) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -16,7 +16,7 @@ async function api(page, method, path, body) {
 
 test('a waiter serves a ready plate and clears the table once the guests have paid', async ({ page }) => {
   await signIn(page, 'waiter');
-  const table = (await api(page, 'GET', '/floor/tables')).filter((x) => !x.occupied).at(-1);
+  const table = (await freeTables(page, 1)).at(-1);
   const menu = await api(page, 'GET', '/menu');
   const ayran = menu.find((m) => m.name === 'Ayran');
   const guest = uniqueGuest('Runner');

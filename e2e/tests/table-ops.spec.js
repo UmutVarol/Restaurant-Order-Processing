@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { signIn, uniqueGuest } = require('./helpers');
+const { signIn, uniqueGuest, freeTables } = require('./helpers');
 
 /** Calls the API as the signed-in user of this tab. */
 async function api(page, method, path, body) {
@@ -15,8 +15,7 @@ async function api(page, method, path, body) {
 
 test('a waiter voids, comps with a manager PIN, discounts and moves a table', async ({ page }) => {
   await signIn(page, 'waiter');
-  const tables = await api(page, 'GET', '/floor/tables');
-  const [from, to] = tables.filter((table) => !table.occupied);
+  const [from, to] = await freeTables(page, 2, (table) => !table.occupied);
   const menu = await api(page, 'GET', '/menu');
   const lahmacun = menu.find((item) => item.name === 'Lahmacun');
   const guest = uniqueGuest('Ops');

@@ -1,7 +1,7 @@
 // A guest pays their table's bill from the table's QR code, with no waiter: for what they had, with an invoice,
 // and the rest of the table pays what is left. Runs on a desktop and on a phone.
 const { test, expect } = require('@playwright/test');
-const { signIn, uniqueGuest } = require('./helpers');
+const { signIn, uniqueGuest, freeTables } = require('./helpers');
 
 async function api(page, method, path, body) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -17,7 +17,7 @@ async function api(page, method, path, body) {
 test('a guest pays for what they had with an invoice, and the table pays the rest', async ({ page, context }) => {
   // the restaurant side: a seated table with served plates, and its QR code
   await signIn(page, 'admin');
-  const table = (await api(page, 'GET', '/floor/tables')).filter((x) => !x.occupied && !x.needsClearingSince).at(-2);
+  const table = (await freeTables(page, 2)).at(-2);
   const { token: code } = await api(page, 'POST', `/tables/${table.id}/qr`);
   const menu = await api(page, 'GET', '/menu');
   const item = (name) => menu.find((m) => m.name === name).id;

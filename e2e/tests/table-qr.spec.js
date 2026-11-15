@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { signIn, uniqueGuest } = require('./helpers');
+const { signIn, uniqueGuest, freeTables } = require('./helpers');
 
 async function api(page, method, path, body) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -16,8 +16,7 @@ test('a guest orders from the table QR code and a waiter accepts it', async ({ p
   // the guest follows the order to the table, through the page's slower look once everything is served
   test.setTimeout(90_000);
   await signIn(page, 'admin');
-  const tables = await api(page, 'GET', '/floor/tables');
-  const table = tables.find((x) => !x.occupied);
+  const table = (await freeTables(page, 1, (x) => !x.occupied))[0];
 
   // the manager prints a new code for the table
   await page.goto('/#/settings');

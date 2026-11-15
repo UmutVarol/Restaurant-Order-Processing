@@ -23,4 +23,36 @@ function uniqueGuest(prefix = 'E2E') {
   return `${prefix} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 }
 
-module.exports = { signIn, uniqueGuest };
+/** Calls the API as the signed-in page (or with the given token). */
+async function call(page, method, path, body, token) {
+  return page.evaluate(async ({ method, path, body, token }) => {
+    const bearer = token ?? JSON.parse(sessionStorage.getItem('sofra.session')).token;
+    const response = await fetch(`/api/v1${path}`, {
+      method, headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return response.status === 204 ? null : response.json();
+  }, { method, path, body, token });
+}
+
+/**
+ * Tables a test may use, at least `count` of them. The demo seats guests at random and by the time of day, so in a
+ * busy hour every table can be taken: then the test adds tables of its own (as the demo manager) instead of failing.
+ */
+async function freeTables(page, count = 1, accept = (t) => !t.occupied && !t.needsClearingSince) {
+  let usable = (await call(page, 'GET', '/floor/tables')).filter(accept);
+  if (usable.length >= count) return usable;
+  const session = await page.evaluate(() => JSON.parse(sessionStorage.getItem('sofra.session')));
+  const manager = session.user?.role === 'ADMIN' ? session.token
+    : await page.evaluate(async () => (await (await fetch('/api/v1/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    })).json()).accessToken);
+  for (let i = usable.length; i < count; i++) {
+    const code = `E${Date.now().toString(36).slice(-5)}${i}`;
+    await call(page, 'POST', '/tables', { code, seats: 4, zone: 'INDOOR' }, manager);
+  }
+  usable = (await call(page, 'GET', '/floor/tables')).filter(accept);
+  return usable;
+}
+
+module.exports = { signIn, uniqueGuest, freeTables };

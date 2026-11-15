@@ -2,7 +2,7 @@
 // (remembered on their phone), and the cart suggests what goes well with it. Managers declare the allergens.
 // Runs on a desktop and on a phone.
 const { test, expect } = require('@playwright/test');
-const { signIn } = require('./helpers');
+const { signIn, freeTables } = require('./helpers');
 
 async function api(page, method, path, body) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -17,7 +17,7 @@ async function api(page, method, path, body) {
 
 test('a guest hides what they cannot eat and the cart suggests a drink', async ({ page, context }) => {
   await signIn(page, 'admin');
-  const table = (await api(page, 'GET', '/floor/tables')).filter((x) => !x.occupied).at(0);
+  const table = (await freeTables(page, 1)).at(0);
   const { token } = await api(page, 'POST', `/tables/${table.id}/qr`);
 
   const guest = await context.newPage();

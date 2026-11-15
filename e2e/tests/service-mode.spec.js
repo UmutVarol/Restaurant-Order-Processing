@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { signIn } = require('./helpers');
+const { signIn, freeTables } = require('./helpers');
 
 async function api(page, method, path, body) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -29,7 +29,7 @@ test('in QR-first mode a guest cart goes straight to the kitchen', async ({ page
     expect((await api(page, 'GET', '/service-settings')).mode).toBe('QR_FIRST');
 
     // a guest at an empty table orders a drink; the last free table, so the other QR tests keep theirs
-    const table = (await api(page, 'GET', '/floor/tables')).filter((x) => !x.occupied).at(-1);
+    const table = (await freeTables(page, 1)).at(-1);
     await page.getByTestId(`qr-${table.code}`).click();
     if (await page.locator('.modal').getByRole('button', { name: 'Make new codes' }).isVisible()) {
       await page.locator('.modal').getByRole('button', { name: 'Make new codes' }).click();
