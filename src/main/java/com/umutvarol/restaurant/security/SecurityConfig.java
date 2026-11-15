@@ -168,6 +168,9 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/stations/**").hasRole(Role.ADMIN.name())
                         // Guests paying by QR link: the unguessable link token is their permission.
                         .requestMatchers("/api/v1/public/**").permitAll()
+                        // a print bridge signs in with its own token on every call
+                        .requestMatchers(HttpMethod.POST, "/api/v1/bridge/**").permitAll()
+                        .requestMatchers("/api/v1/print-bridges", "/api/v1/print-bridges/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/callback/*", "/api/v1/payments/webhook/*").permitAll()
                         .requestMatchers("/api/v1/payments/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/bills", "/api/v1/bills/**")

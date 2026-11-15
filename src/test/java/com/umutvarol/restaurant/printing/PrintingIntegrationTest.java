@@ -156,6 +156,60 @@ class PrintingIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void aPrintBridgeFetchesItsBranchsTicketsAndTheServerLeavesThemAlone() throws Exception {
+        String created = mvc.perform(json(as(ADMIN, post("/api/v1/print-bridges")), """
+                        {"name": "Mutfak bilgisayarı"}"""))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String token = JsonPath.read(created, "$.token");
+        long bridge = ((Number) JsonPath.read(created, "$.bridge.id")).longValue();
+        // an address only the restaurant's network knows: the server must never try it itself
+        String body = mvc.perform(json(as(ADMIN, post("/api/v1/printers")), """
+                        {"name": "Köprü %d", "host": "kitchen-printer.lan", "port": 9100, "paperWidth": "80",
+                         "stations": ["HOT"], "enabled": true, "viaBridge": true}""".formatted(System.nanoTime())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.viaBridge").value(true))
+                .andReturn().getResponse().getContentAsString();
+        long printer = ((Number) JsonPath.read(body, "$.id")).longValue();
+        try {
+            exerciseBridge(token, bridge, printer);
+        } finally {
+            remove(printer);
+        }
+    }
+
+    private void exerciseBridge(String token, long bridge, long printer) throws Exception {
+        mvc.perform(as(ADMIN, post("/api/v1/printers/{id}/test", printer))).andExpect(status().isAccepted());
+        Thread.sleep(800);
+        String jobs = mvc.perform(as(ADMIN, get("/api/v1/print-jobs"))).andReturn().getResponse().getContentAsString();
+        Integer job = ((java.util.List<Integer>) JsonPath.read(jobs, "$[?(@.printerId == %d)].id".formatted(printer))).getFirst();
+        assertThat(((java.util.List<Integer>) JsonPath.read(jobs, "$[?(@.id == %d)].attempts".formatted(job))).getFirst()).isZero();
+
+        // the bridge takes it, once, with the printer's address and its bytes
+        String claimed = mvc.perform(post("/api/v1/bridge/jobs/claim").header("X-Bridge-Token", token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat((java.util.List<Integer>) JsonPath.read(claimed, "$[*].id")).containsExactly(job);
+        assertThat((String) JsonPath.read(claimed, "$[0].host")).isEqualTo("kitchen-printer.lan");
+        byte[] ticket = java.util.Base64.getDecoder().decode((String) JsonPath.read(claimed, "$[0].bytes"));
+        assertThat(ticket.length).isGreaterThan(20);
+        mvc.perform(post("/api/v1/bridge/jobs/claim").header("X-Bridge-Token", token))
+                .andExpect(jsonPath("$").isEmpty());
+
+        mvc.perform(json(post("/api/v1/bridge/jobs/{id}/result", job).header("X-Bridge-Token", token), """
+                        {"ok": true}""")).andExpect(status().isOk());
+        String after = mvc.perform(as(ADMIN, get("/api/v1/print-jobs"))).andReturn().getResponse().getContentAsString();
+        assertThat((java.util.List<String>) JsonPath.read(after, "$[?(@.id == %d)].status".formatted(job))).containsExactly("PRINTED");
+
+        // without its token, or once switched off, a bridge gets nothing
+        mvc.perform(post("/api/v1/bridge/jobs/claim")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/bridge/jobs/claim").header("X-Bridge-Token", "forged-token")).andExpect(status().isUnauthorized());
+        mvc.perform(as(ADMIN, org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/print-bridges/{id}", bridge)))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/bridge/jobs/claim").header("X-Bridge-Token", token)).andExpect(status().isUnauthorized());
+    }
+
     private long createPrinter(String name, int port, String stations) throws Exception {
         String body = mvc.perform(json(as(ADMIN, post("/api/v1/printers")), """
                         {"name": "%s", "host": "127.0.0.1", "port": %d, "paperWidth": "80",

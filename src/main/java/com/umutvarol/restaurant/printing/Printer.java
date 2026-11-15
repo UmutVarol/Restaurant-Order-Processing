@@ -57,6 +57,10 @@ public class Printer implements BranchOwned {
     @Column(nullable = false)
     private boolean enabled;
 
+    /** Printed by the branch's print bridge instead of by the server itself (always so for Sofra Cloud). */
+    @Column(name = "via_bridge", nullable = false)
+    private boolean viaBridge;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -74,7 +78,8 @@ public class Printer implements BranchOwned {
         this.createdAt = at;
     }
 
-    void update(String name, String host, int port, int paperWidth, Set<String> stations, boolean enabled) {
+    void update(String name, String host, int port, int paperWidth, Set<String> stations, boolean enabled, boolean viaBridge) {
+        this.viaBridge = viaBridge;
         this.name = name;
         this.host = host;
         this.port = port;
@@ -125,6 +130,10 @@ public class Printer implements BranchOwned {
 
     public int getPaperWidth() {
         return paperWidth;
+    }
+
+    public boolean isViaBridge() {
+        return viaBridge;
     }
 
     public boolean isEnabled() {

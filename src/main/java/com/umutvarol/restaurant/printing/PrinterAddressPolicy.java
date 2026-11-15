@@ -20,7 +20,11 @@ final class PrinterAddressPolicy {
     private PrinterAddressPolicy() {
     }
 
-    static InetAddress resolve(String host, int port, PrintingProperties properties) {
+    /**
+     * The form of a printer's address and its port. For a printer behind a print bridge this is all the server checks:
+     * the address belongs to the restaurant's network, and the bridge applies the network rules there.
+     */
+    static void checkForm(String host, int port, PrintingProperties properties) {
         if (host == null || !HOST.matcher(host).matches()) {
             throw refused(host, "not a host name or IP address");
         }
@@ -29,6 +33,10 @@ final class PrinterAddressPolicy {
                     .formatted(properties.minPort(), properties.maxPort()),
                     Map.of("min", properties.minPort(), "max", properties.maxPort()));
         }
+    }
+
+    static InetAddress resolve(String host, int port, PrintingProperties properties) {
+        checkForm(host, port, properties);
         InetAddress address;
         try {
             address = InetAddress.getByName(host);

@@ -1,0 +1,23 @@
+# systemd unit for the Sofra print bridge (Linux, Raspberry Pi). Install:
+#   sudo cp sofra-print-bridge.mjs /opt/sofra/ && sudo cp sofra-print-bridge.service /etc/systemd/system/
+#   sudo systemctl edit sofra-print-bridge   # set SOFRA_URL and SOFRA_BRIDGE_TOKEN under [Service] Environment=
+#   sudo systemctl enable --now sofra-print-bridge
+[Unit]
+Description=Sofra print bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/env node /opt/sofra/sofra-print-bridge.mjs
+Environment=SOFRA_URL=https://your-restaurant.sofra.app
+Environment=SOFRA_BRIDGE_TOKEN=paste-the-token-here
+Restart=always
+RestartSec=5
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

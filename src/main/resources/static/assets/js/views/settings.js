@@ -467,7 +467,7 @@ export default {
             : printers.length ? h('div', { class: 'printer-list' }, printers.map((printer) => h('div', { class: ['printer-row', printer.enabled ? '' : 'off'] },
               h('div', { class: 'printer-info' },
                 h('b', null, printer.name, printer.enabled ? null : h('span', { class: 'pill plain', style: { marginLeft: '8px' } }, t('printing.off'))),
-                h('small', null, `${printer.host}:${printer.port} · ${printer.paperWidth} mm · ${printer.stations.map(stationName).join(', ')}`),
+                h('small', null, `${printer.host}:${printer.port} · ${printer.paperWidth} mm · ${printer.stations.map(stationName).join(', ')}${printer.viaBridge ? ` · ${t('bridge.via')}` : ''}`),
                 printer.lastError ? h('small', { class: 'danger-text' }, icon('alert', 'sm'), ` ${printer.lastError}`)
                   : printer.lastPrintedAt ? h('small', { class: 'faint' }, t('printing.lastPrinted', { at: dateTime(printer.lastPrintedAt) })) : null),
               h('div', { class: 'printer-actions' },
@@ -475,11 +475,76 @@ export default {
                 h('button', { class: 'btn sm ghost', 'data-testid': `test-${printer.name}`, onclick: () => testPage(printer) }, icon('printer', 'sm'), t('printing.test')),
                 h('button', { class: 'btn sm ghost', onclick: () => editPrinter(printer) }, icon('edit', 'sm'), t('common.edit'))))))
               : h('div', { class: 'empty', style: { padding: '18px' } }, h('div', { class: 'art' }, '🖨️'), h('h4', null, t('printing.none'))),
-          h('div', null, h('button', { class: 'btn', 'data-testid': 'add-printer', onclick: () => editPrinter(null) }, icon('plus', 'sm'), t('printing.add')))));
+          h('div', null, h('button', { class: 'btn', 'data-testid': 'add-printer', onclick: () => editPrinter(null) }, icon('plus', 'sm'), t('printing.add'))),
+          bridgesSection()));
+    }
+
+    // a print bridge: a small program in the restaurant that prints what the server cannot reach (always so in the cloud)
+    let bridges = null;
+    async function loadBridges() {
+      try { bridges = await api.printBridges(); } catch { bridges = []; }
+      renderPrinters();
+    }
+
+    function bridgesSection() {
+      return h('div', { class: 'bridge-section', 'data-testid': 'print-bridges' },
+        h('div', { class: 'card-title' }, t('bridge.title')),
+        h('p', { class: 'muted' }, t('bridge.text')),
+        bridges == null ? null : bridges.length ? h('div', { class: 'printer-list' }, bridges.map((bridge) => h('div', { class: 'printer-row' },
+          h('div', { class: 'printer-info' }, h('b', null, bridge.name),
+            h('small', { class: bridge.lastSeenAt && Date.now() - new Date(bridge.lastSeenAt) < 120_000 ? 'faint' : 'danger-text' },
+              bridge.lastSeenAt ? t('bridge.seen', { at: dateTime(bridge.lastSeenAt) }) : t('bridge.never'))),
+          h('div', { class: 'printer-actions' },
+            h('button', { class: 'btn sm ghost danger-text', onclick: async () => {
+              if (!(await confirmDialog({ title: t('bridge.revokeTitle', { name: bridge.name }), text: t('bridge.revokeText'), confirmLabel: t('bridge.revoke'), danger: true }))) return;
+              try { await api.revokePrintBridge(bridge.id); loadBridges(); } catch (error) { toast({ title: errorMessage(error), kind: 'error' }); }
+            } }, icon('x', 'sm'), t('bridge.revoke'))))))
+          : null,
+        h('div', null, h('button', { class: 'btn', 'data-testid': 'add-bridge', onclick: addBridge }, icon('plus', 'sm'), t('bridge.add'))));
+    }
+
+    function addBridge() {
+      const name = h('input', { class: 'input', id: 'bridge-name', maxlength: 60, value: t('bridge.defaultName') });
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const modal = openModal({
+        title: t('bridge.add'),
+        size: 'sm',
+        body: [h('div', { class: 'field' }, h('label', { for: 'bridge-name' }, t('bridge.name')), name), problem],
+        footer: (handle) => [h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')),
+          h('button', { class: 'btn primary', 'data-testid': 'bridge-create', onclick: async () => {
+            try {
+              const created = await api.addPrintBridge({ name: name.value.trim() });
+              modal.close();
+              showBridgeToken(created);
+              loadBridges();
+            } catch (error) { problem.replaceChildren(icon('alert', 'sm'), errorMessage(error)); problem.hidden = false; }
+          } }, icon('check', 'sm'), t('bridge.create'))],
+      });
+      name.select();
+    }
+
+    /** The token is shown once: what to run on the restaurant's computer, ready to copy. */
+    function showBridgeToken({ bridge, token }) {
+      const command = `SOFRA_URL=${location.origin} SOFRA_BRIDGE_TOKEN=${token} node sofra-print-bridge.mjs`;
+      openModal({
+        title: t('bridge.createdTitle', { name: bridge.name }),
+        size: 'sm',
+        body: [
+          h('p', { class: 'muted' }, t('bridge.createdText')),
+          h('dl', { class: 'setup-credentials' },
+            h('dt', null, t('bridge.address')), h('dd', null, h('code', null, location.origin)),
+            h('dt', null, t('bridge.token')), h('dd', null, h('code', { 'data-testid': 'bridge-token' }, token))),
+          h('pre', { class: 'bridge-command', dir: 'ltr' }, command),
+          h('p', { class: 'faint' }, t('bridge.once')),
+        ],
+        footer: (handle) => [
+          h('button', { class: 'btn ghost', onclick: () => navigator.clipboard?.writeText(command).then(() => toast({ title: t('bridge.copied') }), () => {}) }, icon('note', 'sm'), t('bridge.copy')),
+          h('button', { class: 'btn primary', onclick: handle.close }, t('common.done'))],
+      });
     }
 
     function editPrinter(printer) {
-      const draft = printer ?? { name: '', host: '192.168.1.', port: 9100, paperWidth: 80, stations: ['COLD', 'HOT'], enabled: true };
+      const draft = printer ?? { name: '', host: '192.168.1.', port: 9100, paperWidth: 80, stations: ['COLD', 'HOT'], enabled: true, viaBridge: (bridges?.length ?? 0) > 0 };
       const input = (id, value, extra = {}) => h('input', { class: 'input', id, value, ...extra });
       const name = input('printer-name', draft.name, { maxlength: 40 });
       const host = input('printer-host', draft.host, { maxlength: 100, inputmode: 'decimal', autocomplete: 'off' });
@@ -488,6 +553,7 @@ export default {
       const boxes = (stations ?? []).map((station) => h('label', null,
         h('input', { type: 'checkbox', value: station.code, checked: draft.stations.includes(station.code) }), station.name));
       const enabled = h('input', { type: 'checkbox', checked: draft.enabled });
+      const viaBridge = h('input', { type: 'checkbox', checked: draft.viaBridge, 'data-testid': 'printer-via-bridge' });
       const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
       const field = (id, label, control) => h('div', { class: 'field' }, h('label', { for: id }, label), control);
       const modal = openModal({
@@ -500,6 +566,7 @@ export default {
           field('printer-width', t('printing.paper'), width),
           h('div', { class: 'field' }, h('span', { class: 'label' }, t('printing.stations')), h('div', { class: 'tag-picker' }, boxes)),
           h('label', { class: 'checkbox' }, enabled, t('printing.enabled')),
+          h('label', { class: 'checkbox' }, viaBridge, t('bridge.printerVia')),
           problem,
         ],
         footer: (handle) => [
@@ -515,7 +582,7 @@ export default {
               await api.savePrinter(printer?.id, {
                 name: name.value.trim(), host: host.value.trim(), port: Number(port.value), paperWidth: width.value,
                 stations: boxes.map((label) => label.querySelector('input')).filter((box) => box.checked).map((box) => box.value),
-                enabled: enabled.checked,
+                enabled: enabled.checked, viaBridge: viaBridge.checked,
               });
               toast({ title: t('settings.saved') });
               modal.close();
@@ -623,6 +690,7 @@ export default {
 
     async function loadPrinters() {
       if (!manager) return;
+      loadBridges();
       try {
         printers = await api.printers();
       } catch (error) {

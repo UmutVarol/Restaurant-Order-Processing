@@ -49,6 +49,17 @@ public class StationService {
         });
     }
 
+    /** The four stations every restaurant starts with (as in V12), for a business that has none yet. */
+    public void createDefaults() {
+        if (!stations.findAll().isEmpty()) {
+            return;
+        }
+        stations.save(new Station("COLD", "Soğuk mutfak", 8, 1));
+        stations.save(new Station("HOT", "Sıcak mutfak", 18, 2));
+        stations.save(new Station("DESSERT", "Tatlı", 10, 3));
+        stations.save(new Station("BAR", "Bar", 5, 4));
+    }
+
     public StationResponse create(StationRequest request) {
         if (request.code() == null) {
             throw new BusinessRuleException("STATION_CODE_REQUIRED", "A new station needs a code");

@@ -73,6 +73,7 @@ public class SignupService {
     private final DiningTableRepository tables;
     private final MenuItemRepository menu;
     private final BranchRepository branches;
+    private final com.umutvarol.restaurant.menu.StationService stations;
     private final TransactionTemplate tx;
     private final boolean enabled;
     private final String baseDomain;
@@ -82,7 +83,7 @@ public class SignupService {
 
     SignupService(BusinessRegistry registry, BusinessRepository businesses, StaffService staff,
                   DiningTableRepository tables, MenuItemRepository menu, BranchRepository branches,
-                  PlatformTransactionManager transactions,
+                  com.umutvarol.restaurant.menu.StationService stations, PlatformTransactionManager transactions,
                   @Value("${restaurant.cloud.signup-enabled:false}") boolean enabled,
                   @Value("${restaurant.cloud.base-domain:}") String baseDomain,
                   @Value("${restaurant.cloud.signups-per-client-per-hour:5}") int perClientPerHour) {
@@ -93,6 +94,7 @@ public class SignupService {
         this.tables = tables;
         this.menu = menu;
         this.branches = branches;
+        this.stations = stations;
         this.tx = new TransactionTemplate(transactions);
         this.enabled = enabled;
         this.baseDomain = baseDomain;
@@ -111,6 +113,8 @@ public class SignupService {
                 branches.save(new Branch("merkez", "Merkez", Instant.now()));
                 TokenResponse owner = staff.createOwner(request.username(), request.ownerName(), request.password());
                 sampleTables();
+                // the kitchen's stations first: the sample dishes go to them, and printers are set up by them
+                stations.createDefaults();
                 sampleMenu();
                 return owner;
             }));

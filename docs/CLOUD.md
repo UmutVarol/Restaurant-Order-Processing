@@ -13,6 +13,7 @@ sunucusundaki kurulum ([INSTALL.md](INSTALL.md)) bundan etkilenmez: orada abonel
 | Başlangıç planı sınırları: 1 şube, 5 etkin personel, 15 masa (aşılınca `PLAN_LIMIT`) | hazır |
 | Deneme bitince / ödeme 14 günden fazla gecikince **yalnızca okuma**: veri silinmez; rapor, dışa aktarma, giriş ve ödeme çalışır; sipariş alınamaz (`402 SUBSCRIPTION_INACTIVE`). Ödeme gelince hemen açılır | hazır |
 | İşletmenin kendi iyzico hesabı (misafir telefondan öder), şifreli saklanır | hazır |
+| Mutfak fişleri için yazıcı köprüsü (restoranda çalışır, yalnızca dışarı bağlanır) | hazır |
 | Paddle ile tahsilat: ödeme sayfası, kart/fatura sayfası, imzalı webhook, şube sayısı değişince otomatik fiyat güncelleme | hazır, **sandbox'ta denenmeli** |
 | "Plan ve ödeme" ekranı, deneme bitiyor / ödeme gecikti bandı, 6 dil | hazır |
 | Mağaza uygulamaları için kabuklar (`mobile/`), Android doğrulama dosyası | hazır, **derlenmesi sizde** |
@@ -49,8 +50,9 @@ PRICE_CHAIN_MONTHLY=pri_...    PRICE_CHAIN_YEARLY=pri_...
   (`PAYMENT_PROVIDER=NONE`).
 - **e-Arşiv ve paket servis platformları** bugün hâlâ sunucu genelinde ayardır; işletme başına ekranları gelene kadar
   bulutta kapalıdır.
-- **Yazıcılar:** buluttaki sunucu restoranın yerel ağındaki yazıcıya doğrudan ulaşamaz. Bulutta mutfak fişi için
-  restoranda çalışacak küçük bir "yazıcı köprüsü" gerekir (sonraki iş).
+- **Yazıcılar:** buluttaki sunucu restoranın yerel ağındaki yazıcıya ulaşamaz ve güvenlik için hiçbir adrese kendisi
+  bağlanmaz (işletmenin yazdığı bir adres sunucunun iç ağını gösterebilirdi). Fişleri restoranda çalışan **yazıcı
+  köprüsü** alıp yazdırır: [PRINT_BRIDGE.md](PRINT_BRIDGE.md).
 
 ## 3. Paddle (dolar ile tahsilat)
 

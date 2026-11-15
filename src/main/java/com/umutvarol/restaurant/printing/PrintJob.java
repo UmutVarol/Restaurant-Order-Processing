@@ -136,6 +136,11 @@ public class PrintJob implements BranchOwned {
         printer.printed(at);
     }
 
+    /** A print bridge took the job: nobody else tries it until the lease ends (the bridge reports back before). */
+    void lease(Instant until) {
+        this.nextAttemptAt = until;
+    }
+
     /** @return whether the job gave up */
     boolean failed(String error, Instant at, int maxAttempts) {
         this.attempts++;

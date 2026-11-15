@@ -2548,12 +2548,29 @@
       save();
       return { tableId: table.id, tableCode: table.code, token, issuedAt: iso(qr().issued[table.id]) };
     }],
+    // print bridges: the demo has no restaurant computer, so a bridge is only ever "not connected yet"
+    ['GET', /^print-bridges$/, 'manager', () => (state.bridges ?? []).filter((b) => !b.revoked).map(({ revoked, ...b }) => b)],
+    ['POST', /^print-bridges$/, 'manager', (_, body) => {
+      if (blank(body.name)) throw new Problem(400, 'VALIDATION_FAILED', 'Name the bridge', { fieldErrors: { name: 'must not be blank' } });
+      state.bridges ??= [];
+      const bridge = { id: state.bridges.length + 1, name: String(body.name).trim(), branchId: 1, createdAt: iso(Date.now()), lastSeenAt: null };
+      state.bridges.push(bridge);
+      save();
+      return [201, { bridge, token: `demo-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}` }];
+    }],
+    ['DELETE', /^print-bridges\/(\d+)$/, 'manager', ({ params }) => {
+      const bridge = (state.bridges ?? []).find((b) => b.id === Number(params[0]));
+      if (!bridge) throw new Problem(404, 'PRINT_BRIDGE_NOT_FOUND', 'Print bridge not found');
+      bridge.revoked = true;
+      save();
+      return [204, null];
+    }],
     ['GET', /^printers$/, 'manager', () => [...printers()].sort((a, b) => a.name.localeCompare(b.name)).map(printerView)],
     ['POST', /^printers$/, 'manager', (_, body) => {
       validatePrinter(body, null);
       state.nextPrinterId ??= 1;
       const printer = { id: state.nextPrinterId++, name: String(body.name).trim(), host: String(body.host).trim(), port: Number(body.port),
-        paperWidth: Number(body.paperWidth), stations: [...new Set(body.stations)].sort(), enabled: Boolean(body.enabled), lastPrintedAt: null, lastError: null };
+        paperWidth: Number(body.paperWidth), stations: [...new Set(body.stations)].sort(), enabled: Boolean(body.enabled), viaBridge: Boolean(body.viaBridge), lastPrintedAt: null, lastError: null };
       printers().push(printer);
       save();
       return [201, printerView(printer)];
@@ -2563,7 +2580,7 @@
       if (!printer) throw new Problem(404, 'NOT_FOUND', 'Printer not found');
       validatePrinter(body, printer.id);
       Object.assign(printer, { name: String(body.name).trim(), host: String(body.host).trim(), port: Number(body.port), paperWidth: Number(body.paperWidth),
-        stations: [...new Set(body.stations)].sort(), enabled: Boolean(body.enabled) });
+        stations: [...new Set(body.stations)].sort(), enabled: Boolean(body.enabled), viaBridge: Boolean(body.viaBridge) });
       save();
       return printerView(printer);
     }],

@@ -1937,3 +1937,8 @@ button.rota-shift { cursor: pointer; }
   background: var(--amber-soft); color: var(--text); font-size: 14px; }
 .plan-banner.lapsed { background: var(--red-soft, var(--amber-soft)); }
 .plan-banner > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* ------------------------------------------------------------------ print bridges */
+.bridge-section { display: grid; gap: 10px; padding-top: 14px; margin-top: 4px; border-top: 1px solid var(--border); }
+.bridge-command { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-3); font-size: 12px;
+  white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }

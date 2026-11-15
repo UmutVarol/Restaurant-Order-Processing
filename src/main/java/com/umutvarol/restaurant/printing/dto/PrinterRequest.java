@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.printing.dto;
 
+import org.jspecify.annotations.Nullable;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -15,5 +16,6 @@ public record PrinterRequest(
         @Min(1) @Max(65535) int port,
         @NotNull @Pattern(regexp = "58|80") String paperWidth,
         @NotEmpty @Size(max = 10) Set<@NotNull @Pattern(regexp = "[A-Z][A-Z0-9_]{1,19}") String> stations,
-        boolean enabled) {
+        boolean enabled,
+        @Nullable Boolean viaBridge) {
 }

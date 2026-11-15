@@ -17,6 +17,7 @@ import com.umutvarol.restaurant.printing.dto.TicketPreview;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,10 +59,14 @@ public class PrintingService {
     private final ApplicationEventPublisher events;
     private final TransactionTemplate transaction;
     private final Clock clock;
+    /** Sofra Cloud: the server never connects to an address a business gave it; every printer prints via a bridge. */
+    private final boolean cloud;
 
     public PrintingService(PrinterRepository printers, StationService stations, PrintJobRepository jobs, OrderRepository orders,
                            PrinterClient client, PrintingProperties properties, RestaurantProperties restaurant,
-                           ApplicationEventPublisher events, PlatformTransactionManager transactionManager, Clock clock) {
+                           ApplicationEventPublisher events, PlatformTransactionManager transactionManager, Clock clock,
+                           @org.springframework.beans.factory.annotation.Value("${restaurant.cloud.enabled:false}") boolean cloud) {
+        this.cloud = cloud;
         this.printers = printers;
         this.stations = stations;
         this.jobs = jobs;
@@ -90,10 +95,16 @@ public class PrintingService {
                     Map.of("name", name));
         }
         String host = request.host().strip();
-        PrinterAddressPolicy.resolve(host, request.port(), properties);
+        boolean viaBridge = cloud || Boolean.TRUE.equals(request.viaBridge());
+        if (viaBridge) {
+            // the address is on the restaurant's network, which only the bridge can see: never looked up here
+            PrinterAddressPolicy.checkForm(host, request.port(), properties);
+        } else {
+            PrinterAddressPolicy.resolve(host, request.port(), properties);
+        }
         stations.requireExisting(request.stations());
         printer.update(name, host, request.port(), Integer.parseInt(request.paperWidth()), request.stations(),
-                request.enabled());
+                request.enabled(), viaBridge);
         return PrinterResponse.from(printers.save(printer));
     }
 
@@ -181,8 +192,14 @@ public class PrintingService {
         if (!properties.enabled()) {
             return;
         }
+        if (cloud) {
+            return;
+        }
+        // jobs for printers behind a bridge wait for the bridge
         List<Long> due = transaction.execute(status -> jobs.findByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(
-                PrintJob.Status.QUEUED, clock.instant(), Limit.of(20)).stream().map(PrintJob::getId).toList());
+                PrintJob.Status.QUEUED, clock.instant(), Limit.of(20)).stream()
+                .filter(job -> !job.getPrinter().isViaBridge())
+                .map(PrintJob::getId).toList());
         for (Long id : due == null ? List.<Long>of() : due) {
             print(id);
         }
@@ -202,6 +219,57 @@ public class PrintingService {
             error = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
         }
         String failure = error;
+        transaction.executeWithoutResult(status -> record(jobId, failure));
+    }
+
+    // ------------------------------------------------------------------------------------------- print bridges
+
+    /** A ticket for a print bridge: where to send it on the restaurant's network, and the printer's bytes. */
+    public record BridgeJob(long id, String host, int port, String bytes) {
+    }
+
+    /** How long a bridge has to report back before the job is offered again. */
+    static final Duration BRIDGE_LEASE = Duration.ofSeconds(60);
+
+    /**
+     * Hands a branch's bridge the tickets due on its printers, rendered, and leases them so they are handed out once.
+     * The printer's own address is sent along: the bridge decides there whether it may connect to it.
+     */
+    public List<BridgeJob> claimForBridge(long branchId, int max) {
+        Instant now = clock.instant();
+        List<Long> due = transaction.execute(status -> jobs.findByStatusAndNextAttemptAtLessThanEqualOrderByIdAsc(
+                PrintJob.Status.QUEUED, now, Limit.of(100)).stream()
+                .filter(job -> (cloud || job.getPrinter().isViaBridge()) && job.getPrinter().isEnabled()
+                        && Long.valueOf(branchId).equals(job.getPrinter().getBranchId()))
+                .limit(Math.max(1, Math.min(max, 20)))
+                .map(PrintJob::getId).toList());
+        List<BridgeJob> claimed = new java.util.ArrayList<>();
+        for (Long id : due == null ? List.<Long>of() : due) {
+            BridgeJob job = transaction.execute(status -> {
+                Prepared prepared = prepare(id);
+                if (prepared == null) {
+                    return null;
+                }
+                jobs.findById(id).orElseThrow().lease(now.plus(BRIDGE_LEASE));
+                return new BridgeJob(id, prepared.host(), prepared.port(), java.util.Base64.getEncoder().encodeToString(prepared.bytes()));
+            });
+            if (job != null) {
+                claimed.add(job);
+            }
+        }
+        return claimed;
+    }
+
+    /** The bridge printed the job, or says why it could not; another branch's job is not its to report. */
+    public void bridgeResult(long branchId, long jobId, @Nullable String error) {
+        boolean ours = Boolean.TRUE.equals(transaction.execute(status -> jobs.findById(jobId)
+                .filter(job -> job.getStatus() == PrintJob.Status.QUEUED)
+                .filter(job -> Long.valueOf(branchId).equals(job.getPrinter().getBranchId()))
+                .isPresent()));
+        if (!ours) {
+            throw new com.umutvarol.restaurant.common.error.ResourceNotFoundException("print_job", jobId);
+        }
+        String failure = error == null || error.isBlank() ? null : error.strip();
         transaction.executeWithoutResult(status -> record(jobId, failure));
     }
 

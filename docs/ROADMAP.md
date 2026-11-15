@@ -310,6 +310,10 @@ Plan and prices: [SOFRA_CLOUD_PLAN.md](SOFRA_CLOUD_PLAN.md); going live: [CLOUD.
 - **Store apps:** a Capacitor shell for the App Store and a Trusted Web Activity for Google Play (`mobile/`), with
   Digital Asset Links served by the app.
 - A `cloud` profile: platform health and metrics on a private port, per-restaurant integrations off.
+- **Plans hold to what they include** (402 `PLAN_FEATURE`), and the app hides what the plan leaves out.
+- **Each business's own iyzico account** for guests' phone payments, keys sealed with AES-GCM.
+- **Print bridge** (`bridge/sofra-print-bridge.mjs`): the cloud never connects to an address a business typed in;
+  a program in the restaurant fetches the branch's tickets and prints them on the local network only.
 - **Closed source from now on:** a proprietary licence; versions published before stay MIT.
 
 ## Later
