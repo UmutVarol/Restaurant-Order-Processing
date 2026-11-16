@@ -814,6 +814,19 @@
   // Mirrors GuestService: a table's QR token opens its page, the service rules (GuestOrderPolicy) send a cart to the
   // kitchen or hold it for a waiter, and calls fold into the open one.
   const guestRequests = () => (state.guestRequests ??= []);
+  const brandView = () => {
+    const b = state.branding || {};
+    return { accent: b.accent || null, logoVersion: b.logo ? b.logoVersion : null };
+  };
+
+  async function logoResponse() {
+    const logo = state.branding?.logo;
+    if (!logo) throw new Problem(404, 'NOT_FOUND', 'Logo ? was not found');
+    const [head, data] = logo.split(',');
+    const type = head.slice(5, head.indexOf(';'));
+    const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+    return new Response(new Blob([bytes], { type }), { status: 200, headers: { 'Content-Type': type } });
+  }
   const serviceSettings = () => (state.serviceSettings ??= { mode: 'MIXED', autoAcceptLimit: 1500, firstCartNeedsStaff: true, updatedAt: null, updatedBy: null });
   const BURST_LIMIT = 6;
   const BURST_WINDOW_MS = 10 * 60_000;
@@ -1796,6 +1809,7 @@
         share: link.amountC == null ? null : toLira(Math.min(link.amountC, m.available)),
         payable: reason == null, reason, expiresAt: iso(link.expiresAt), provider: 'SIMULATED',
         lastPayment: last ? { status: last.status, amount: toLira(last.amountC), tip: toLira(last.tipC), failureReason: last.failureReason, at: iso(last.completedAt || last.createdAt) } : null,
+        brand: brandView(),
       };
     }],
     ['POST', /^public\/pay\/([A-Za-z0-9_-]+)\/checkout$/, 'public', ({ params }, body) => {
@@ -2427,7 +2441,7 @@
     }],
     ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})$/, 'public', ({ params }) => {
       const table = tableForToken(params[0]);
-      return { restaurant: 'Sofra Bistro', tableCode: table.code, mode: serviceSettings().mode,
+      return { restaurant: 'Sofra Bistro', tableCode: table.code, mode: serviceSettings().mode, brand: brandView(),
         selfPay: PLAN_OFFERS[billing().plan].features.includes('ONLINE_PAYMENTS'),
         openCalls: ['CALL_WAITER', 'REQUEST_BILL'].filter((kind) => guestRequests().some((r) => r.tableId === table.id && r.kind === kind && r.status === 'OPEN')) };
     }],
@@ -2505,6 +2519,35 @@
       if (!request) throw new Problem(404, 'NOT_FOUND', 'Request ? was not found');
       return guestView(request);
     }],
+    // D1: the restaurant's colour and logo on its guests' screens; the demo keeps the logo as a data: address
+    ['GET', /^branding$/, 'staff', () => brandView()],
+    ['PUT', /^branding$/, 'manager', (_, body) => {
+      if (body.accent != null && !/^#[0-9a-fA-F]{6}$/.test(body.accent)) throw new Problem(400, 'VALIDATION_FAILED', 'One or more fields are invalid.', { errors: [{ field: 'accent', message: 'must match "^#[0-9A-Fa-f]{6}$"' }] });
+      state.branding = { ...(state.branding || {}), accent: body.accent ? body.accent.toLowerCase() : null };
+      save();
+      return brandView();
+    }],
+    ['PUT', /^branding\/logo$/, 'manager', async (_, body) => {
+      const bytes = body instanceof Blob ? new Uint8Array(await body.arrayBuffer()) : new Uint8Array();
+      const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+      const webp = String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP';
+      if (!bytes.length || bytes.length > 60 * 1024 || !(png || webp)) throw new Problem(422, 'LOGO_INVALID', 'The logo must be a PNG or WebP image of at most 60 KB.');
+      const type = png ? 'image/png' : 'image/webp';
+      let binary = '';
+      bytes.forEach((b) => { binary += String.fromCharCode(b); });
+      const previous = state.branding || {};
+      state.branding = { ...previous, logo: `data:${type};base64,${btoa(binary)}`, logoVersion: (previous.logoVersion || 0) + 1 };
+      save();
+      return brandView();
+    }],
+    ['DELETE', /^branding\/logo$/, 'manager', () => {
+      state.branding = { ...(state.branding || {}), logo: null };
+      save();
+      return brandView();
+    }],
+    ['GET', /^branding\/logo$/, 'staff', () => logoResponse()],
+    ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})\/logo$/, 'public', ({ params }) => { tableForToken(params[0]); return logoResponse(); }],
+    ['GET', /^public\/pay\/([A-Za-z0-9_-]+)\/logo$/, 'public', ({ params }) => { findLink(params[0]); return logoResponse(); }],
     ['GET', /^service-settings$/, 'staff', () => ({ ...serviceSettings() })],
     ['PUT', /^service-settings$/, 'manager', ({ user }, body) => {
       const limit = body.autoAcceptLimit == null || body.autoAcceptLimit === '' ? null : Number(body.autoAcceptLimit);
@@ -2688,6 +2731,13 @@
         ...floorParties(table.id),
         openTotal: toLira(open.reduce((sum, o) => sum + o.pricing.total, 0)),
         openOrders: open.map((o) => ({ id: o.id, status: o.status, customerName: o.customerName, itemCount: o.lines.reduce((n, l) => n + l.quantity - (l.voided || 0), 0), total: toLira(o.pricing.total), createdAt: iso(o.createdAt) })),
+        // F1: the oldest open call or cart, else the last change to any of the table's orders
+        attentionSince: (() => {
+          if (!open.length) return null;
+          const call = guestRequests().filter((r) => r.tableId === table.id && r.status === 'OPEN').map((r) => r.createdAt).sort((a, b) => a - b)[0];
+          if (call) return iso(call);
+          return iso(Math.max(...open.map((o) => o.history[o.history.length - 1].at)));
+        })(),
       };
     })],
     ['POST', /^floor\/tables\/(\d+)\/cleared$/, 'till', ({ params }) => {
@@ -2994,10 +3044,13 @@
         const contentType = headers['Content-Type'] || headers['content-type'] || '';
         if (init.body && contentType.startsWith('application/x-www-form-urlencoded')) {
           body = Object.fromEntries(new URLSearchParams(init.body));
+        } else if (init.body && contentType.startsWith('image/')) {
+          body = init.body;
         } else if (init.body) {
           try { body = JSON.parse(init.body); } catch { throw new Problem(400, 'MALFORMED_REQUEST', 'The request body is missing or is not valid JSON of the expected shape.'); }
         }
         const result = await handler({ params: match.slice(1), query: resolved.searchParams, user, headers }, body);
+        if (result instanceof Response) return result;
         if (result && typeof result.redirect === 'string') return new Response(null, { status: 303, headers: { Location: result.redirect } });
         return Array.isArray(result) && typeof result[0] === 'number' ? json(result[0], result[1]) : json(200, result);
       }

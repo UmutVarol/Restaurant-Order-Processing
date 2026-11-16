@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,6 +40,12 @@ class PublicTableController {
     @GetMapping
     PublicTableResponse table(@PathVariable @Pattern(regexp = "[A-Za-z0-9_-]{20,100}") String token) {
         return guests.table(token);
+    }
+
+    @Operation(summary = "The restaurant's logo", description = "404 when it has none.")
+    @GetMapping("/logo")
+    ResponseEntity<byte[]> logo(@PathVariable @Pattern(regexp = "[A-Za-z0-9_-]{20,100}") String token) {
+        return guests.logo(token).map(BrandingService.Logo::response).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Operation(summary = "Send a cart", description = "A waiter accepts it before it reaches the kitchen.")

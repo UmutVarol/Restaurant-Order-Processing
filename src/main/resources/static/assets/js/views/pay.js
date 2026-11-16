@@ -1,7 +1,8 @@
 // Pages a guest sees without signing in: the bill behind a QR code, and the simulated provider's payment page
 // used in demos. Card details are only ever entered on the provider's own page, never here.
 import { h, mount } from '../core/dom.js';
-import { icon, logoMark } from '../core/icons.js';
+import { icon } from '../core/icons.js';
+import { guestMark, guestName, leaveGuestBrand, useGuestBrand } from '../core/brand.js';
 import { t } from '../core/i18n.js';
 import { money, percent, time } from '../core/format.js';
 import { api, backendFetch, errorMessage } from '../core/api.js';
@@ -17,7 +18,10 @@ const RETURN_TTL_MS = 2 * 60 * 60 * 1000;
 /** Renders a guest page into {@code root}. Returns a cleanup function. */
 export function renderGuest(root, kind, token) {
   if (kind === 'pay' && token === 'return') return returnFromProvider(root);
-  return kind === 'pay' ? payPage(root, token) : simulatedCheckoutPage(root, token);
+  // the simulated provider's page is the provider's, not the restaurant's: it keeps Sofra's own look
+  if (kind !== 'pay') leaveGuestBrand();
+  const cleanup = kind === 'pay' ? payPage(root, token) : simulatedCheckoutPage(root, token);
+  return () => { cleanup?.(); leaveGuestBrand(); };
 }
 
 /**
@@ -42,7 +46,7 @@ function returnFromProvider(root) {
 
 function frame(...content) {
   return h('div', { class: 'guest' },
-    h('header', { class: 'guest-top' }, logoMark(), h('b', null, 'Sofra'), h('span', { class: 'spacer' }), langButton(), themeButton()),
+    h('header', { class: 'guest-top' }, guestMark(), h('b', { 'data-testid': 'guest-name' }, guestName()), h('span', { class: 'spacer' }), langButton(), themeButton()),
     h('main', { class: 'guest-card card' }, content),
     h('footer', { class: 'guest-foot faint' }, icon('info', 'sm'), t('guest.secure')));
 }
@@ -81,6 +85,7 @@ function payPage(root, token) {
   async function load() {
     try {
       const [bill, invoice] = await Promise.all([api.publicBill(token), api.guestInvoice(token).catch(() => null)]);
+      if (!state.bill) useGuestBrand(bill.restaurant, bill.brand, `/public/pay/${encodeURIComponent(token)}/logo`).then(render);
       state.bill = bill;
       state.invoice = invoice;
       state.error = null;

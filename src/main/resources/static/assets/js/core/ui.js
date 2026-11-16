@@ -161,12 +161,14 @@ function leave(el, className) {
   setTimeout(done, 400);
 }
 
-export function toast({ title, text, kind = 'success', action, timeout = 4500 }) {
+export function toast({ title, text, kind = 'success', action, timeout = 4500, countdown = 0 }) {
   const host = document.getElementById('toasts');
-  const el = h('div', { class: `toast ${kind}`, role: kind === 'error' ? 'alert' : 'status' },
+  const el = h('div', { class: ['toast', kind, countdown ? 'counting' : ''], role: kind === 'error' ? 'alert' : 'status' },
     h('div', { class: 'ic' }, icon(TOAST_ICONS[kind] || 'info', 'sm')),
     h('div', { class: 'msg' }, h('b', null, title), text ? h('span', null, text) : null),
-    action ? h('button', { class: 'act', onclick: () => { action.run(); dismiss(); } }, action.label) : null);
+    action ? h('button', { class: 'act', 'data-testid': 'toast-action', onclick: () => { action.run(); dismiss(); } }, action.label) : null,
+    // E1: how long is left to take it back, as a bar that empties (reduced motion: the seconds in the text only)
+    countdown ? h('i', { class: 'toast-countdown', 'aria-hidden': 'true', style: { animationDuration: `${countdown}ms` } }) : null);
   host.append(el);
   // A burst of events (a busy kitchen) should not bury the screen: keep the newest few.
   const live = [...host.querySelectorAll('.toast:not(.leaving)')];
@@ -187,8 +189,64 @@ export function toast({ title, text, kind = 'success', action, timeout = 4500 })
     leave(el, 'leaving');
   }
   el.dismiss = dismiss;
+  dismiss.el = el;
   return dismiss;
 }
+
+// ---------------------------------------------------------------------------- E1: undo instead of a confirmation
+
+const UNDO_MS = 5000;
+const pendingUndos = new Set();
+
+/**
+ * Does something on screen at once and sends it a few seconds later, unless the user takes it back from the toast.
+ * {@code apply} and {@code revert} change only the screen; {@code commit} talks to the server. Leaving the page or
+ * the screen sends whatever is still waiting, so nothing is lost. Resolves once it is sent or taken back.
+ */
+export function undoable({ title, apply, revert, commit, onError, delay = UNDO_MS }) {
+  return new Promise((resolve) => {
+    apply?.();
+    let settled = false;
+    let left = Math.ceil(delay / 1000);
+    const entry = { flush: () => finish(true) };
+    pendingUndos.add(entry);
+    const dismiss = toast({
+      title, text: t('undo.left', { n: left }), kind: 'success', timeout: delay + 60_000, countdown: delay,
+      action: { label: t('undo.action'), run: () => finish(false) },
+    });
+    const seconds = dismiss.el.querySelector('.msg span');
+    const tick = setInterval(() => { left = Math.max(0, left - 1); if (seconds) seconds.textContent = t('undo.left', { n: left }); }, 1000);
+    const timer = setTimeout(() => finish(true), delay);
+    async function finish(send) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearInterval(tick);
+      pendingUndos.delete(entry);
+      dismiss();
+      if (!send) {
+        revert?.();
+        toast({ title: t('undo.done'), kind: 'info', timeout: 1800 });
+        resolve(false);
+        return;
+      }
+      try {
+        await commit();
+        resolve(true);
+      } catch (error) {
+        revert?.();
+        onError?.(error);
+        resolve(false);
+      }
+    }
+  });
+}
+
+/** Sends everything still waiting to be undone: the screen is changing or the page is going away. */
+export function flushUndoables() {
+  [...pendingUndos].forEach((entry) => entry.flush());
+}
+window.addEventListener('pagehide', flushUndoables);
 
 const openLayers = [];
 
@@ -336,4 +394,85 @@ export function chooseLanguage() {
     language.code === lang() ? icon('check', 'sm') : null))),
   });
   return modal;
+}
+
+// ---------------------------------------------------------------------------- E2: swipe a card to its next step
+
+/**
+ * Lets a card be swiped towards the reading end (right, or left in Arabic) to do its main action: a green band with
+ * the action's name shows under it, and past 40% of its width it goes. Let go sooner and it slides back. Only a
+ * clearly sideways move counts, so scrolling the list up and down is untouched. The card's own button stays: the
+ * swipe is a shortcut, never the only way.
+ */
+export function swipeAction(card, { label, run }) {
+  let drag = null;
+  let suppressClick = false;
+  card.classList.add('swipeable');
+
+  const forward = () => (getComputedStyle(card).direction === 'rtl' ? -1 : 1);
+  function under() {
+    const band = h('div', { class: 'swipe-under', 'aria-hidden': 'true' }, icon('check', 'sm'), h('span', null, label));
+    band.style.top = `${card.offsetTop}px`;
+    band.style.left = `${card.offsetLeft}px`;
+    band.style.width = `${card.offsetWidth}px`;
+    band.style.height = `${card.offsetHeight}px`;
+    card.parentElement.insertBefore(band, card);
+    return band;
+  }
+  function reset() {
+    drag?.band?.remove();
+    card.classList.remove('swiping');
+    card.style.transform = '';
+    drag = null;
+  }
+
+  card.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || drag) return;
+    drag = { x: event.clientX, y: event.clientY, dx: 0, axis: null, past: false, id: event.pointerId };
+  });
+  card.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (drag.axis == null) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      drag.axis = Math.abs(dx) > Math.abs(dy) * 1.5 ? 'x' : 'y';
+      if (drag.axis === 'y') return;
+      card.setPointerCapture(event.pointerId);
+      card.classList.add('swiping');
+      drag.band = under();
+    }
+    if (drag.axis !== 'x') return;
+    // only towards the reading end; a pull the other way stays put
+    drag.dx = forward() > 0 ? Math.max(0, dx) : Math.min(0, dx);
+    card.style.transform = `translateX(${drag.dx}px)`;
+    const past = Math.abs(drag.dx) > card.offsetWidth * 0.4;
+    if (past !== drag.past) {
+      drag.past = past;
+      drag.band.classList.toggle('past', past);
+      if (past) haptic();
+    }
+  });
+  const release = (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    if (drag.axis !== 'x') { drag = null; return; }
+    suppressClick = true;
+    setTimeout(() => { suppressClick = false; }, 0);
+    const { past, band } = drag;
+    card.classList.remove('swiping');
+    if (past) {
+      card.classList.add('swipe-gone');
+      card.style.transform = `translateX(${forward() * card.offsetWidth}px)`;
+      setTimeout(() => { band?.remove(); drag = null; run(); }, reducedMotion() ? 0 : 180);
+      return;
+    }
+    card.classList.add('swipe-back');
+    card.style.transform = '';
+    setTimeout(() => { card.classList.remove('swipe-back'); band?.remove(); }, reducedMotion() ? 0 : 240);
+    drag = null;
+  };
+  card.addEventListener('pointerup', release);
+  card.addEventListener('pointercancel', (event) => { if (drag && event.pointerId === drag.id) reset(); });
+  // the click that ends a swipe must not also press a button inside the card
+  card.addEventListener('click', (event) => { if (suppressClick) { event.stopPropagation(); event.preventDefault(); } }, true);
 }

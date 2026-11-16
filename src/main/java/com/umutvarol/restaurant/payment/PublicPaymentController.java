@@ -51,6 +51,13 @@ class PublicPaymentController {
         return onlinePaymentService.view(token);
     }
 
+    @Operation(summary = "The restaurant's logo", description = "404 when it has none.")
+    @GetMapping("/api/v1/public/pay/{token}/logo")
+    ResponseEntity<byte[]> logo(@PathVariable String token) {
+        return onlinePaymentService.logo(token).map(com.umutvarol.restaurant.guest.BrandingService.Logo::response)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @Operation(summary = "Start paying", description = "Returns the provider's secure page to send the guest to.")
     @RequiresFeature(Feature.ONLINE_PAYMENTS)
     @PostMapping("/api/v1/public/pay/{token}/checkout")

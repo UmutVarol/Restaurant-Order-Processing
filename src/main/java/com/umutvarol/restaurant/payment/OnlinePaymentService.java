@@ -80,6 +80,7 @@ public class OnlinePaymentService {
     private final PaymentProperties properties;
     private final RestaurantProperties restaurant;
     private final com.umutvarol.restaurant.business.BusinessProfile profile;
+    private final com.umutvarol.restaurant.guest.BrandingService branding;
     private final ApplicationEventPublisher events;
     private final TransactionTemplate transaction;
     private final PaymentAuditLog audit;
@@ -89,8 +90,10 @@ public class OnlinePaymentService {
                                 PaymentLinkRepository links, RefundRepository refunds, OnlinePayments online,
                                 PaymentProperties properties, RestaurantProperties restaurant,
                                 ApplicationEventPublisher events, PlatformTransactionManager transactionManager,
-                                PaymentAuditLog audit, Clock clock, com.umutvarol.restaurant.business.BusinessProfile profile) {
+                                PaymentAuditLog audit, Clock clock, com.umutvarol.restaurant.business.BusinessProfile profile,
+                                com.umutvarol.restaurant.guest.BrandingService branding) {
         this.profile = profile;
+        this.branding = branding;
         this.billService = billService;
         this.paymentService = paymentService;
         this.payments = payments;
@@ -192,6 +195,13 @@ public class OnlinePaymentService {
 
     // ------------------------------------------------------------------------------------------- guests
 
+    /** The restaurant's logo for the guest holding this link; empty when it has none. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<com.umutvarol.restaurant.guest.BrandingService.Logo> logo(String token) {
+        findLink(token);
+        return branding.logo();
+    }
+
     @Transactional(readOnly = true)
     public PublicBillResponse view(String token) {
         PaymentLink link = findLink(token);
@@ -228,7 +238,8 @@ public class OnlinePaymentService {
                 reason,
                 link.getExpiresAt(),
                 online.gateway().map(OnlinePaymentGateway::provider).orElse(null),
-                last);
+                last,
+                branding.get());
     }
 
     /**

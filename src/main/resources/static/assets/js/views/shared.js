@@ -53,10 +53,10 @@ export function canTakeOrders(user) {
  * Advances an order and reports the outcome with a toast. Resolves to the updated order, or null. An order whose
  * bill is not paid yet cannot be completed: staff who take payments get the bill opened instead.
  */
-export async function advanceOrder(order, user) {
+export async function advanceOrder(order, user, { quiet = false } = {}) {
   try {
     const updated = await api.advance(order.id);
-    toast({ title: t('advanced', { id: updated.id, status: t(`status.${updated.status}`) }), kind: 'success', timeout: 2500 });
+    if (!quiet) toast({ title: t('advanced', { id: updated.id, status: t(`status.${updated.status}`) }), kind: 'success', timeout: 2500 });
     return updated;
   } catch (error) {
     if (error.code === 'BILL_NOT_PAID' && user && canTakeOrders(user)) {

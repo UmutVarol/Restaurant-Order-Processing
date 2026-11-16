@@ -55,6 +55,7 @@ Kaynak: kullanıcının notu "UI UX Tasarım Stüdyosu" (14 Kasım 2026). Bağla
   Sonraki tasarım işleri yine aynı yoldan: aday sayfası → kullanıcı seçer → uygulanır.
 - 2. tur adaylar (D1 işletme rengi, D2 uzaktan okunur mutfak, D3 kategori şeridi, E1 geri al, E2 kaydırarak hazır,
   E3 hızlı arama, F1 masa bekleme halkası, F2 günün kartı): https://claude.ai/artifact/MAXCSVmBM4LJwjST84UgWa.
-  Kullanıcı seçimini bekliyor; onaylananlar uygulanacak.
+  Kullanıcı **sekizini de onayladı** (16 Kasım 2026). D1–F1 uygulandı; **F2 (günün kartı) kaldı**: gün kapatılınca
+  kasa ekranında (`views/cashier.js`, `closeDay`) bir kez çıkan, paylaşılabilir kart.
 - Sofra'nın kendi tasarım dili: `DESIGN.md` (lokanta sıcaklığı, domates kırmızısı, safran; Fraunces + Inter;
   easing `cubic-bezier(.2,.8,.2,1)`; yalnızca transform/opacity animasyonu).

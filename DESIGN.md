@@ -124,6 +124,22 @@ Status is always shown as a dot and a word, never as colour alone.
 - **First table set (C2):** a restaurant that has just signed up is greeted on the setup screen by a table being
   set, plates and steam included. It plays once, right after sign-up.
 
+### Round two (approved 15 November 2026)
+
+- **Guest look (D1):** guest pages wear the restaurant's colour, name and logo; `core/brand.js` adjusts the colour
+  until text on it and in it reads at 4.5:1, in the light and the dark theme. Logos are PNG/WebP, re-encoded at
+  256 px in the browser; SVG is refused.
+- **Far view (D2):** a kitchen screen can show tickets 1.5–1.8× larger; column states read by colour, shape and word.
+  A late ticket nudges once instead of blinking.
+- **Category strip (D3):** the guest menu is in sections; the strip follows the scroll and slides a line to the
+  current one.
+- **Undo (E1):** reversible actions happen at once and reach the server after 5 seconds unless taken back; leaving
+  the screen sends them. `undoable()` in `core/ui.js`.
+- **Swipe (E2):** kitchen tickets and service cards move on by a swipe towards the reading end; the button stays.
+- **Quick search (E3):** Ctrl/⌘ K or the magnifier: screens, tables, orders and dishes, accent-insensitive.
+- **Waiting rings (F1):** each occupied table shows how long its guests have waited for someone (an open call, else
+  the last order change); amber and red at limits chosen per device; crossing one rings once.
+
 ## Accessibility and input
 
 - There is a skip link. Icon-only buttons have `aria-label`s, form fields have linked labels, and dialogs are

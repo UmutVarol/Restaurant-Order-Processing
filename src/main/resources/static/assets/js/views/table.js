@@ -2,11 +2,12 @@
 // need no account; the code in the link is the permission. The restaurant's service rules decide whether a cart goes
 // straight to the kitchen or waits for a waiter, and the guest is told which, and why.
 import { h, mount } from '../core/dom.js';
-import { icon, logoMark } from '../core/icons.js';
+import { icon } from '../core/icons.js';
+import { guestMark, guestName, leaveGuestBrand, useGuestBrand } from '../core/brand.js';
 import { t, tn } from '../core/i18n.js';
 import { money, time } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
-import { haptic, langButton, openModal, themeButton, toast } from '../core/ui.js';
+import { haptic, langButton, openModal, reducedMotion, themeButton, toast } from '../core/ui.js';
 import { chooseOptions, chosen, defaultOptionIds, optionKey, optionsPrice } from './options.js';
 import { rememberTable } from './pay.js';
 import { allergenList, allergenPicker } from './allergens.js';
@@ -28,16 +29,18 @@ const STEPS = ['PENDING', 'PREPARING', 'READY', 'SERVED'];
 export function renderTable(root, token) {
   const sentKey = `sofra.table.${token.slice(0, 12)}`;
   const payKey = `sofra.table.pay.${token.slice(0, 12)}`;
-  const state = { table: null, menu: null, error: null, category: 'ALL', cart: [], sent: readSent(), calls: new Set(), busy: false, bill: null, orders: [], avoid: readAvoid() };
+  const state = { table: null, menu: null, error: null, cart: [], sent: readSent(), calls: new Set(), busy: false, bill: null, orders: [], avoid: readAvoid() };
   const seenSteps = new Map(); // order number → the step last shown, so only a real change fills in
   let timer = null;
   let stopped = false;
 
   const body = h('main', { class: 'table-page' });
   const bar = h('div', { class: 'cart-bar-slot' });
-  mount(root, h('div', { class: 'guest table-guest' },
-    h('header', { class: 'guest-top' }, logoMark(), h('b', null, 'Sofra'), h('span', { class: 'spacer' }), langButton(), themeButton()),
-    body, bar));
+  // D1: the restaurant's own name, colour and logo once the table is known; Sofra's until then
+  const top = h('header', { class: 'guest-top' });
+  const paintTop = () => mount(top, guestMark(), h('b', { 'data-testid': 'guest-name' }, guestName()), h('span', { class: 'spacer' }), langButton(), themeButton());
+  paintTop();
+  mount(root, h('div', { class: 'guest table-guest' }, top, body, bar));
 
   /** What this guest cannot eat, remembered on the phone for their next visit. */
   function readAvoid() {
@@ -70,9 +73,11 @@ export function renderTable(root, token) {
       mount(body, [120, 60, 220, 220].map((height) => h('div', { class: 'skeleton', style: { height: `${height}px`, borderRadius: '20px' } })));
       return;
     }
-    const inCategory = state.menu.filter((item) => item.available && (state.category === 'ALL' || item.category === state.category));
-    const items = inCategory.filter((item) => !unsafe(item));
-    const hidden = inCategory.length - items.length;
+    // D3: the whole menu in sections, one per category; the strip above follows the scroll and jumps to a section
+    const available = state.menu.filter((item) => item.available);
+    const items = available.filter((item) => !unsafe(item));
+    const hidden = available.length - items.length;
+    const sections = CATEGORIES.map((category) => [category, items.filter((item) => item.category === category)]).filter(([, list]) => list.length);
     mount(body,
       h('section', { class: 'card table-hero' },
         h('div', null, h('div', { class: 'faint' }, state.table.restaurant),
@@ -89,17 +94,70 @@ export function renderTable(root, token) {
       // a cart the kitchen took shows up as an order above; only carts still waiting or turned down stay here
       state.sent.filter((sent) => sent.view.status !== 'ACCEPTED').map(sentCard),
       h('div', { class: 'table-tools' },
-        h('div', { class: 'chips table-cats', role: 'tablist' }, ['ALL', ...CATEGORIES].map((category) => h('button', {
-          class: ['chip', state.category === category ? 'active' : ''], role: 'tab', 'aria-selected': String(state.category === category),
-          onclick: () => { state.category = category; render(); },
-        }, t(`cat.${category}`)))),
+        h('nav', { class: 'chips table-cats', 'aria-label': t('table.categories'), 'data-testid': 'menu-categories' },
+          sections.map(([category]) => h('button', {
+            class: 'chip', type: 'button', 'data-cat': category, onclick: () => jumpTo(category),
+          }, t(`cat.${category}`))),
+          h('i', { class: 'cat-ink', 'aria-hidden': 'true' })),
         h('button', { class: ['btn', 'sm', 'allergy-btn', state.avoid.length ? 'on' : ''], 'data-testid': 'allergies', onclick: openAllergies },
           icon('wheat', 'sm'), h('span', null, state.avoid.length ? t('allergy.buttonN', { n: state.avoid.length }) : t('allergy.button')))),
       hidden ? h('div', { class: 'guest-banner info allergy-note', 'data-testid': 'allergy-hidden' }, icon('wheat', 'sm'),
         h('div', null, h('b', null, tn('allergy.hidden', hidden)), h('div', { class: 'sub' }, t('allergy.avoiding', { list: allergenList(state.avoid) }))),
         h('button', { class: 'btn sm ghost', onclick: openAllergies }, t('allergy.change'))) : null,
-      h('div', { class: 'table-menu' }, items.map(menuRow)));
+      h('div', { class: 'table-menu' }, sections.map(([category, list]) => h('section', {
+        class: 'menu-section', 'data-cat': category, 'aria-label': t(`cat.${category}`),
+      }, h('h2', { class: 'menu-section-title' }, t(`cat.${category}`)), list.map(menuRow)))));
+    markCategory(false);
     renderBar();
+  }
+
+  // ------------------------------------------------------------------ D3: the category strip
+  let activeCategory = null;
+  let spyFrame = 0;
+
+  /** The section under the strip: the last one whose top has passed the strip's bottom edge. */
+  function spy() {
+    spyFrame = 0;
+    const tools = body.querySelector('.table-tools');
+    const list = [...body.querySelectorAll('.menu-section')];
+    if (!tools || !list.length) return;
+    const line = tools.getBoundingClientRect().bottom + 12;
+    let current = list[0].dataset.cat;
+    for (const section of list) if (section.getBoundingClientRect().top <= line) current = section.dataset.cat;
+    // at the very bottom the last section counts, even when it is too short to reach the strip
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) current = list[list.length - 1].dataset.cat;
+    if (current !== activeCategory) { activeCategory = current; markCategory(true); }
+  }
+  const onScroll = () => { if (!spyFrame) spyFrame = requestAnimationFrame(spy); };
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  /** Marks the current category and slides the line under it; the strip scrolls itself to keep it in view. */
+  function markCategory(animate) {
+    const nav = body.querySelector('.table-cats');
+    if (!nav) return;
+    const chip = nav.querySelector(`[data-cat="${activeCategory}"]`) || nav.querySelector('[data-cat]');
+    if (!chip) return;
+    activeCategory = chip.dataset.cat;
+    nav.querySelectorAll('[data-cat]').forEach((other) => {
+      other.classList.toggle('active', other === chip);
+      other.setAttribute('aria-current', String(other === chip));
+    });
+    const ink = nav.querySelector('.cat-ink');
+    const still = !animate || reducedMotion();
+    if (still) ink.style.transition = 'none';
+    ink.style.transform = `translateX(${chip.offsetLeft}px) scaleX(${chip.offsetWidth / 100})`;
+    if (still) { void ink.offsetWidth; ink.style.transition = ''; }
+    if (animate) chip.scrollIntoView({ block: 'nearest', inline: 'center', behavior: still ? 'auto' : 'smooth' });
+  }
+
+  function jumpTo(category) {
+    const section = body.querySelector(`.menu-section[data-cat="${category}"]`);
+    const tools = body.querySelector('.table-tools');
+    if (!section || !tools) return;
+    activeCategory = category;
+    markCategory(true);
+    const top = section.getBoundingClientRect().top + window.scrollY - tools.offsetHeight - 8;
+    window.scrollTo({ top, behavior: reducedMotion() ? 'auto' : 'smooth' });
   }
 
   function callButton(kind, iconName) {
@@ -377,6 +435,7 @@ export function renderTable(root, token) {
       state.calls = new Set(table.openCalls);
       state.menu = menu;
       document.title = `${t('guest.table', { table: table.tableCode })} · ${table.restaurant}`;
+      useGuestBrand(table.restaurant, table.brand, `/public/table/${encodeURIComponent(token)}/logo`).then(() => { if (!stopped) paintTop(); });
     } catch (error) {
       state.error = error instanceof ApiError ? error.code : 'NETWORK';
     }
@@ -390,5 +449,12 @@ export function renderTable(root, token) {
 
   render();
   load();
-  return () => { stopped = true; clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); };
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('scroll', onScroll);
+    cancelAnimationFrame(spyFrame);
+    leaveGuestBrand();
+  };
 }

@@ -7,7 +7,7 @@ import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { clearOutbox, entries as outboxEntries, flush, isOnline, registerServiceWorker } from './core/offline.js';
 import { time } from './core/format.js';
-import { bump, chooseLanguage, confirmDialog, langButton, openModal, themeButton, toast } from './core/ui.js';
+import { bump, chooseLanguage, confirmDialog, flushUndoables, langButton, openModal, themeButton, toast } from './core/ui.js';
 
 const ALL = ['ADMIN', 'WAITER', 'KITCHEN'];
 const ROUTES = [
@@ -76,6 +76,7 @@ const serverConfigReady = api.publicConfig().then((config) => { serverConfig = c
 
 async function render() {
   const token = ++renderToken;
+  flushUndoables();
   activeView?.destroy?.();
   activeView = null;
 
@@ -254,11 +255,18 @@ function renderShell(current) {
     onclick: async () => { const { openInbox } = await import('./views/inbox.js'); openInbox(user); },
   }, icon('bell'), h('span', { class: 'badge', id: 'guest-badge', hidden: guestCount === 0 }, guestCount)) : null;
 
+  // E3: one search for screens, tables, orders and dishes
+  const search = h('button', {
+    class: 'icon-btn bordered search-btn', title: `${t('search.title')} (Ctrl K)`, 'aria-label': t('search.title'),
+    'aria-keyshortcuts': 'Control+K Meta+K', 'data-testid': 'open-search', onclick: () => openQuickSearch(),
+  }, icon('search'));
+
   const topbar = h('header', { class: 'topbar' },
     h('div', null, title, subtitle),
     h('div', { class: 'spacer' }),
     actions,
     h('div', { class: 'topbar-tools' },
+      search,
       outbox,
       inbox,
       live,
@@ -475,6 +483,11 @@ setInterval(() => {
 }, 10_000);
 
 document.addEventListener('keydown', (event) => {
+  if (user && (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    if (!document.querySelector('.search-modal')) openQuickSearch();
+    return;
+  }
   if (!user || !event.altKey || event.ctrlKey || event.metaKey) return;
   const index = Number(event.key) - 1;
   const route = allowedRoutes()[index];
@@ -483,6 +496,12 @@ document.addEventListener('keydown', (event) => {
     navigate(route.id);
   }
 });
+
+async function openQuickSearch() {
+  if (!user) return;
+  const { openSearch } = await import('./views/search.js');
+  openSearch({ user, routes: allowedRoutes(), navigate });
+}
 
 async function boot() {
   await languageReady;

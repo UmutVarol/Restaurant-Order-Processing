@@ -191,11 +191,12 @@ export function branchHeader() {
   return id ? { 'X-Branch': String(id) } : {};
 }
 
-async function request(method, path, body, { auth = true, headers: extra = {} } = {}) {
+async function request(method, path, body, { auth = true, headers: extra = {}, contentType = null } = {}) {
   const sentWith = auth ? session : null;
   const code = businessCode();
   const headers = { Accept: 'application/json', ...(code ? { 'X-Business': code } : {}), ...(auth ? { ...authHeader(), ...branchHeader() } : {}), ...extra };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // a file (a logo) goes as it is, with its own type; everything else as JSON
+  if (body !== undefined) headers['Content-Type'] = contentType || 'application/json';
 
   let response;
   const controller = new AbortController();
@@ -204,7 +205,7 @@ async function request(method, path, body, { auth = true, headers: extra = {} } 
     response = await backendFetch(`${API_BASE}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : contentType ? body : JSON.stringify(body),
       signal: controller.signal,
     });
   } catch {
@@ -229,6 +230,17 @@ async function request(method, path, body, { auth = true, headers: extra = {} } 
     throw new ApiError(response.status, data);
   }
   return data;
+}
+
+/** A file the signed-in user may see (a logo), or null. */
+async function fileRequest(path) {
+  const code = businessCode();
+  try {
+    const response = await backendFetch(`${API_BASE}${path}`, { headers: { ...(code ? { 'X-Business': code } : {}), ...authHeader(), ...branchHeader() } });
+    return response.ok ? await response.blob() : null;
+  } catch {
+    return null;
+  }
 }
 
 export const api = {
@@ -373,6 +385,11 @@ export const api = {
   // Staff inbox and table codes.
   guestRequests: () => request('GET', '/guest-requests'),
   serviceSettings: () => request('GET', '/service-settings'),
+  branding: () => request('GET', '/branding'),
+  saveBranding: (accent) => request('PUT', '/branding', { accent }),
+  uploadLogo: (blob) => request('PUT', '/branding/logo', blob, { contentType: blob.type }),
+  removeLogo: () => request('DELETE', '/branding/logo'),
+  brandingLogo: () => fileRequest('/branding/logo'),
   saveServiceSettings: (settings) => request('PUT', '/service-settings', settings),
   acceptGuestRequest: (id) => request('POST', `/guest-requests/${id}/accept`),
   rejectGuestRequest: (id, reason) => request('POST', `/guest-requests/${id}/reject`, { reason }),

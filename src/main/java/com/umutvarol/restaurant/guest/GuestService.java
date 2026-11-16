@@ -77,14 +77,16 @@ public class GuestService {
     private final StationService stations;
     private final RestaurantProperties restaurant;
     private final com.umutvarol.restaurant.business.BusinessProfile profile;
+    private final BrandingService branding;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public GuestService(GuestRequestRepository requests, DiningTableRepository tables, OrderService orders,
                         MenuItemRepository menuItems, ServiceSettingsService serviceSettings, StationService stations,
                         RestaurantProperties restaurant, ApplicationEventPublisher events, Clock clock,
-                        com.umutvarol.restaurant.business.BusinessProfile profile) {
+                        com.umutvarol.restaurant.business.BusinessProfile profile, BrandingService branding) {
         this.profile = profile;
+        this.branding = branding;
         this.requests = requests;
         this.tables = tables;
         this.orders = orders;
@@ -105,7 +107,7 @@ public class GuestService {
                 .filter(kind -> requests.findFirstByTableIdAndKindAndStatus(table.getId(), kind, GuestRequestStatus.OPEN).isPresent())
                 .toList();
         return new PublicTableResponse(profile.name(restaurant.name()), table.getCode(), openCalls, serviceSettings.current().getMode(),
-                profile.includes(com.umutvarol.restaurant.business.Feature.ONLINE_PAYMENTS));
+                profile.includes(com.umutvarol.restaurant.business.Feature.ONLINE_PAYMENTS), branding.get());
     }
 
     public GuestRequestView order(String token, GuestOrderRequest cart, String client) {
@@ -296,6 +298,13 @@ public class GuestService {
      * The table behind a QR code. The code is the guest's permission for what they do at that table, here and in
      * other features (paying the table's bill).
      */
+    /** The restaurant's logo for the guest at this table; empty when it has none. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<BrandingService.Logo> logo(String token) {
+        tableFor(token);
+        return branding.logo();
+    }
+
     public DiningTable tableFor(String token) {
         if (token == null || token.length() < 20 || token.length() > 100) {
             throw new ResourceNotFoundException("table", "?");

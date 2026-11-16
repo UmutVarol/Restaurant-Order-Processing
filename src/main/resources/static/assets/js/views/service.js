@@ -7,7 +7,7 @@ import { t } from '../core/i18n.js';
 import { elapsed } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
-import { haptic, toast } from '../core/ui.js';
+import { haptic, swipeAction, toast, undoable } from '../core/ui.js';
 import { optionsText } from './options.js';
 import { guestActions, requestCard } from './inbox.js';
 
@@ -19,6 +19,8 @@ export default {
     let requests = null;
     let toClear = null;
     const busy = new Set();
+    // E1: plates served and tables cleared leave the list at once; the server hears of it when the undo time is over
+    const waiting = new Set();
     const summary = h('div', { class: 'service-summary', 'data-testid': 'service-summary' });
     const readyList = h('div', { class: 'service-list' });
     const callList = h('div', { class: 'service-list' });
@@ -46,9 +48,9 @@ export default {
       }
       const chip = (n, label, kind) => h('span', { class: ['service-count', n ? kind : 'none'] }, h('b', null, n), label);
       mount(summary,
-        chip(ready.length, t('service.countReady'), 'ready'),
+        chip(ready.filter((order) => !waiting.has(`o${order.id}`)).length, t('service.countReady'), 'ready'),
         chip(requests.length, t('service.countCalls'), 'calls'),
-        chip(toClear.length, t('service.countClear'), 'clear'));
+        chip(toClear.filter((table) => !waiting.has(`t${table.id}`)).length, t('service.countClear'), 'clear'));
     }
 
     const skeleton = () => h('div', { class: 'skeleton', style: { height: '92px', borderRadius: '16px' } });
@@ -58,7 +60,9 @@ export default {
     function renderReady() {
       if (!ready) return mount(readyList, skeleton());
       if (!ready.length) return mount(readyList, empty(t('service.readyNone')));
-      mount(readyList, ready.map((order) => h('article', { class: 'runner-card ready', 'data-testid': 'ready-plate', dataset: { order: order.id } },
+      const plates = ready.filter((order) => !waiting.has(`o${order.id}`));
+      if (!plates.length) return mount(readyList, empty(t('service.readyNone')));
+      mount(readyList, plates.map((order) => swiped(h('article', { class: 'runner-card ready', 'data-testid': 'ready-plate', dataset: { order: order.id } },
         tableBadge(order.table.code),
         h('div', { class: 'service-body' },
           h('div', { class: 'service-head' }, h('b', null, `#${order.id}`), h('span', { class: 'faint', dir: 'auto' }, order.customerName),
@@ -70,8 +74,15 @@ export default {
           order.heldCourses?.length ? h('small', { class: 'faint' }, t('courses.waiting', { list: order.heldCourses.join(', ') })) : null),
         h('button', {
           class: 'btn primary service-act', disabled: busy.has(`o${order.id}`), 'data-testid': 'serve',
-          onclick: () => act(`o${order.id}`, () => api.advance(order.id), t('service.served', { table: order.table.code })),
-        }, icon('check', 'sm'), t('service.serve')))));
+          onclick: () => later(`o${order.id}`, () => api.advance(order.id), t('service.served', { table: order.table.code })),
+        }, icon('check', 'sm'), t('service.serve'))), t('service.serve'),
+      () => later(`o${order.id}`, () => api.advance(order.id), t('service.served', { table: order.table.code })))));
+    }
+
+    /** E2: the card's main action also by a swipe towards the reading end. */
+    function swiped(card, label, run) {
+      swipeAction(card, { label, run });
+      return card;
     }
 
     function renderCalls() {
@@ -83,15 +94,38 @@ export default {
     function renderClear() {
       if (!toClear) return mount(clearList, skeleton());
       if (!toClear.length) return mount(clearList, empty(t('service.clearNone')));
-      mount(clearList, toClear.map((table) => h('article', { class: 'runner-card clear', 'data-testid': 'table-to-clear' },
+      const tables = toClear.filter((table) => !waiting.has(`t${table.id}`));
+      if (!tables.length) return mount(clearList, empty(t('service.clearNone')));
+      mount(clearList, tables.map((table) => swiped(h('article', { class: 'runner-card clear', 'data-testid': 'table-to-clear' },
         tableBadge(table.code),
         h('div', { class: 'service-body' },
           h('b', null, `${t('pos.table')} ${table.code}`),
           h('span', { class: 'faint' }, t('service.leftAgo', { time: elapsed(table.needsClearingSince) }))),
         h('button', {
           class: 'btn service-act', disabled: busy.has(`t${table.id}`), 'data-testid': 'cleared',
-          onclick: () => act(`t${table.id}`, () => api.clearTable(table.id), t('service.clearedToast', { table: table.code })),
-        }, icon('sparkle', 'sm'), t('service.cleared')))));
+          onclick: () => later(`t${table.id}`, () => api.clearTable(table.id), t('service.clearedToast', { table: table.code })),
+        }, icon('sparkle', 'sm'), t('service.cleared'))), t('service.cleared'),
+      () => later(`t${table.id}`, () => api.clearTable(table.id), t('service.clearedToast', { table: table.code })))));
+    }
+
+    /** Takes the card off the list now and sends the change once the undo time is over. */
+    function later(key, call, message) {
+      haptic('success');
+      undoable({
+        title: message,
+        apply: () => { waiting.add(key); render(); },
+        revert: () => { waiting.delete(key); render(); },
+        commit: async () => {
+          try {
+            await call();
+          } finally {
+            await load();
+            waiting.delete(key);
+            render();
+          }
+        },
+        onError: (error) => { haptic('error'); toast({ title: errorMessage(error), kind: 'error' }); },
+      });
     }
 
     async function act(key, call, message) {

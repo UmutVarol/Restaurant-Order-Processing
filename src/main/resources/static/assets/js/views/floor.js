@@ -1,8 +1,8 @@
 // Floor plan: every table with its open check, updated live.
-import { debounce, h, mount } from '../core/dom.js';
+import { debounce, h, mount, s } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t, tn } from '../core/i18n.js';
-import { elapsed, money, percent, time } from '../core/format.js';
+import { elapsed, minutesSince, money, percent, time } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { openModal, reducedMotion, toast } from '../core/ui.js';
@@ -13,6 +13,39 @@ const ZONES = ['INDOOR', 'WINDOW', 'TERRACE'];
 /** What each table looked like at the last render (A3), kept while the app runs so a state change can be shown. */
 const lastStates = new Map();
 
+// F1: how long the guests at each table have been without anyone seeing to them, as a ring that fills; amber and red
+// at the limits chosen on this device. Crossing a limit rings the table once; it never blinks.
+const WAIT_KEY = 'sofra.floor.wait';
+const WAIT_CHOICES = { '8-15': [8, 15], '12-20': [12, 20], '15-25': [15, 25], off: null };
+const RING_MINUTES = 30;
+const lastWait = new Map();
+
+function waitLimits() {
+  let saved = '12-20';
+  try { saved = localStorage.getItem(WAIT_KEY) || saved; } catch { /* private window */ }
+  return saved in WAIT_CHOICES ? saved : '12-20';
+}
+
+function waitState(minutes, limits) {
+  if (!limits) return 'ok';
+  return minutes >= limits[1] ? 'long' : minutes >= limits[0] ? 'look' : 'ok';
+}
+
+/** The ring, the minutes and a word; the word and the colour change together, so it reads without colour too. */
+function waitRing(since, limits) {
+  const minutes = minutesSince(since);
+  const state = waitState(minutes, limits);
+  const r = 9;
+  const length = 2 * Math.PI * r;
+  const share = Math.min(1, minutes / RING_MINUTES);
+  return h('span', { class: `wait wait-${state}`, dataset: { attention: since }, 'data-testid': 'table-wait' },
+    s('svg', { viewBox: '0 0 24 24', class: 'wait-ring', 'aria-hidden': 'true' },
+      s('circle', { class: 'wait-track', cx: 12, cy: 12, r }),
+      s('circle', { class: 'wait-arc', cx: 12, cy: 12, r, 'stroke-dasharray': length.toFixed(2), 'stroke-dashoffset': (length * (1 - share)).toFixed(2) })),
+    h('span', { class: 'wait-text' }, t(`floor.wait.${state}`)),
+    h('span', { class: 'wait-min' }, elapsed(since)));
+}
+
 export default {
   title: 'floor.title',
   subtitle: 'floor.sub',
@@ -20,7 +53,19 @@ export default {
     let tables = null;
     const summary = h('div', { class: 'floor-summary' });
     const zones = h('div');
-    mount(container, summary, zones);
+    let limitsKey = waitLimits();
+    const limitsSelect = h('select', {
+      class: 'select', id: 'floor-wait', 'data-testid': 'floor-wait', 'aria-label': t('floor.waitLabel'),
+      onchange: (event) => {
+        limitsKey = event.target.value;
+        try { localStorage.setItem(WAIT_KEY, limitsKey); } catch { /* this visit only */ }
+        render();
+      },
+    }, Object.keys(WAIT_CHOICES).map((key) => h('option', { value: key, selected: key === limitsKey },
+      key === 'off' ? t('floor.waitOff') : t('floor.waitLimits', { look: WAIT_CHOICES[key][0], long: WAIT_CHOICES[key][1] }))));
+    const tools = h('div', { class: 'toolbar floor-tools' }, h('span', { class: 'spacer' }),
+      h('label', { class: 'floor-wait-label', for: 'floor-wait' }, icon('clock', 'sm'), h('span', null, t('floor.waitLabel'))), limitsSelect);
+    mount(container, summary, tools, zones);
 
     function render() {
       if (!tables) {
@@ -57,9 +102,14 @@ export default {
       const before = lastStates.get(table.id);
       lastStates.set(table.id, state);
       const changed = before !== undefined && before !== state && !reducedMotion();
+      // F1: crossing a waiting limit rings the table once (the same ring as A3, never a blink)
+      const waited = table.attentionSince && WAIT_CHOICES[limitsKey] ? waitState(minutesSince(table.attentionSince), WAIT_CHOICES[limitsKey]) : 'ok';
+      const waitedBefore = lastWait.get(table.id);
+      lastWait.set(table.id, waited);
+      const rang = waitedBefore !== undefined && waited !== 'ok' && waited !== waitedBefore && !reducedMotion();
       const card = h('button', {
         class: ['table-card', table.occupied ? 'occupied' : '', table.seatedParty && !table.occupied ? 'seated' : '', served ? 'attention' : '',
-          changed ? `state-changed fill-${state}` : '', changed && (state === 'attention' || state === 'dirty') ? 'ring-once' : ''], 'data-testid': `table-${table.code}`,
+          changed ? `state-changed fill-${state}` : '', (changed && (state === 'attention' || state === 'dirty')) || rang ? 'ring-once' : '', waited !== 'ok' ? `waiting-${waited}` : ''], 'data-testid': `table-${table.code}`,
         onclick: () => {
           if (order) openOrderDrawer(order.id, user);
           else if (canTakeOrders(user)) navigate('pos', { table: table.id });
@@ -71,6 +121,7 @@ export default {
           h('div', { class: 'row', style: { gap: '6px' } }, statusPill(order.status),
             table.openOrders.length > 1 ? h('span', { class: 'pill plain' }, `+${table.openOrders.length - 1}`) : null),
           h('div', { class: 't-amount' }, money(table.openTotal)),
+          table.attentionSince && WAIT_CHOICES[limitsKey] ? waitRing(table.attentionSince, WAIT_CHOICES[limitsKey]) : null,
           h('div', { class: 'seats since-line' }, icon('clock', 'sm'),
             h('span', { class: 'since-time', dataset: { since: table.occupiedSince } }, elapsed(table.occupiedSince)),
             h('span', { class: 'since-who', dir: 'auto' }, `· ${order.customerName}`)),
@@ -169,8 +220,11 @@ export default {
     const offOrder = bus.on('order', reload);
     const offTable = bus.on('table', reload);
     const offReservation = bus.on('reservation', reload);
+    const offGuest = bus.on('guest', reload);
     const timer = setInterval(() => {
       zones.querySelectorAll('[data-since]').forEach((el) => { el.textContent = elapsed(el.dataset.since); });
+      // the rings move on with the clock; a table crossing a limit is drawn again, so it rings once
+      if (zones.querySelector('[data-attention]')) render();
     }, 15_000);
 
     render();
@@ -180,6 +234,7 @@ export default {
         offOrder();
         offTable();
         offReservation();
+        offGuest();
         reload.cancel();
         clearInterval(timer);
       },

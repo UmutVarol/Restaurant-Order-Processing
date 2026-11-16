@@ -6,7 +6,7 @@ import { t } from '../core/i18n.js';
 import { elapsed, minutesSince, number } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus, chime, prefs } from '../core/store.js';
-import { flip, flipNumber, toast } from '../core/ui.js';
+import { flip, flipNumber, swipeAction, toast, undoable } from '../core/ui.js';
 import { optionsText } from './options.js';
 import { advanceLabel, advanceOrder, openOrderDrawer, servedInCourses, STATUS_COLORS, typeBadge } from './shared.js';
 
@@ -19,6 +19,14 @@ const SLA = {
 const COOKING = new Set(['PENDING', 'PREPARING']);
 const WARN_SHARE = 0.7;
 const STATION_KEY = 'sofra.kitchen.station';
+// D2: a screen on the kitchen wall can show tickets large enough to read from across the room (this device only)
+const FAR_KEY = 'sofra.kitchen.far';
+// Each column's status is told by colour, shape and word, so it reads without telling colours apart.
+const SHAPES = { PENDING: 'ring', PREPARING: 'half', READY: 'full', OUT_FOR_DELIVERY: 'diamond' };
+
+function savedFar() {
+  try { return localStorage.getItem(FAR_KEY) === '1'; } catch { return false; }
+}
 
 function savedStation() {
   try { return localStorage.getItem(STATION_KEY) || ''; } catch { return ''; }
@@ -40,7 +48,10 @@ export default {
     const fresh = new Set();
     // Tickets that already played their arrival animation; a re-render (every status change) must not replay it.
     const arrived = new Set();
-    const board = h('div', { class: 'kds' });
+    let far = savedFar();
+    // a ticket turns late once: it nudges then, and stays red without blinking
+    const lateSeen = new Set();
+    const board = h('div', { class: ['kds', far ? 'far' : ''] });
     const summary = h('div', { class: 'kds-summary' });
 
     const soundButton = h('button', { class: 'btn sm', title: t('kitchen.sound'), 'aria-label': t('kitchen.sound') });
@@ -54,7 +65,19 @@ export default {
       renderSound();
     });
     renderSound();
-    mount(actions, soundButton);
+    const farButton = h('button', { class: 'btn sm kitchen-far', 'data-testid': 'kitchen-far', title: t('kitchen.far'), 'aria-label': t('kitchen.far') });
+    const renderFar = () => {
+      farButton.setAttribute('aria-pressed', String(far));
+      board.classList.toggle('far', far);
+      mount(farButton, icon('eye', 'sm'), h('span', { class: 'btn-label' }, t('kitchen.far')));
+    };
+    farButton.addEventListener('click', () => {
+      far = !far;
+      try { localStorage.setItem(FAR_KEY, far ? '1' : '0'); } catch { /* private window: this visit only */ }
+      renderFar();
+    });
+    renderFar();
+    mount(actions, farButton, soundButton);
 
     const stationSelect = h('select', {
       class: 'select', id: 'kitchen-station', 'data-testid': 'kitchen-station', 'aria-label': t('stations.screen'),
@@ -69,7 +92,11 @@ export default {
 
     /** The dishes this screen shows: only fired ones (held courses wait with the waiter), of this station if one is chosen. */
     const visibleLines = (order) => order.lines.filter((line) => line.firedAt && (!station || line.station === station));
-    const visibleOrders = () => (orders || []).filter((order) => !station || visibleLines(order).length > 0);
+    // E1: a ticket moved on is shown in its new column at once; the server hears of it when the undo time is over
+    const moving = new Map();
+    const visibleOrders = () => (orders || []).filter((order) => !station || visibleLines(order).length > 0)
+      .map((order) => (moving.has(order.id) ? { ...order, status: moving.get(order.id), nextStatus: null, moving: true } : order))
+      .filter((order) => !order.moving || COLUMNS.includes(order.status));
     const active = (line) => line.quantity - (line.voidedQuantity || 0) > 0;
 
     /** Amber and red limits in minutes: the slowest station's target on this ticket while it cooks, fixed ones after. */
@@ -106,7 +133,7 @@ export default {
         lastCounts.set(status, tickets.length);
         return h('section', { class: 'kds-col', 'aria-label': t(`status.${status}`) },
           h('div', { class: 'kds-col-head' },
-            h('span', { class: 'dot', style: { background: STATUS_COLORS[status] } }),
+            h('span', { class: `shape ${SHAPES[status]}`, style: { color: STATUS_COLORS[status] }, 'aria-hidden': 'true' }),
             h('h3', null, t(`status.${status}`)),
             count),
           tickets.length ? tickets.map(ticket) : h('div', { class: 'empty' }, h('div', { class: 'art', style: { fontSize: '30px' } }, '✨'),
@@ -121,11 +148,9 @@ export default {
       const label = advanceLabel(order);
       const button = h('button', {
         class: `btn sm ${order.status === 'PENDING' ? 'primary' : order.status === 'PREPARING' ? 'success' : ''}`,
-        onclick: async (event) => {
+        onclick: (event) => {
           event.stopPropagation();
-          button.disabled = true;
-          if (await advanceOrder(order, user)) await load();
-          button.disabled = false;
+          moveOn(order);
         },
       }, label, icon('arrowRight', 'sm'));
       const isFresh = fresh.has(order.id);
@@ -138,7 +163,7 @@ export default {
       const counted = lines.filter(active);
       // Expo view: every dish of the courses fired so far is done.
       const allReady = cooking && counted.length > 0 && counted.every((line) => line.readyAt);
-      return h('article', { class: ['ticket', isFresh ? 'fresh' : '', drop ? 'drop' : ''], style: { '--accent': accent }, dataset: { order: order.id } },
+      const card = h('article', { class: ['ticket', isFresh ? 'fresh' : '', drop ? 'drop' : ''], style: { '--accent': accent }, dataset: { order: order.id } },
         h('div', { class: 'ticket-head' },
           h('button', { class: 'ticket-no', style: { border: 0, background: 'none', padding: 0 }, onclick: () => openOrderDrawer(order.id, user) }, `#${order.id}`),
           typeBadge(order),
@@ -152,6 +177,27 @@ export default {
         order.note ? h('div', { class: 'sticky-note' }, icon('note', 'sm'), order.note) : null,
         h('div', { class: 'ticket-items' }, lines.map((line) => ticketItem(order, line, cooking && active(line)))),
         label ? h('div', { class: 'actions' }, button) : null);
+      // E2: a swipe towards the reading end moves the ticket on, the same as its button
+      if (label) swipeAction(card, { label, run: () => moveOn(order) });
+      return card;
+    }
+
+    /** Moves a ticket to its next column now; the change is sent once the undo time is over. */
+    function moveOn(order) {
+      if (!order.nextStatus || moving.has(order.id)) return;
+      const next = order.nextStatus;
+      undoable({
+        title: t('advanced', { id: order.id, status: t(`status.${next}`) }),
+        apply: () => { moving.set(order.id, next); render(); tickTimers(); },
+        revert: () => { moving.delete(order.id); render(); tickTimers(); },
+        commit: async () => {
+          await advanceOrder(order, user, { quiet: true });
+          await load();
+          moving.delete(order.id);
+          render();
+          tickTimers();
+        },
+      });
     }
 
     /** One dish on a ticket; while the order cooks, a tap marks it ready (or takes the mark back). */
@@ -203,7 +249,12 @@ export default {
         bar.style.setProperty('--p', Math.min(1, minutes / late));
         bar.classList.toggle('warn', minutes >= warn && minutes < late);
         bar.classList.toggle('late', minutes >= late);
-        bar.closest('.ticket').classList.toggle('is-late', minutes >= late);
+        const card = bar.closest('.ticket');
+        card.classList.toggle('is-late', minutes >= late);
+        if (minutes >= late && !lateSeen.has(card.dataset.order)) {
+          lateSeen.add(card.dataset.order);
+          card.classList.add('late-nudge');
+        }
       });
     }
 

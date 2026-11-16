@@ -1,5 +1,6 @@
 package com.umutvarol.restaurant.payment.dto;
 
+import com.umutvarol.restaurant.guest.dto.BrandingResponse;
 import com.umutvarol.restaurant.payment.PaymentStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,7 +27,8 @@ public record PublicBillResponse(
         String reason,
         Instant expiresAt,
         String provider,
-        LastPayment lastPayment) {
+        LastPayment lastPayment,
+        BrandingResponse brand) {
 
     public record Line(String name, String icon, @Nullable String options, int quantity, BigDecimal lineTotal) {
     }

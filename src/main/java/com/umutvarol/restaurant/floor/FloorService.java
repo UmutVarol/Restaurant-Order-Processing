@@ -10,6 +10,7 @@ import com.umutvarol.restaurant.order.OrderType;
 import com.umutvarol.restaurant.table.DiningTable;
 import com.umutvarol.restaurant.table.DiningTableRepository;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -26,11 +27,18 @@ public class FloorService {
     private final DiningTableRepository tables;
     private final OrderRepository orders;
     private final ObjectProvider<TableBookings> bookings;
+    private final ObjectProvider<TableCalls> calls;
 
-    public FloorService(DiningTableRepository tables, OrderRepository orders, ObjectProvider<TableBookings> bookings) {
+    public FloorService(DiningTableRepository tables, OrderRepository orders, ObjectProvider<TableBookings> bookings,
+                        ObjectProvider<TableCalls> calls) {
         this.tables = tables;
         this.orders = orders;
         this.bookings = bookings;
+        this.calls = calls;
+    }
+
+    private Map<Long, Instant> waiting() {
+        return calls.getIfAvailable(() -> TableCalls.NONE).waitingSince();
     }
 
     private TableBookings bookings() {
@@ -45,9 +53,10 @@ public class FloorService {
 
         Map<Long, Party> seated = bookings().seated();
         Map<Long, Party> next = bookings().nextBookings();
+        Map<Long, Instant> waiting = waiting();
         return tables.findByActiveTrueOrderByIdAsc().stream()
                 .map(table -> toResponse(table, openByTable.getOrDefault(table.getId(), List.of()),
-                        seated.get(table.getId()), next.get(table.getId())))
+                        seated.get(table.getId()), next.get(table.getId()), waiting.get(table.getId())))
                 .toList();
     }
 
@@ -58,11 +67,11 @@ public class FloorService {
                         && order.getTable().getId().equals(table.getId()))
                 .toList();
         return toResponse(table, open, bookings().seated().get(table.getId()),
-                bookings().nextBookings().get(table.getId()));
+                bookings().nextBookings().get(table.getId()), waiting().get(table.getId()));
     }
 
     private static TableStatusResponse toResponse(DiningTable table, List<Order> open, @Nullable Party seated,
-                                                  @Nullable Party next) {
+                                                  @Nullable Party next, @Nullable Instant called) {
         BigDecimal openTotal = open.stream()
                 .map(order -> order.getPricing().total())
                 .reduce(Money.ZERO, BigDecimal::add);
@@ -81,6 +90,18 @@ public class FloorService {
                 table.getQrIssuedAt(),
                 open.isEmpty() ? table.getNeedsClearingSince() : null,
                 seated,
-                next);
+                next,
+                attentionSince(open, called));
+    }
+
+    /** An open call wins; otherwise the latest change to any of the table's orders. Null for an empty table. */
+    static @Nullable Instant attentionSince(List<Order> open, @Nullable Instant called) {
+        if (open.isEmpty()) {
+            return null;
+        }
+        if (called != null) {
+            return called;
+        }
+        return open.stream().map(Order::statusSince).max(Instant::compareTo).orElse(open.getFirst().getCreatedAt());
     }
 }

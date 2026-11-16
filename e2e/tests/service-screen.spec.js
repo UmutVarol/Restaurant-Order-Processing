@@ -33,9 +33,17 @@ test('a waiter serves a ready plate and clears the table once the guests have pa
   await expect(plate.locator('.service-table')).toHaveText(table.code);
   await expect(plate).toContainText('2× ');
   await expect(plate).toContainText('Ayran');
+  // a wrong tap is taken back from the toast; nothing reached the server
   await plate.getByTestId('serve').click();
-  await expect(page.locator('.toast', { hasText: `Table ${table.code}: served` })).toBeVisible();
   await expect(plate).toHaveCount(0);
+  await page.locator('.toast', { hasText: `Table ${table.code}: served` }).getByTestId('toast-action').click();
+  await expect(plate).toBeVisible();
+  expect((await api(page, 'GET', `/orders/${order.id}`)).status).toBe('READY');
+  await plate.getByTestId('serve').click();
+  await expect(page.locator('.toast:not(.leaving)', { hasText: `Table ${table.code}: served` })).toBeVisible();
+  await expect(plate).toHaveCount(0);
+  // once the undo time is over, the server has it
+  await expect.poll(async () => (await api(page, 'GET', `/orders/${order.id}`)).status, { timeout: 10_000 }).toBe('SERVED');
 
   // the guests pay: the table now waits to be cleared, live
   const bill = await api(page, 'GET', `/bills/by-order/${order.id}`);
@@ -45,6 +53,6 @@ test('a waiter serves a ready plate and clears the table once the guests have pa
   await dirty.getByTestId('cleared').click();
   await expect(page.locator('.toast', { hasText: `Table ${table.code} is laid again` })).toBeVisible();
   await expect(dirty).toHaveCount(0);
-  const after = (await api(page, 'GET', '/floor/tables')).find((x) => x.id === table.id);
-  expect(after.needsClearingSince).toBeNull();
+  await expect.poll(async () => (await api(page, 'GET', '/floor/tables')).find((x) => x.id === table.id).needsClearingSince,
+    { timeout: 10_000 }).toBeNull();
 });

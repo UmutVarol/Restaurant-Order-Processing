@@ -1,12 +1,13 @@
 // Settings: my PIN for quick switching, this till's registration, and for managers how the restaurant takes orders
 // and the registered devices.
 import { h, mount } from '../core/dom.js';
-import { icon } from '../core/icons.js';
+import { icon, logoMark } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { dateTime } from '../core/format.js';
 import { api, currentDevice, errorMessage, forgetDevice, hasFeature, saveDevice, updateDevice } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
+import { PRESETS, fitAccent, paintAccent } from '../core/brand.js';
 import { qrCode } from './qr.js';
 import { withRecentSignIn } from './reauth.js';
 
@@ -29,13 +30,16 @@ export default {
     const ownsPayments = manager && user.branchId == null && hasFeature('ONLINE_PAYMENTS');
     const paymentsCard = h('div', { class: 'card settings-card', 'data-testid': 'payment-account' });
     const serviceCard = h('div', { class: 'card settings-card service-card' });
+    // D1: the colour and logo guests see belong to the whole business
+    const ownsBrand = manager && user.branchId == null;
+    const brandCard = h('div', { class: 'card settings-card brand-card', 'data-testid': 'brand-card' });
     let totp = null;
     let service = null;
     let devices = null;
     let tables = null;
     let printers = null;
     let stations = null;
-    mount(container, h('div', { class: 'settings-grid' }, manager ? serviceCard : null, ownsPayments ? paymentsCard : null, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
+    mount(container, h('div', { class: 'settings-grid' }, manager ? serviceCard : null, ownsBrand ? brandCard : null, ownsPayments ? paymentsCard : null, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
       manager ? stationsCard : null, manager ? printersCard : null));
 
     const head = (iconName, title, sub) => h('div', { class: 'card-head' },
@@ -158,6 +162,131 @@ export default {
         return;
       }
       renderService();
+    }
+
+    // ------------------------------------------------------------------ guest look (D1, owner)
+    let brand = null;
+    let brandLogo = null;
+
+    function renderBrand() {
+      if (!ownsBrand) return;
+      if (!brand) {
+        mount(brandCard, head('store', t('brand.title'), t('brand.sub')),
+          h('div', { class: 'card-body' }, h('div', { class: 'skeleton', style: { height: '200px' } })));
+        return;
+      }
+      let accent = brand.accent;
+      const ratio = new Intl.NumberFormat(document.documentElement.lang || undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      const readout = h('small', { class: 'brand-readout', 'data-testid': 'brand-readout', 'aria-live': 'polite' });
+      const name = h('b', null, '');
+      const preview = h('div', { class: 'brand-preview', 'aria-label': t('brand.preview') },
+        h('div', { class: 'brand-preview-top' }, h('span', { class: 'brand-preview-mark' }), name),
+        h('div', { class: 'brand-preview-body' },
+          h('span', { class: 'faint' }, t('brand.preview')),
+          h('span', { class: 'btn primary sm', 'aria-hidden': 'true' }, t('brand.sample'))));
+      const custom = h('input', { type: 'color', id: 'brand-custom', value: accent || PRESETS[0], 'aria-label': t('brand.custom') });
+      const swatches = PRESETS.map((colour) => h('button', {
+        type: 'button', class: 'brand-swatch', style: { background: colour }, 'aria-label': colour, 'data-colour': colour,
+        onclick: () => choose(colour),
+      }));
+      const save = h('button', { class: 'btn primary', type: 'button', 'data-testid': 'save-brand' }, icon('check', 'sm'), t('common.save'));
+      const reset = h('button', { class: 'btn ghost', type: 'button', onclick: () => choose(null) }, t('brand.reset'));
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+
+      function paintPreview() {
+        paintAccent(accent, preview);
+        const mark = preview.querySelector('.brand-preview-mark');
+        mark.replaceChildren(brandLogo ? h('img', { class: 'guest-logo', src: brandLogo, alt: '' }) : logoMark());
+        name.textContent = brandName;
+        swatches.forEach((swatch) => swatch.setAttribute('aria-pressed', String(swatch.dataset.colour === accent)));
+        if (!accent) { readout.textContent = ''; readout.classList.remove('adjusted'); return; }
+        const fit = fitAccent(accent);
+        readout.classList.toggle('adjusted', fit.adjusted);
+        readout.textContent = fit.adjusted
+          ? t('brand.adjusted', { from: ratio.format(fit.from), ratio: ratio.format(fit.ratio) })
+          : t('brand.readable', { ratio: ratio.format(fit.ratio) });
+      }
+      function choose(colour) {
+        accent = colour;
+        if (colour) custom.value = colour;
+        paintPreview();
+      }
+      custom.addEventListener('input', () => choose(custom.value.toLowerCase()));
+      save.addEventListener('click', async () => {
+        problem.hidden = true;
+        save.disabled = true;
+        try {
+          brand = await api.saveBranding(accent);
+          toast({ title: t('settings.saved') });
+        } catch (error) {
+          problem.replaceChildren(icon('alert', 'sm'), errorMessage(error));
+          problem.hidden = false;
+        }
+        save.disabled = false;
+      });
+
+      const file = h('input', { type: 'file', accept: 'image/png,image/webp,image/jpeg', hidden: true, 'data-testid': 'brand-logo-file',
+        onchange: () => { if (file.files[0]) uploadLogo(file.files[0]); file.value = ''; } });
+      const logoRow = h('div', { class: 'brand-logo-row' },
+        h('button', { class: 'btn', type: 'button', 'data-testid': 'brand-upload', onclick: () => file.click() },
+          icon('plus', 'sm'), t(brand.logoVersion != null ? 'brand.replace' : 'brand.upload')),
+        brand.logoVersion != null ? h('button', { class: 'btn ghost danger', type: 'button', 'data-testid': 'brand-remove', onclick: removeLogo },
+          icon('trash', 'sm'), t('brand.remove')) : null,
+        file);
+
+      mount(brandCard,
+        head('store', t('brand.title'), t('brand.sub')),
+        h('div', { class: 'card-body settings-form brand-form' },
+          preview,
+          h('div', { class: 'field' }, h('label', null, t('brand.colour')),
+            h('div', { class: 'brand-swatches', role: 'group', 'aria-label': t('brand.colour') }, swatches,
+              h('label', { class: 'brand-custom', for: 'brand-custom' }, custom, t('brand.custom'))),
+            readout),
+          h('div', { class: 'field' }, h('label', null, t('brand.logo')), logoRow, h('small', { class: 'faint' }, t('brand.logoHint'))),
+          problem,
+          h('div', { class: 'row-actions' }, save, reset)));
+      paintPreview();
+
+      async function uploadLogo(source) {
+        problem.hidden = true;
+        try {
+          const blob = await shrinkLogo(source);
+          brand = await api.uploadLogo(blob);
+          brandLogo = await asDataUrl(blob);
+          toast({ title: t('brand.logoSaved') });
+          brand = { ...brand, accent };
+          renderBrand();
+        } catch (error) {
+          problem.replaceChildren(icon('alert', 'sm'), error instanceof Error && error.message.startsWith('brand.') ? t(error.message) : errorMessage(error));
+          problem.hidden = false;
+        }
+      }
+      async function removeLogo() {
+        try {
+          brand = { ...(await api.removeLogo()), accent };
+          brandLogo = null;
+          toast({ title: t('brand.logoRemoved') });
+          renderBrand();
+        } catch (error) {
+          toast({ title: errorMessage(error), kind: 'error' });
+        }
+      }
+    }
+
+    let brandName = 'Sofra';
+    async function loadBrand() {
+      if (!ownsBrand) return;
+      try {
+        const [loaded, config] = await Promise.all([api.branding(), api.publicConfig().catch(() => null)]);
+        brand = loaded;
+        if (config?.restaurantName) brandName = config.restaurantName;
+        const blob = brand.logoVersion != null ? await api.brandingLogo() : null;
+        brandLogo = blob ? await asDataUrl(blob) : null;
+      } catch (error) {
+        toast({ title: errorMessage(error), kind: 'error' });
+        return;
+      }
+      renderBrand();
     }
 
     // ------------------------------------------------------------------ my PIN
@@ -736,6 +865,8 @@ export default {
     loadTotp();
     renderService();
     loadService();
+    renderBrand();
+    loadBrand();
     if (ownsPayments) {
       renderAccount();
       loadAccount();
@@ -744,3 +875,38 @@ export default {
     return { destroy: () => offPrint() };
   },
 };
+
+/**
+ * Scales a logo down to at most 256 pixels and encodes it again in the browser (WebP, or PNG where WebP cannot be
+ * written), smaller each time until it fits the server's 60 KB. Re-encoding also drops whatever the file carried
+ * besides the picture.
+ */
+async function shrinkLogo(file) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error('brand.unreadable');
+  }
+  for (const size of [256, 192, 128, 96]) {
+    const scale = Math.min(1, size / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const [type, quality] of [['image/webp', 0.9], ['image/webp', 0.75], ['image/png', undefined]]) {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+      if (blob && /^image\/(png|webp)$/.test(blob.type) && blob.size <= 60 * 1024) return blob;
+    }
+  }
+  throw new Error('brand.tooBig');
+}
+
+function asDataUrl(blob) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
