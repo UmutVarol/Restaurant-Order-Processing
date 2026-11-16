@@ -135,8 +135,9 @@ Status is always shown as a dot and a word, never as colour alone.
   current one.
 - **Undo (E1):** reversible actions happen at once and reach the server after 5 seconds unless taken back; leaving
   the screen sends them. `undoable()` in `core/ui.js`. Used for serving and clearing on the waiter screen, clearing
-  on the floor plan, kitchen tickets, and voiding a line that needs no manager (a manager's PIN is already a
-  deliberate confirmation, so an approved change is sent at once).
+  on the floor plan, kitchen tickets, and voids, comps and discounts that need no manager's PIN (a waiter's void of
+  a dish not yet cooked, anything a manager does themselves); a PIN is already a deliberate confirmation, so an
+  approved change is sent at once.
 - **Swipe (E2):** kitchen tickets and service cards move on by a swipe towards the reading end; the button stays.
 - **Quick search (E3):** Ctrl/⌘ K or the magnifier: screens, tables, orders and dishes, accent-insensitive.
 - **Waiting rings (F1):** each occupied table shows how long its guests have waited for someone (an open call, else

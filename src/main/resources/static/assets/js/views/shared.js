@@ -148,7 +148,7 @@ function drawerContent(order, user, handle, run) {
           h('button', { class: 'btn sm ghost', 'data-testid': 'void-line', onclick: () => adjust(line, 'VOID') }, t('adjust.void')),
           h('button', { class: 'btn sm ghost', 'data-testid': 'comp-line', onclick: () => adjust(line, 'COMP') }, t('adjust.comp'))) : null)))),
       section(null, totals(order.pricing, { loading: order.pending })),
-      editable ? h('button', { class: 'btn sm block', 'data-testid': 'discount-order', onclick: () => run(() => discountOrder(order, user)) },
+      editable && !order.pending ? h('button', { class: 'btn sm block', 'data-testid': 'discount-order', onclick: () => run(() => discountOrder(order, user, { restore: (back) => run(async () => back) })) },
         icon('tag', 'sm'), order.manualDiscount ? t('adjust.changeDiscount') : t('adjust.addDiscount')) : null,
       order.adjustments?.length ? section(t('adjust.history'), h('ul', { class: 'adjustments' }, order.adjustments.map(adjustmentItem))) : null),
 

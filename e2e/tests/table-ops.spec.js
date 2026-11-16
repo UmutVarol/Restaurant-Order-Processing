@@ -87,3 +87,43 @@ test('a waiter voids, comps with a manager PIN, discounts and moves a table', as
   const moved = (await api(page, 'GET', '/orders/active')).find((o) => o.customerName === guest);
   await api(page, 'POST', `/orders/${moved.id}/cancel`, { reason: 'E2E clean-up' });
 });
+
+test('a manager\'s own comp and discount need no PIN and can be taken back (E1)', async ({ page }) => {
+  await signIn(page, 'admin');
+  const [table] = await freeTables(page, 1, (t) => !t.occupied);
+  const menu = await api(page, 'GET', '/menu');
+  const lahmacun = menu.find((item) => item.name === 'Lahmacun');
+  const guest = uniqueGuest('Own');
+  const order = await api(page, 'POST', '/orders', {
+    type: 'DINE_IN', tableId: table.id, customerName: guest, paymentMethod: 'CARD',
+    items: [{ menuItemId: lahmacun.id, quantity: 2 }],
+  });
+  try {
+    await page.goto('/#/floor');
+    await page.getByTestId(`table-${table.code}`).click();
+    const drawer = page.locator('.drawer');
+    const modal = page.locator('.modal');
+
+    // a discount, taken back from the toast: nothing reaches the server
+    await drawer.getByTestId('discount-order').click();
+    await expect(modal.locator('.approval')).toBeHidden();
+    await modal.getByRole('button', { name: '10%' }).click();
+    await modal.getByRole('button', { name: 'Regular guest' }).click();
+    await modal.getByTestId('adjust-confirm').click();
+    await expect(modal).toHaveCount(0);
+    await page.locator('.toast:not(.leaving)').getByTestId('toast-action').first().click();
+    await expect(drawer.getByTestId('discount-order')).toBeVisible();
+    expect((await api(page, 'GET', `/orders/${order.id}`)).manualDiscount).toBeNull();
+
+    // a comp, left to run out: the server has it after the undo time
+    await drawer.getByTestId('comp-line').click();
+    await expect(modal.locator('.approval')).toBeHidden();
+    await modal.getByRole('button', { name: 'Long wait' }).click();
+    await modal.getByTestId('adjust-confirm').click();
+    await expect(drawer.locator('.adj-tag.comp')).toHaveText('1 on the house');
+    await expect.poll(async () => (await api(page, 'GET', `/orders/${order.id}`)).lines[0].compedQuantity, { timeout: 10_000 }).toBe(1);
+    await expect(drawer.locator('.adjustments')).toContainText('admin');
+  } finally {
+    await api(page, 'POST', `/orders/${order.id}/cancel`, { reason: 'E2E clean-up' });
+  }
+});

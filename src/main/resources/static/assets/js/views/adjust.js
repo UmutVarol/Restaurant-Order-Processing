@@ -21,9 +21,10 @@ export function needsApproval(user, kind, order) {
 }
 
 /**
- * Resolves to the updated order, or null when dismissed. A void that needs no manager (E1) is undoable: the line
- * shows as voided at once, and the change reaches the server after the undo time; {@code restore} puts the order
- * back on screen when the waiter takes it back, and the server's answer once it is sent.
+ * Resolves to the updated order, or null when dismissed. A change that needs no manager's PIN (E1: a waiter's void
+ * of a dish not yet cooked, or anything a manager does themselves) is undoable: it shows at once, and reaches the
+ * server after the undo time; {@code restore} puts the order back on screen when it is taken back, and the server's
+ * answer once it is sent. A manager's PIN is already a deliberate confirmation, so an approved change goes at once.
  */
 export function adjustLine(order, line, kind, user, { restore } = {}) {
   const max = line.quantity - line.voidedQuantity - line.compedQuantity;
@@ -42,26 +43,27 @@ export function adjustLine(order, line, kind, user, { restore } = {}) {
     kind, order, user,
     send: (reason, approval) => api.adjustLine(order.id, line.id, { kind, quantity, reason, approval }),
     done: (updated) => t(`adjust.${kind}.done`, { n: quantity, name: line.name, id: updated.id }),
-    undo: kind === 'VOID' && restore ? {
-      title: () => t('adjust.VOID.done', { n: quantity, name: line.name, id: order.id }),
-      preview: () => voidedPreview(order, line, quantity),
+    undo: restore ? {
+      title: () => t(`adjust.${kind}.done`, { n: quantity, name: line.name, id: order.id }),
+      preview: () => linePreview(order, line, kind, quantity),
       restore,
     } : null,
   });
 }
 
-/** The order as it will look once the units are voided; totals wait for the server. */
-function voidedPreview(order, line, quantity) {
+/** The order as it will look once the units are voided or comped; totals wait for the server. */
+function linePreview(order, line, kind, quantity) {
+  const field = kind === 'VOID' ? 'voidedQuantity' : 'compedQuantity';
   return {
     ...order,
     pending: true,
     lines: order.lines.map((l) => (l.id !== line.id ? l : {
-      ...l, voidedQuantity: (l.voidedQuantity || 0) + quantity, lineTotal: Number(l.lineTotal) - Number(l.unitPrice) * quantity,
+      ...l, [field]: (l[field] || 0) + quantity, lineTotal: Number(l.lineTotal) - Number(l.unitPrice) * quantity,
     })),
   };
 }
 
-export function discountOrder(order, user) {
+export function discountOrder(order, user, { restore } = {}) {
   let mode = order.manualDiscount?.amount != null ? 'amount' : 'percent';
   const value = h('input', {
     class: 'input', id: 'discount-value', inputmode: 'decimal', autocomplete: 'off',
@@ -101,6 +103,11 @@ export function discountOrder(order, user) {
         : { [mode]: number, reason, approval });
     },
     done: (updated) => (updated.manualDiscount ? t('adjust.DISCOUNT.done', { id: updated.id }) : t('adjust.DISCOUNT.removed', { id: updated.id })),
+    undo: restore ? {
+      title: (removing) => t(removing ? 'adjust.DISCOUNT.removed' : 'adjust.DISCOUNT.done', { id: order.id }),
+      preview: () => ({ ...order, pending: true }),
+      restore,
+    } : null,
   });
 }
 
@@ -163,9 +170,9 @@ function dialog({ title, intro, fields, kind, order, user, send, done, validate,
         resolve(undo.preview());
         modal.close();
         undoable({
-          title: undo.title(),
+          title: undo.title(removing),
           revert: () => undo.restore(order),
-          commit: async () => undo.restore(await send(why, null, false)),
+          commit: async () => undo.restore(await send(why, null, removing)),
           onError: (error) => toast({ title: errorMessage(error), kind: 'error' }),
         });
         return;
