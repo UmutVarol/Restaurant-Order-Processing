@@ -82,4 +82,35 @@ class PostgresCompatibilityTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].code", hasItem("12")));
     }
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactions;
+
+    /**
+     * The second wall: plain SQL, past Hibernate's tenant filter, still sees only the business of its transaction,
+     * and every table that belongs to a business is covered.
+     */
+    @Test
+    void rowLevelSecurityKeepsEachBusinessToItsOwnRows() {
+        org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        Integer own = com.umutvarol.restaurant.business.BusinessContext.call(1L,
+                () -> tx.execute(status -> jdbc.queryForObject("SELECT count(*) FROM orders", Integer.class)));
+        Integer other = com.umutvarol.restaurant.business.BusinessContext.call(999L,
+                () -> tx.execute(status -> jdbc.queryForObject("SELECT count(*) FROM orders WHERE business_id = 1", Integer.class)));
+        org.assertj.core.api.Assertions.assertThat(own).isGreaterThan(0);
+        org.assertj.core.api.Assertions.assertThat(other).isZero();
+        Integer changed = com.umutvarol.restaurant.business.BusinessContext.call(999L,
+                () -> tx.execute(status -> jdbc.update("UPDATE menu_items SET price = 1 WHERE business_id = 1")));
+        org.assertj.core.api.Assertions.assertThat(changed).isZero();
+
+        java.util.List<String> unprotected = jdbc.queryForList("""
+                SELECT c.table_name FROM information_schema.columns c
+                JOIN pg_class k ON k.relname = c.table_name
+                WHERE c.column_name = 'business_id' AND c.table_schema = current_schema()
+                  AND NOT (k.relrowsecurity AND k.relforcerowsecurity)""", String.class);
+        org.assertj.core.api.Assertions.assertThat(unprotected).isEmpty();
+    }
 }

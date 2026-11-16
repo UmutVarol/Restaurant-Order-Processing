@@ -62,8 +62,15 @@ account; a 14-day trial with sample tables and dishes. Rate-limited per client.
 - Only managers who work in all branches open, rename and close branches; a closed branch keeps its history and
   the last open branch cannot be closed. A branch manager sees and manages only their branch's people.
 - Branches are a softer boundary than businesses: they share a menu and staff accounts by design, and a person who
-  works in all branches sees all of them. Per-branch menu availability and prices, and per-branch fiscal settings,
-  are later steps.
+  works in all branches sees all of them. A branch can sell a dish at its own price or not at all (Chain plan,
+  `branch_menu_items`); legal documents belong to their bill's branch.
+- **Second wall: PostgreSQL row-level security** (`RowLevelSecurity`). Every table with a `business_id` has a policy
+  `sofra_business_isolation` (ENABLE and FORCE, so it holds for the owner the application connects as), applied after
+  every migration, so a new table is covered without anyone remembering to. Each transaction sets
+  `sofra.business_id` (`set_config(..., true)`, reset when it ends, so pooled connections never carry it over); a row
+  of another business is then neither read nor written, even by native SQL past Hibernate. Work that names no
+  business (migrations, start-up) and work across all businesses (`BusinessContext.ALL`, "0") pass, as they do in
+  the application. Tested on PostgreSQL 16: another business's id reads nothing, changes nothing and cannot insert.
 
 ## Considered and not chosen
 
@@ -72,13 +79,13 @@ account; a 14-day trial with sample tables and dishes. Rate-limited per client.
   demands it.
 - **Only a `WHERE business_id` in each repository method:** one forgotten condition leaks data. `@TenantId` makes
   the safe path the default.
-- **PostgreSQL row-level security alone:** a good second wall, planned once phase A is in place (a policy on
-  `current_setting('sofra.business_id')` set per transaction), but not a replacement for the first.
+- **PostgreSQL row-level security alone:** a good second wall (now in place, see above), but not a replacement for
+  the first: H2 has none, and the tenant filter also stamps every insert.
 
 ## Consequences
 
 - Isolation tests create two businesses (and, for branches, two branches of one business) and prove, endpoint by endpoint, that one cannot read or change the other's
   orders, tables, menu, staff, bills, reservations or live events.
-- Integrations whose keys belong to the restaurant (iyzico merchant keys, e-Arşiv, delivery platforms) must move from
-  server settings to per-business settings before they are offered in Sofra Cloud; until then the cloud runs
-  without online payments and integrations, and self-hosted installations keep using environment variables.
+- Integrations whose keys belong to the restaurant (iyzico merchant keys, e-Arşiv, delivery platforms) are
+  per-business settings in Sofra Cloud (Settings › Online payment account, Settings › Connections); the server's own
+  settings are never shared between businesses there. Self-hosted installations can keep using environment variables.

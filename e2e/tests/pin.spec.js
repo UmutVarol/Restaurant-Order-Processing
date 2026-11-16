@@ -59,7 +59,8 @@ test('staff set their own PIN with their password', async ({ page }) => {
   await page.getByLabel('New PIN (4–6 digits)').fill('1111');
   await page.getByLabel('Repeat PIN').fill('1111');
   await page.getByTestId('save-pin').click();
-  await expect(page.locator('.settings-form .form-error')).toContainText('not a run or a repeat');
+  // the PIN card's own error (other cards on the page have theirs)
+  await expect(page.locator('.settings-card', { has: page.getByTestId('save-pin') }).locator('.form-error')).toContainText('not a run or a repeat');
   await page.getByLabel('New PIN (4–6 digits)').fill('9024');
   await page.getByLabel('Repeat PIN').fill('9024');
   await page.getByTestId('save-pin').click();

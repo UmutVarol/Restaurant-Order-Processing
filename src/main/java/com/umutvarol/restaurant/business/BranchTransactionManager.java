@@ -20,12 +20,34 @@ class BranchTransactionManager {
     @Bean
     JpaTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
         return new JpaTransactionManager(entityManagerFactory) {
+            private volatile Boolean postgres;
+
             @Override
             protected void doBegin(Object transaction, TransactionDefinition definition) {
                 super.doBegin(transaction, definition);
+                if (!(TransactionSynchronizationManager.getResource(entityManagerFactory) instanceof EntityManagerHolder holder)) {
+                    return;
+                }
+                Session session = holder.getEntityManager().unwrap(Session.class);
                 Long branch = BranchContext.current();
-                if (branch != null && TransactionSynchronizationManager.getResource(entityManagerFactory) instanceof EntityManagerHolder holder) {
-                    holder.getEntityManager().unwrap(Session.class).enableFilter(Branch.FILTER).setParameter("branch", branch);
+                if (branch != null) {
+                    session.enableFilter(Branch.FILTER).setParameter("branch", branch);
+                }
+                // the second wall (RowLevelSecurity): PostgreSQL itself keeps this transaction to its business
+                Long business = BusinessContext.current();
+                if (business != null && postgres != Boolean.FALSE) {
+                    session.doWork(connection -> {
+                        if (postgres == null) {
+                            postgres = "PostgreSQL".equals(connection.getMetaData().getDatabaseProductName());
+                        }
+                        if (postgres) {
+                            try (java.sql.PreparedStatement set = connection.prepareStatement("SELECT set_config(?, ?, true)")) {
+                                set.setString(1, RowLevelSecurity.SETTING);
+                                set.setString(2, Long.toString(business));
+                                set.execute();
+                            }
+                        }
+                    });
                 }
             }
         };

@@ -31,7 +31,8 @@ Ayrıntı: `docs/ROADMAP.md`, `docs/SOFRA_CLOUD_PLAN.md`, `docs/CLOUD.md`, `docs
    kullanıcının Firebase projesi ve `FCM_SERVICE_ACCOUNT` gerekir (docs/OPERATIONS.md); gerçek Firebase'e karşı denenmedi.
 4. [x] Zincir planı vaatleri (16 Kasım 2026): merkezi menü, şube fiyatı/satışı (Menü › şube simgesi), şubeler arası rapor
    (Panel › Şubeler). Şube bazında ayrı stok sayımı yok (plan metninde "stok farkı" yalnızca satışa açık/kapalı olarak karşılandı).
-5. [ ] PostgreSQL satır güvenliği (RLS), ikinci yalıtım duvarı.
+5. [x] PostgreSQL satır güvenliği (RLS), ikinci yalıtım duvarı (16 Kasım 2026; `RowLevelSecurity`, her göçten sonra
+   uygulanır; yerel PostgreSQL 16'da ve bulut modunda iki işletmeyle denendi).
 6. [ ] Paddle'ı sandbox'ta kullanıcıyla birlikte doğrulamak (bu ortamdan Paddle'a erişim yok).
 7. [ ] İsteğe bağlı: iyzico aboneliği (TL), sadakat, saatlik fiyat, müşteri ekranı.
 
