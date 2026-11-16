@@ -14,6 +14,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -219,8 +220,21 @@ class PrintingIntegrationTest extends ApiIntegrationTest {
         return ((Number) JsonPath.read(body, "$.id")).longValue();
     }
 
-    /** Leaves no live printer behind for the other tests sharing this application context. */
+    /**
+     * Leaves no live printer behind for the other tests sharing this application context. A ticket the fake printer
+     * has just received is still being marked printed; deleting the printer at that moment races that update (H2
+     * reports the clash instead of waiting), so its queue settles first.
+     */
     private void remove(long id) throws Exception {
+        long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < until) {
+            String jobs = mvc.perform(as(ADMIN, get("/api/v1/print-jobs"))).andReturn().getResponse().getContentAsString();
+            List<Object> queued = JsonPath.read(jobs, "$[?(@.printerId == %d && @.status == 'QUEUED')]".formatted(id));
+            if (queued.isEmpty()) {
+                break;
+            }
+            Thread.sleep(50);
+        }
         mvc.perform(as(ADMIN, org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/printers/{id}", id)))
                 .andExpect(status().isNoContent());
     }
