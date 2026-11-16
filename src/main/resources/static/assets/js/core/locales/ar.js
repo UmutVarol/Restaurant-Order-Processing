@@ -1636,4 +1636,8 @@ export default {
   "branchReport.average": "المتوسط {amount}",
   "branchReport.kitchen": "المطبخ {time}",
   "error.BRANCH_NOT_YOURS": "يغيّر مدير الفرع فرعه فقط.",
+  "service.waitHint": "في مخطط الصالة، تتحول حلقة الطاولة التي لم يخدمها أحد إلى الكهرماني ثم الأحمر بعد هذه الدقائق. تسري على جميع أجهزة المنشأة.",
+  "error.WAIT_LIMITS_INVALID": "يجب أن يأتي الحد الأحمر بعد الكهرماني (أو كلاهما 0 لإيقاف الحلقات).",
+  "service.waiting": "طاولات تنتظر أحدًا",
+  "service.waitedFor": "تنتظر منذ {time}",
 };

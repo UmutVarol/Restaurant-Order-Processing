@@ -837,7 +837,12 @@
         updatedAt: own ? iso(own.at) : null, updatedBy: own?.by || null };
     }),
   });
-  const serviceSettings = () => (state.serviceSettings ??= { mode: 'MIXED', autoAcceptLimit: 1500, firstCartNeedsStaff: true, updatedAt: null, updatedBy: null });
+  const serviceSettings = () => {
+    const settings = (state.serviceSettings ??= { mode: 'MIXED', autoAcceptLimit: 1500, firstCartNeedsStaff: true, updatedAt: null, updatedBy: null });
+    settings.waitLookMinutes ??= 12;
+    settings.waitLongMinutes ??= 20;
+    return settings;
+  };
   const BURST_LIMIT = 6;
   const BURST_WINDOW_MS = 10 * 60_000;
 
@@ -2605,8 +2610,19 @@
         autoAcceptLimit: limit != null && !(limit >= 0 && limit <= 100000) ? 'must be between 0.00 and 100000.00' : null,
         firstCartNeedsStaff: typeof body.firstCartNeedsStaff === 'boolean' ? null : 'must not be null',
       });
+      const before = serviceSettings();
+      let look = before.waitLookMinutes;
+      let long = before.waitLongMinutes;
+      if (body.waitLookMinutes != null || body.waitLongMinutes != null) {
+        look = Number(body.waitLookMinutes);
+        long = Number(body.waitLongMinutes);
+        if (!(look === 0 && long === 0) && !(look >= 1 && long > look && long <= 120)) {
+          throw new Problem(422, 'WAIT_LIMITS_INVALID', 'The red limit must be later than the amber one (or both 0 to switch the rings off)');
+        }
+      }
       state.serviceSettings = { mode: body.mode, autoAcceptLimit: limit == null ? null : Math.round(limit * 100) / 100,
-        firstCartNeedsStaff: body.firstCartNeedsStaff, updatedAt: iso(Date.now()), updatedBy: user.username };
+        firstCartNeedsStaff: body.firstCartNeedsStaff, waitLookMinutes: look, waitLongMinutes: long,
+        updatedAt: iso(Date.now()), updatedBy: user.username };
       save();
       return { ...state.serviceSettings };
     }],

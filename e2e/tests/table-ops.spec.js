@@ -29,14 +29,27 @@ test('a waiter voids, comps with a manager PIN, discounts and moves a table', as
   const drawer = page.locator('.drawer');
   await expect(drawer.locator('.line-item')).toContainText('3 × Lahmacun');
 
-  // still pending: a void needs no manager
-  await drawer.getByTestId('void-line').click();
+  // still pending: a void needs no manager, and can be taken back from the toast (E1); nothing reaches the server
   const modal = page.locator('.modal');
+  await drawer.getByTestId('void-line').click();
   await expect(modal.locator('.approval')).toBeHidden();
   await modal.getByRole('button', { name: 'Entered by mistake' }).click();
   await modal.getByTestId('adjust-confirm').click();
   await expect(drawer.locator('.line-item')).toContainText('2 × Lahmacun');
+  await page.locator('.toast', { hasText: 'Lahmacun' }).getByTestId('toast-action').click();
+  await expect(drawer.locator('.line-item')).toContainText('3 × Lahmacun');
+  await expect(drawer.locator('.adj-tag.void')).toHaveCount(0);
+  await expect(modal).toHaveCount(0);
+  const placed = (await api(page, 'GET', '/orders/active')).find((o) => o.customerName === guest);
+  expect(placed.lines[0].voidedQuantity).toBe(0);
+
+  await drawer.getByTestId('void-line').click();
+  await modal.getByRole('button', { name: 'Entered by mistake' }).click();
+  await modal.getByTestId('adjust-confirm').click();
+  await expect(drawer.locator('.line-item')).toContainText('2 × Lahmacun');
   await expect(drawer.locator('.adj-tag.void')).toHaveText('1 voided');
+  // once the undo time is over, the server has it
+  await expect.poll(async () => (await api(page, 'GET', `/orders/${placed.id}`)).lines[0].voidedQuantity, { timeout: 10_000 }).toBe(1);
   // the dialog has finished closing before the next one opens (two open at once would share their buttons)
   await expect(modal).toHaveCount(0);
 

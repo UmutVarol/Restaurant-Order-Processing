@@ -1810,6 +1810,18 @@ body.sheet-locked { overflow: hidden; }
   background: var(--brand); color: #fff; font: 700 24px/1 var(--font-sans); font-variant-numeric: tabular-nums;
 }
 .runner-card.clear .service-table { background: var(--violet-soft); color: var(--violet); }
+/* F1 on the waiter screen: tables past the amber limit, longest first; redrawn every half minute, so no entry motion */
+.runner-card.waiting {
+  grid-template-areas: "table body"; animation: none; font: inherit; color: inherit; text-align: start; cursor: pointer;
+  touch-action: manipulation; transition: transform var(--dur-fast) var(--ease);
+}
+.runner-card.waiting:active { transform: scale(.97); }
+.runner-card.waiting-look { border-color: color-mix(in srgb, var(--amber) 55%, var(--border)); }
+.runner-card.waiting-look .service-table { background: var(--amber-soft); color: var(--amber); }
+.runner-card.waiting-look b { color: var(--amber); }
+.runner-card.waiting-long { border-color: color-mix(in srgb, var(--red) 55%, var(--border)); }
+.runner-card.waiting-long .service-table { background: var(--red-soft); color: var(--red); }
+.runner-card.waiting-long b { color: var(--red); }
 .service-body { grid-area: body; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .service-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .service-head .faint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }

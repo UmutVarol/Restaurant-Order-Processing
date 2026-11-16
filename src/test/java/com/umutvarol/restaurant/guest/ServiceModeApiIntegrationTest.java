@@ -59,6 +59,44 @@ class ServiceModeApiIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void theWaitingRingLimitsAreSetOnceForTheBusiness() throws Exception {
+        mvc.perform(as(WAITER, get("/api/v1/service-settings")))
+                .andExpect(jsonPath("$.waitLookMinutes").value(12))
+                .andExpect(jsonPath("$.waitLongMinutes").value(20));
+        mvc.perform(json(as(ADMIN, put("/api/v1/service-settings")), """
+                        {"mode": "MIXED", "autoAcceptLimit": 1500, "firstCartNeedsStaff": true,
+                         "waitLookMinutes": 8, "waitLongMinutes": 15}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.waitLookMinutes").value(8))
+                .andExpect(jsonPath("$.waitLongMinutes").value(15));
+        // a client that does not send them keeps them
+        mvc.perform(json(as(ADMIN, put("/api/v1/service-settings")), DEFAULTS))
+                .andExpect(jsonPath("$.waitLookMinutes").value(8));
+        // red before amber, one without the other, or past two hours: refused
+        for (String limits : List.of("\"waitLookMinutes\": 20, \"waitLongMinutes\": 10",
+                "\"waitLookMinutes\": 10", "\"waitLookMinutes\": 0, \"waitLongMinutes\": 15")) {
+            mvc.perform(json(as(ADMIN, put("/api/v1/service-settings")),
+                            "{\"mode\": \"MIXED\", \"autoAcceptLimit\": 1500, \"firstCartNeedsStaff\": true, " + limits + "}"))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.code").value("WAIT_LIMITS_INVALID"));
+        }
+        mvc.perform(json(as(ADMIN, put("/api/v1/service-settings")), """
+                        {"mode": "MIXED", "autoAcceptLimit": 1500, "firstCartNeedsStaff": true,
+                         "waitLookMinutes": 30, "waitLongMinutes": 121}"""))
+                .andExpect(status().isBadRequest());
+        // both 0 switches the rings off
+        mvc.perform(json(as(ADMIN, put("/api/v1/service-settings")), """
+                        {"mode": "MIXED", "autoAcceptLimit": 1500, "firstCartNeedsStaff": true,
+                         "waitLookMinutes": 0, "waitLongMinutes": 0}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.waitLongMinutes").value(0));
+        mvc.perform(json(as(ADMIN, put("/api/v1/service-settings")), """
+                        {"mode": "MIXED", "autoAcceptLimit": 1500, "firstCartNeedsStaff": true,
+                         "waitLookMinutes": 12, "waitLongMinutes": 20}"""))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void aCartFromASeatedTableGoesStraightToTheKitchenAndALargeOneWaits() throws Exception {
         String seated = newTable();
         seat(seated);

@@ -1602,4 +1602,8 @@ export default {
   "branchReport.average": "Ø {amount}",
   "branchReport.kitchen": "Küche {time}",
   "error.BRANCH_NOT_YOURS": "Filialleiter ändern nur ihre eigene Filiale.",
+  "service.waitHint": "Auf dem Tischplan wird der Ring eines Tisches, um den sich niemand gekümmert hat, nach diesen Minuten gelb und dann rot. Gilt für alle Geräte des Betriebs.",
+  "error.WAIT_LIMITS_INVALID": "Die rote Grenze muss nach der gelben liegen (oder beide 0, um die Ringe auszuschalten).",
+  "service.waiting": "Tische, die auf jemanden warten",
+  "service.waitedFor": "wartet seit {time}",
 };

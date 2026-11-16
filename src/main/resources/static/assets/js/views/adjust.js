@@ -5,7 +5,7 @@ import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { money, percent } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
-import { openModal, toast } from '../core/ui.js';
+import { openModal, toast, undoable } from '../core/ui.js';
 
 const REASONS = {
   VOID: ['adjust.r.mistake', 'adjust.r.changedMind', 'adjust.r.outOfStock'],
@@ -20,8 +20,12 @@ export function needsApproval(user, kind, order) {
   return kind !== 'VOID' || order.status !== 'PENDING';
 }
 
-/** Resolves to the updated order, or null when dismissed. */
-export function adjustLine(order, line, kind, user) {
+/**
+ * Resolves to the updated order, or null when dismissed. A void that needs no manager (E1) is undoable: the line
+ * shows as voided at once, and the change reaches the server after the undo time; {@code restore} puts the order
+ * back on screen when the waiter takes it back, and the server's answer once it is sent.
+ */
+export function adjustLine(order, line, kind, user, { restore } = {}) {
   const max = line.quantity - line.voidedQuantity - line.compedQuantity;
   let quantity = 1;
   const stepper = h('div', { class: 'stepper big' });
@@ -38,7 +42,23 @@ export function adjustLine(order, line, kind, user) {
     kind, order, user,
     send: (reason, approval) => api.adjustLine(order.id, line.id, { kind, quantity, reason, approval }),
     done: (updated) => t(`adjust.${kind}.done`, { n: quantity, name: line.name, id: updated.id }),
+    undo: kind === 'VOID' && restore ? {
+      title: () => t('adjust.VOID.done', { n: quantity, name: line.name, id: order.id }),
+      preview: () => voidedPreview(order, line, quantity),
+      restore,
+    } : null,
   });
+}
+
+/** The order as it will look once the units are voided; totals wait for the server. */
+function voidedPreview(order, line, quantity) {
+  return {
+    ...order,
+    pending: true,
+    lines: order.lines.map((l) => (l.id !== line.id ? l : {
+      ...l, voidedQuantity: (l.voidedQuantity || 0) + quantity, lineTotal: Number(l.lineTotal) - Number(l.unitPrice) * quantity,
+    })),
+  };
 }
 
 export function discountOrder(order, user) {
@@ -84,7 +104,7 @@ export function discountOrder(order, user) {
   });
 }
 
-function dialog({ title, intro, fields, kind, order, user, send, done, validate, extra }) {
+function dialog({ title, intro, fields, kind, order, user, send, done, validate, extra, undo }) {
   return new Promise((resolve) => {
     let settled = false;
     let approvalShown = needsApproval(user, kind, order);
@@ -135,6 +155,20 @@ function dialog({ title, intro, fields, kind, order, user, send, done, validate,
         if (!manager.value.trim()) { manager.focus(); return fail(t('adjust.managerRequired')); }
         if (!/^\d{4,6}$/.test(pin.value)) { pin.focus(); return fail(t('settings.pinFormat')); }
         approval = { manager: manager.value.trim(), pin: pin.value };
+      }
+      if (undo && !approval) {
+        // no manager to ask: the dialog closes, and the change waits out the undo time before it is sent
+        settled = true;
+        const why = reason.value.trim();
+        resolve(undo.preview());
+        modal.close();
+        undoable({
+          title: undo.title(),
+          revert: () => undo.restore(order),
+          commit: async () => undo.restore(await send(why, null, false)),
+          onError: (error) => toast({ title: errorMessage(error), kind: 'error' }),
+        });
+        return;
       }
       confirm.disabled = true;
       try {

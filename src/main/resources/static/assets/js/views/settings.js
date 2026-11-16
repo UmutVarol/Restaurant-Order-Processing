@@ -10,6 +10,7 @@ import { confirmDialog, openModal, toast } from '../core/ui.js';
 import { PRESETS, fitAccent, paintAccent } from '../core/brand.js';
 import { DEFAULT_TOPICS, currentSubscription, disablePush, enablePush, isNativeApp, unsupportedReason } from '../core/push.js';
 import { qrCode } from './qr.js';
+import { WAIT_CHOICES } from './floor.js';
 import { withRecentSignIn } from './reauth.js';
 
 const IDLE_CHOICES = [1, 2, 5, 10, 0];
@@ -249,6 +250,17 @@ export default {
           h('small', { class: 'faint' }, t('service.limitHint'))),
         h('label', { class: 'checkbox' }, firstCart, t('service.firstCart')),
         h('small', { class: 'faint' }, t('service.firstCartHint')));
+      // F1: when the floor plan's waiting rings turn amber and red, for every device of the business
+      const current = `${draft.waitLookMinutes ?? 12}-${draft.waitLongMinutes ?? 20}`;
+      const waitOptions = WAIT_CHOICES.map(([look, long]) => `${look}-${long}`);
+      if (!waitOptions.includes(current)) waitOptions.unshift(current);
+      const wait = h('select', { class: 'select', id: 'service-wait', 'data-testid': 'service-wait' }, waitOptions.map((key) => {
+        const [look, long] = key.split('-').map(Number);
+        return h('option', { value: key, selected: key === current },
+          look === 0 ? t('floor.waitOff') : t('floor.waitLimits', { look, long }));
+      }));
+      const waitField = h('div', { class: 'field' }, h('label', { for: 'service-wait' }, t('floor.waitLabel')), wait,
+        h('small', { class: 'faint' }, t('service.waitHint')));
       const choices = SERVICE_MODES.map((mode) => h('label', { class: ['service-mode', draft.mode === mode ? 'active' : ''], 'data-testid': `service-mode-${mode}` },
         h('input', { type: 'radio', name: 'service-mode', value: mode, checked: draft.mode === mode, onchange: () => {
           draft.mode = mode;
@@ -271,6 +283,8 @@ export default {
                 mode: draft.mode,
                 autoAcceptLimit: limit.value === '' ? null : Number(limit.value),
                 firstCartNeedsStaff: firstCart.checked,
+                waitLookMinutes: Number(wait.value.split('-')[0]),
+                waitLongMinutes: Number(wait.value.split('-')[1]),
               });
               toast({ title: t('settings.saved') });
               renderService();
@@ -284,6 +298,7 @@ export default {
         h('div', { class: 'service-modes', role: 'radiogroup', 'aria-label': t('service.title') }, choices),
         rules,
         h('p', { class: 'faint' }, t('service.always')),
+        waitField,
         problem,
         h('div', null, save)));
     }

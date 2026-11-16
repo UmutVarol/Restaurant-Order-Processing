@@ -118,7 +118,7 @@ function skeletonDrawer(handle) {
 function drawerContent(order, user, handle, run) {
   const staff = canTakeOrders(user);
   const editable = staff && !['COMPLETED', 'CANCELLED'].includes(order.status);
-  const adjust = (line, kind) => run(() => adjustLine(order, line, kind, user));
+  const adjust = (line, kind) => run(() => adjustLine(order, line, kind, user, { restore: (back) => run(async () => back) }));
   // Course badges only matter on an order that is served in courses (one was held back).
   const coursed = servedInCourses(order);
   return [
@@ -144,10 +144,10 @@ function drawerContent(order, user, handle, run) {
       section(t('detail.timeline'), timeline(order)),
       editable && order.heldCourses?.length ? courseBar(order, run) : null,
       section(t('detail.items'), h('div', { class: 'line-items' }, order.lines.map((line) => lineItem(line, coursed,
-        editable && line.quantity - line.voidedQuantity - line.compedQuantity > 0 ? h('div', { class: 'line-actions' },
+        editable && !order.pending && line.quantity - line.voidedQuantity - line.compedQuantity > 0 ? h('div', { class: 'line-actions' },
           h('button', { class: 'btn sm ghost', 'data-testid': 'void-line', onclick: () => adjust(line, 'VOID') }, t('adjust.void')),
           h('button', { class: 'btn sm ghost', 'data-testid': 'comp-line', onclick: () => adjust(line, 'COMP') }, t('adjust.comp'))) : null)))),
-      section(null, totals(order.pricing)),
+      section(null, totals(order.pricing, { loading: order.pending })),
       editable ? h('button', { class: 'btn sm block', 'data-testid': 'discount-order', onclick: () => run(() => discountOrder(order, user)) },
         icon('tag', 'sm'), order.manualDiscount ? t('adjust.changeDiscount') : t('adjust.addDiscount')) : null,
       order.adjustments?.length ? section(t('adjust.history'), h('ul', { class: 'adjustments' }, order.adjustments.map(adjustmentItem))) : null),

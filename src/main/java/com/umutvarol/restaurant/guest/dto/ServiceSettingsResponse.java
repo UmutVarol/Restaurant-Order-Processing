@@ -7,11 +7,12 @@ import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 
 public record ServiceSettingsResponse(ServiceMode mode, @Nullable BigDecimal autoAcceptLimit,
-                                      boolean firstCartNeedsStaff, @Nullable Instant updatedAt,
-                                      @Nullable String updatedBy) {
+                                      boolean firstCartNeedsStaff, int waitLookMinutes, int waitLongMinutes,
+                                      @Nullable Instant updatedAt, @Nullable String updatedBy) {
 
     public static ServiceSettingsResponse from(ServiceSettings settings) {
         return new ServiceSettingsResponse(settings.getMode(), settings.getAutoAcceptLimit(),
-                settings.isFirstCartNeedsStaff(), settings.getUpdatedAt(), settings.getUpdatedBy());
+                settings.isFirstCartNeedsStaff(), settings.getWaitLookMinutes(), settings.getWaitLongMinutes(),
+                settings.getUpdatedAt(), settings.getUpdatedBy());
     }
 }

@@ -5,7 +5,7 @@ import { t, tn } from '../core/i18n.js';
 import { elapsed, minutesSince, money, percent, time } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
-import { openModal, reducedMotion, toast } from '../core/ui.js';
+import { openModal, reducedMotion, toast, undoable } from '../core/ui.js';
 import { canTakeOrders, openOrderDrawer, statusPill } from './shared.js';
 
 const ZONES = ['INDOOR', 'WINDOW', 'TERRACE'];
@@ -14,16 +14,17 @@ const ZONES = ['INDOOR', 'WINDOW', 'TERRACE'];
 const lastStates = new Map();
 
 // F1: how long the guests at each table have been without anyone seeing to them, as a ring that fills; amber and red
-// at the limits chosen on this device. Crossing a limit rings the table once; it never blinks.
-const WAIT_KEY = 'sofra.floor.wait';
-const WAIT_CHOICES = { '8-15': [8, 15], '12-20': [12, 20], '15-25': [15, 25], off: null };
+// at the limits the business set (Settings › Service mode). Crossing a limit rings the table once; it never blinks.
+/** The choices offered in the settings, as [amber, red] minutes; [0, 0] switches the rings off. */
+export const WAIT_CHOICES = [[8, 15], [12, 20], [15, 25], [20, 30], [0, 0]];
 const RING_MINUTES = 30;
 const lastWait = new Map();
 
-function waitLimits() {
-  let saved = '12-20';
-  try { saved = localStorage.getItem(WAIT_KEY) || saved; } catch { /* private window */ }
-  return saved in WAIT_CHOICES ? saved : '12-20';
+/** The business's limits from its service settings, or null when the rings are off. */
+export function waitLimitsOf(settings) {
+  const look = settings?.waitLookMinutes ?? 12;
+  const long = settings?.waitLongMinutes ?? 20;
+  return look > 0 && long > look ? [look, long] : null;
 }
 
 function waitState(minutes, limits) {
@@ -53,18 +54,14 @@ export default {
     let tables = null;
     const summary = h('div', { class: 'floor-summary' });
     const zones = h('div');
-    let limitsKey = waitLimits();
-    const limitsSelect = h('select', {
-      class: 'select', id: 'floor-wait', 'data-testid': 'floor-wait', 'aria-label': t('floor.waitLabel'),
-      onchange: (event) => {
-        limitsKey = event.target.value;
-        try { localStorage.setItem(WAIT_KEY, limitsKey); } catch { /* this visit only */ }
-        render();
-      },
-    }, Object.keys(WAIT_CHOICES).map((key) => h('option', { value: key, selected: key === limitsKey },
-      key === 'off' ? t('floor.waitOff') : t('floor.waitLimits', { look: WAIT_CHOICES[key][0], long: WAIT_CHOICES[key][1] }))));
-    const tools = h('div', { class: 'toolbar floor-tools' }, h('span', { class: 'spacer' }),
-      h('label', { class: 'floor-wait-label', for: 'floor-wait' }, icon('clock', 'sm'), h('span', null, t('floor.waitLabel'))), limitsSelect);
+    // the business's limits; the defaults hold until the settings arrive
+    let limits = [12, 20];
+    const limitsNote = h('span', { class: 'floor-wait-label', 'data-testid': 'floor-wait' });
+    const paintLimits = () => mount(limitsNote, icon('clock', 'sm'), h('span', null, t('floor.waitLabel')), ' ',
+      h('b', null, limits ? t('floor.waitLimits', { look: limits[0], long: limits[1] }) : t('floor.waitOff')));
+    paintLimits();
+    api.serviceSettings().then((settings) => { limits = waitLimitsOf(settings); paintLimits(); if (tables) render(); }).catch(() => {});
+    const tools = h('div', { class: 'toolbar floor-tools' }, h('span', { class: 'spacer' }), limitsNote);
     mount(container, summary, tools, zones);
 
     function render() {
@@ -103,7 +100,7 @@ export default {
       lastStates.set(table.id, state);
       const changed = before !== undefined && before !== state && !reducedMotion();
       // F1: crossing a waiting limit rings the table once (the same ring as A3, never a blink)
-      const waited = table.attentionSince && WAIT_CHOICES[limitsKey] ? waitState(minutesSince(table.attentionSince), WAIT_CHOICES[limitsKey]) : 'ok';
+      const waited = table.attentionSince && limits ? waitState(minutesSince(table.attentionSince), limits) : 'ok';
       const waitedBefore = lastWait.get(table.id);
       lastWait.set(table.id, waited);
       const rang = waitedBefore !== undefined && waited !== 'ok' && waited !== waitedBefore && !reducedMotion();
@@ -121,7 +118,7 @@ export default {
           h('div', { class: 'row', style: { gap: '6px' } }, statusPill(order.status),
             table.openOrders.length > 1 ? h('span', { class: 'pill plain' }, `+${table.openOrders.length - 1}`) : null),
           h('div', { class: 't-amount' }, money(table.openTotal)),
-          table.attentionSince && WAIT_CHOICES[limitsKey] ? waitRing(table.attentionSince, WAIT_CHOICES[limitsKey]) : null,
+          table.attentionSince && limits ? waitRing(table.attentionSince, limits) : null,
           h('div', { class: 'seats since-line' }, icon('clock', 'sm'),
             h('span', { class: 'since-time', dataset: { since: table.occupiedSince } }, elapsed(table.occupiedSince)),
             h('span', { class: 'since-who', dir: 'auto' }, `· ${order.customerName}`)),
@@ -197,25 +194,32 @@ export default {
           sub ? h('span', { class: 'muted kpi-sub' }, sub) : null));
     }
 
-    async function clearTable(table) {
-      try {
-        await api.clearTable(table.id);
-        toast({ title: t('service.clearedToast', { table: table.code }) });
-      } catch (error) {
-        toast({ title: errorMessage(error), kind: 'error' });
-      }
-      reload();
+    /** E1: the table shows as clean at once; the server hears of it after the undo time. */
+    function clearTable(table) {
+      const since = table.needsClearingSince;
+      const mark = (value) => { tables = tables.map((one) => (one.id === table.id ? { ...one, needsClearingSince: value } : one)); render(); };
+      undoable({
+        title: t('service.clearedToast', { table: table.code }),
+        apply: () => { clearing.add(table.id); mark(null); },
+        revert: () => { clearing.delete(table.id); mark(since); },
+        commit: async () => {
+          try { await api.clearTable(table.id); } finally { clearing.delete(table.id); reload(); }
+        },
+        onError: (error) => toast({ title: errorMessage(error), kind: 'error' }),
+      });
     }
 
     async function load() {
       try {
-        tables = await api.tables();
+        // a table waiting out its undo time stays clean through live refreshes
+        tables = (await api.tables()).map((one) => (clearing.has(one.id) ? { ...one, needsClearingSince: null } : one));
         render();
       } catch (error) {
         toast({ title: errorMessage(error), kind: 'error' });
       }
     }
 
+    const clearing = new Set();
     const reload = debounce(load, 200);
     const offOrder = bus.on('order', reload);
     const offTable = bus.on('table', reload);

@@ -35,6 +35,13 @@ public class ServiceSettings {
     @Column(name = "first_cart_needs_staff", nullable = false)
     private boolean firstCartNeedsStaff;
 
+    /** F1: minutes until a table's waiting ring turns amber and red; both 0 when the rings are off. */
+    @Column(name = "wait_look_minutes", nullable = false)
+    private int waitLookMinutes;
+
+    @Column(name = "wait_long_minutes", nullable = false)
+    private int waitLongMinutes;
+
     @Column(name = "updated_at")
     private Instant updatedAt;
 
@@ -55,6 +62,8 @@ public class ServiceSettings {
         settings.mode = ServiceMode.MIXED;
         settings.autoAcceptLimit = new BigDecimal("1500.00");
         settings.firstCartNeedsStaff = true;
+        settings.waitLookMinutes = 12;
+        settings.waitLongMinutes = 20;
         return settings;
     }
 
@@ -65,6 +74,20 @@ public class ServiceSettings {
         this.firstCartNeedsStaff = firstCartNeedsStaff;
         this.updatedAt = at;
         this.updatedBy = by;
+    }
+
+    /** The waiting-ring limits; both 0 switches the rings off. Checked by the caller. */
+    void changeWaitLimits(int look, int longWait) {
+        this.waitLookMinutes = look;
+        this.waitLongMinutes = longWait;
+    }
+
+    public int getWaitLookMinutes() {
+        return waitLookMinutes;
+    }
+
+    public int getWaitLongMinutes() {
+        return waitLongMinutes;
     }
 
     public ServiceMode getMode() {

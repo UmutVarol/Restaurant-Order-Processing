@@ -1616,4 +1616,8 @@ export default {
   "branchReport.average": "average {amount}",
   "branchReport.kitchen": "kitchen {time}",
   "error.BRANCH_NOT_YOURS": "A branch manager changes only their own branch.",
+  "service.waitHint": "On the floor plan, a table nobody has seen to turns amber, then red, after these minutes. Applies to every device of the business.",
+  "error.WAIT_LIMITS_INVALID": "The red limit must come after the amber one (or both 0 to switch the rings off).",
+  "service.waiting": "Tables waiting for someone",
+  "service.waitedFor": "waiting {time}",
 };

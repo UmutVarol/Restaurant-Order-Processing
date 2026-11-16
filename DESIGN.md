@@ -134,11 +134,14 @@ Status is always shown as a dot and a word, never as colour alone.
 - **Category strip (D3):** the guest menu is in sections; the strip follows the scroll and slides a line to the
   current one.
 - **Undo (E1):** reversible actions happen at once and reach the server after 5 seconds unless taken back; leaving
-  the screen sends them. `undoable()` in `core/ui.js`.
+  the screen sends them. `undoable()` in `core/ui.js`. Used for serving and clearing on the waiter screen, clearing
+  on the floor plan, kitchen tickets, and voiding a line that needs no manager (a manager's PIN is already a
+  deliberate confirmation, so an approved change is sent at once).
 - **Swipe (E2):** kitchen tickets and service cards move on by a swipe towards the reading end; the button stays.
 - **Quick search (E3):** Ctrl/⌘ K or the magnifier: screens, tables, orders and dishes, accent-insensitive.
 - **Waiting rings (F1):** each occupied table shows how long its guests have waited for someone (an open call, else
-  the last order change); amber and red at limits chosen per device; crossing one rings once.
+  the last order change); amber and red at limits the manager sets once for the business (Settings › Service mode);
+  crossing one rings once. The waiter screen lists tables past amber, longest wait first.
 - **Day card (F2):** closing today at the till shows the day once on receipt paper: figures count up, the hours rise,
   the star dish settles in. "Share" gives the phone's share sheet a 1080 × 1350 picture drawn on the device (right to
   left in Arabic), or saves it as a PNG; it never goes to the server.

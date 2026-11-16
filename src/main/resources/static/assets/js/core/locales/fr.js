@@ -1603,4 +1603,8 @@ export default {
   "branchReport.average": "moyenne {amount}",
   "branchReport.kitchen": "cuisine {time}",
   "error.BRANCH_NOT_YOURS": "Un responsable de succursale ne modifie que la sienne.",
+  "service.waitHint": "Sur le plan de salle, l’anneau d’une table dont personne ne s’est occupé passe à l’orange puis au rouge après ces minutes. S’applique à tous les appareils de l’établissement.",
+  "error.WAIT_LIMITS_INVALID": "La limite rouge doit venir après l’orange (ou les deux à 0 pour désactiver les anneaux).",
+  "service.waiting": "Tables en attente",
+  "service.waitedFor": "attend depuis {time}",
 };

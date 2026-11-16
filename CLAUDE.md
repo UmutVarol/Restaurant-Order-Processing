@@ -62,6 +62,7 @@ Kaynak: kullanıcının notu "UI UX Tasarım Stüdyosu" (14 Kasım 2026). Bağla
 - 2. tur adaylar (D1 işletme rengi, D2 uzaktan okunur mutfak, D3 kategori şeridi, E1 geri al, E2 kaydırarak hazır,
   E3 hızlı arama, F1 masa bekleme halkası, F2 günün kartı): https://claude.ai/artifact/MAXCSVmBM4LJwjST84UgWa.
   Kullanıcı **sekizini de onayladı** (16 Kasım 2026); **hepsi uygulandı** (ayrıntı: `DESIGN.md` → Round two).
-  Eksik kalanlar: E1 kalem iptali ve masa kapatmada yok; F1 eşikleri işletme ayarında değil cihaz başına seçiliyor.
+  2. turun eksikleri de tamamlandı (16 Kasım 2026): kalem iptali (PIN gerekmeyen) ve kat planında masa temizleme
+  geri alınabilir; F1 eşikleri işletme ayarı (Ayarlar › Servis modu, V35); garson ekranı en uzun bekleyeni öne alır.
 - Sofra'nın kendi tasarım dili: `DESIGN.md` (lokanta sıcaklığı, domates kırmızısı, safran; Fraunces + Inter;
   easing `cubic-bezier(.2,.8,.2,1)`; yalnızca transform/opacity animasyonu).

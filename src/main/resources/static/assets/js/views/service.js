@@ -4,12 +4,14 @@
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
-import { elapsed } from '../core/format.js';
+import { elapsed, minutesSince } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { haptic, swipeAction, toast, undoable } from '../core/ui.js';
 import { optionsText } from './options.js';
 import { guestActions, requestCard } from './inbox.js';
+import { waitLimitsOf } from './floor.js';
+import { openOrderDrawer } from './shared.js';
 
 export default {
   title: 'service.screen',
@@ -18,6 +20,9 @@ export default {
     let ready = null;
     let requests = null;
     let toClear = null;
+    // F1: tables whose guests have waited past the business's amber limit, longest first
+    let overdue = [];
+    let limits = [12, 20];
     const busy = new Set();
     // E1: plates served and tables cleared leave the list at once; the server hears of it when the undo time is over
     const waiting = new Set();
@@ -25,9 +30,12 @@ export default {
     const readyList = h('div', { class: 'service-list' });
     const callList = h('div', { class: 'service-list' });
     const clearList = h('div', { class: 'service-list' });
+    const waitList = h('div', { class: 'service-list' });
+    const waitSection = h('section', { class: 'service-section', 'data-testid': 'service-waiting', hidden: true },
+      h('div', { class: 'section-title' }, h('h3', null, icon('clock', 'sm'), t('service.waiting'))), waitList);
     const section = (iconName, title, list, testId) => h('section', { class: 'service-section', 'data-testid': testId },
       h('div', { class: 'section-title' }, h('h3', null, icon(iconName, 'sm'), title)), list);
-    mount(container, summary,
+    mount(container, summary, waitSection,
       section('flash', t('service.ready'), readyList, 'service-ready'),
       section('bell', t('service.calls'), callList, 'service-calls'),
       section('table', t('service.toClear'), clearList, 'service-clear'));
@@ -39,6 +47,24 @@ export default {
       renderReady();
       renderCalls();
       renderClear();
+      renderWaiting();
+    }
+
+    /** Only shown while some table is past the amber limit; the longest wait comes first. */
+    function renderWaiting() {
+      const now = limits ? overdue.filter((table) => minutesSince(table.attentionSince) >= limits[0]) : [];
+      waitSection.hidden = !now.length;
+      mount(waitList, now.map((table) => {
+        const long = minutesSince(table.attentionSince) >= limits[1];
+        return h('button', {
+          type: 'button', class: ['runner-card', 'waiting', long ? 'waiting-long' : 'waiting-look'], 'data-testid': 'waiting-table',
+          onclick: () => { const first = table.openOrders?.[0]; if (first) openOrderDrawer(first.id, user); },
+        },
+        tableBadge(table.code),
+        h('div', { class: 'service-body' },
+          h('b', null, t(long ? 'floor.wait.long' : 'floor.wait.look')),
+          h('span', { class: 'faint' }, t('service.waitedFor', { time: elapsed(table.attentionSince) }))));
+      }));
     }
 
     function renderSummary() {
@@ -149,7 +175,13 @@ export default {
         ? orders.value.filter((o) => o.type === 'DINE_IN' && o.status === 'READY' && o.table)
           .sort((a, b) => new Date(a.statusSince) - new Date(b.statusSince))
         : [];
-      requests = calls.status === 'fulfilled' ? calls.value : [];
+      requests = calls.status === 'fulfilled'
+        ? [...calls.value].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        : [];
+      overdue = tables.status === 'fulfilled'
+        ? tables.value.filter((table) => table.occupied && table.attentionSince)
+          .sort((a, b) => new Date(a.attentionSince) - new Date(b.attentionSince))
+        : [];
       toClear = tables.status === 'fulfilled'
         ? tables.value.filter((table) => !table.occupied && table.needsClearingSince)
           .sort((a, b) => new Date(a.needsClearingSince) - new Date(b.needsClearingSince))
@@ -164,8 +196,9 @@ export default {
     const soon = () => { clearTimeout(timer); timer = setTimeout(load, 250); };
     const offs = ['order', 'guest', 'payment', 'table'].map((name) => bus.on(name, soon));
     // waiting times keep counting
-    const tick = setInterval(() => { if (ready && toClear) { renderReady(); renderClear(); } }, 30_000);
+    const tick = setInterval(() => { if (ready && toClear) { renderReady(); renderClear(); renderWaiting(); } }, 30_000);
     render();
+    api.serviceSettings().then((settings) => { limits = waitLimitsOf(settings); renderWaiting(); }).catch(() => {});
     load();
     return { destroy: () => { offs.forEach((off) => off()); clearTimeout(timer); clearInterval(tick); } };
   },

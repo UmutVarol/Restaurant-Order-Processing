@@ -2,6 +2,7 @@ package com.umutvarol.restaurant.guest;
 
 import com.umutvarol.restaurant.guest.dto.ServiceSettingsRequest;
 import com.umutvarol.restaurant.guest.dto.ServiceSettingsResponse;
+import com.umutvarol.restaurant.common.error.BusinessRuleException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -35,9 +36,19 @@ public class ServiceSettingsService {
         ServiceSettings current = settings.findById(business).orElseGet(() -> settings.save(ServiceSettings.defaults(business)));
         BigDecimal limit = request.autoAcceptLimit() == null ? null
                 : request.autoAcceptLimit().setScale(2, RoundingMode.HALF_UP);
+        Integer look = request.waitLookMinutes();
+        Integer longWait = request.waitLongMinutes();
+        if (look != null || longWait != null) {
+            boolean off = look != null && longWait != null && look == 0 && longWait == 0;
+            if (!off && (look == null || longWait == null || look < 1 || longWait <= look)) {
+                throw new BusinessRuleException("WAIT_LIMITS_INVALID",
+                        "The red limit must be later than the amber one (or both 0 to switch the rings off)");
+            }
+            current.changeWaitLimits(look, longWait);
+        }
         current.change(request.mode(), limit, request.firstCartNeedsStaff(), clock.instant(), actor);
-        audit.info("guest.service_settings mode={} limit={} first_cart_needs_staff={} by={}", request.mode(), limit,
-                request.firstCartNeedsStaff(), actor);
+        audit.info("guest.service_settings mode={} limit={} first_cart_needs_staff={} wait={}/{} by={}", request.mode(),
+                limit, request.firstCartNeedsStaff(), current.getWaitLookMinutes(), current.getWaitLongMinutes(), actor);
         return ServiceSettingsResponse.from(current);
     }
 

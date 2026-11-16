@@ -1600,4 +1600,8 @@ export default {
   "branchReport.average": "ortalama {amount}",
   "branchReport.kitchen": "mutfak {time}",
   "error.BRANCH_NOT_YOURS": "Şube yöneticisi yalnızca kendi şubesinde değişiklik yapar.",
+  "service.waitHint": "Kat planında, misafirlerine uğranmayan masanın halkası bu dakikalarda sarıya ve kırmızıya döner. İşletmenin tüm cihazlarında geçerli.",
+  "error.WAIT_LIMITS_INVALID": "Kırmızı sınır sarıdan sonra olmalı (ya da halkaları kapatmak için ikisi de 0).",
+  "service.waiting": "Uğranmayı bekleyen masalar",
+  "service.waitedFor": "{time} bekliyor",
 };
