@@ -15,6 +15,10 @@ fiyatları aynı olmalı.
 
 ## Kullanıcının yapacakları (kodla çözülemez)
 
+Kullanıcının kendi takip ettiği ayrıntılı liste: `YAPILACAKLAR.md` (kullanıcı "bir sonraki aşamada" bakacak;
+bir maddeye geçince oradan devam edilir, işaretler orada güncellenir).
+
+
 - [ ] GitHub deposunu gizli yapmak; demoyu GitHub Pages'ten Vercel/Cloudflare'e taşımak (Claude hazırlar).
 - [ ] Paddle hesabı açmak, Türkiye'den satıcı kabulünü teyit etmek; sandbox'ta 6 fiyat ($29/$59/$79 aylık,
   $290/$590/$790 yıllık) ve webhook tanımlamak.
