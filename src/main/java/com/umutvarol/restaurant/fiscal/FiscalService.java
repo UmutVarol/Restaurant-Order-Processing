@@ -92,6 +92,9 @@ public class FiscalService {
                     return null;
                 }
                 FiscalDocument document = existing.orElseGet(() -> FiscalDocument.forBill(billId, kind, clock.instant()));
+                if (document.getBranchId() == null) {
+                    document.assignBranch(bill.getBranchId()); // issued in the background, where no branch is chosen
+                }
                 document.due(bill.total(), taxOf(bill), clock.instant());
                 return documents.saveAndFlush(document).getId();
             });
@@ -172,6 +175,9 @@ public class FiscalService {
                         Map.of("billId", billId));
             }
             FiscalDocument document = existing.orElseGet(() -> FiscalDocument.invoiceRequested(billId, name, taxId, address, clock.instant()));
+            if (document.getBranchId() == null) {
+                document.assignBranch(bill.getBranchId()); // a guest's phone works in no branch
+            }
             document.buyer(name, taxId, address);
             if (bill.getStatus() == BillStatus.CLOSED) {
                 document.due(bill.total(), taxOf(bill), clock.instant());

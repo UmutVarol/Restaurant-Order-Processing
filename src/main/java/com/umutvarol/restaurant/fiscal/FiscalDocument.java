@@ -1,6 +1,10 @@
 package com.umutvarol.restaurant.fiscal;
 
+import com.umutvarol.restaurant.business.Branch;
+import com.umutvarol.restaurant.business.BranchOwned;
+import com.umutvarol.restaurant.business.BranchStamp;
 import jakarta.persistence.Column;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -12,6 +16,7 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.TenantId;
 import org.jspecify.annotations.Nullable;
 
@@ -21,7 +26,9 @@ import org.jspecify.annotations.Nullable;
  */
 @Entity
 @Table(name = "fiscal_documents")
-public class FiscalDocument {
+@Filter(name = Branch.FILTER)
+@EntityListeners(BranchStamp.class)
+public class FiscalDocument implements BranchOwned {
 
     /** Where the document is. */
     public enum Status {
@@ -44,6 +51,10 @@ public class FiscalDocument {
     @TenantId
     @Column(name = "business_id", nullable = false, updatable = false)
     private Long businessId;
+
+    /** The branch of its bill (BranchOwned); a branch's list and Z report hold only its own documents. */
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
 
     @Column(name = "bill_id", nullable = false, unique = true)
     private Long billId;
@@ -245,5 +256,15 @@ public class FiscalDocument {
 
     public @Nullable Instant getIssuedAt() {
         return issuedAt;
+    }
+
+    @Override
+    public @Nullable Long getBranchId() {
+        return branchId;
+    }
+
+    @Override
+    public void assignBranch(long branchId) {
+        this.branchId = branchId;
     }
 }

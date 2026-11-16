@@ -115,8 +115,25 @@ class BranchIsolationIntegrationTest extends ApiIntegrationTest {
                         .formatted(username, main))))
                 .andExpect(status().isForbidden());
 
-        mvc.perform(with(manager, json(post("/api/v1/orders/{id}/cancel", order), """
-                        {"reason": "Test finished"}"""))).andExpect(status().isOk());
+        // a legal receipt is its branch's: the branch's manager sees it, another branch does not. Served and paid,
+        // the bill closes and gets its receipt.
+        for (int step = 0; step < 3; step++) {
+            mvc.perform(in(branch, with(manager, post("/api/v1/orders/{id}/advance", order)))).andExpect(status().isOk());
+        }
+        String bill = mvc.perform(in(branch, with(manager, get("/api/v1/bills/by-order/{id}", order))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        long billId = id(bill, "$.id");
+        mvc.perform(in(branch, with(manager, json(post("/api/v1/bills/{id}/payments", billId), """
+                        {"method": "CASH", "amount": %s}""".formatted(JsonPath.<Object>read(bill, "$.balance"))))))
+                .andExpect(status().isCreated());
+        mvc.perform(with(local, get("/api/v1/fiscal/documents")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].billId", hasItem((int) billId)));
+        mvc.perform(in(main, with(manager, get("/api/v1/fiscal/documents"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].billId", not(hasItem((int) billId))));
+
         mvc.perform(with(manager, delete("/api/v1/tables/{id}", table))).andExpect(status().isNoContent());
     }
 
