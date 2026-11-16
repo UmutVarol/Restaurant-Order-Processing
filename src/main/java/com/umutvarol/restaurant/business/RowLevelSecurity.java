@@ -22,13 +22,22 @@ import org.springframework.stereotype.Component;
  * businesses ({@code BusinessContext.ALL}, "0") pass, as they do in the application.
  * <p>
  * Applied after every migration, so a table added later is covered without anyone remembering to. FORCE makes it hold
- * for the tables' owner too, which is the user the application connects as. Other databases (H2 in tests) are left
- * as they are.
+ * for the tables' owner too, which is the user the application connects as. A superuser (or a role with BYPASSRLS),
+ * which is what the official PostgreSQL image makes of {@code POSTGRES_USER}, ignores row-level security altogether;
+ * for such a user a role without that power is kept ({@value #TENANT_ROLE}, no login, only reading and writing rows),
+ * and each business's transaction runs as it ({@code SET LOCAL ROLE}). Other databases (H2 in tests) are left as
+ * they are.
  */
 @Component
 class RowLevelSecurity implements Callback {
 
     static final String SETTING = "sofra.business_id";
+    /** The role a business's transaction takes on when the connecting user would otherwise bypass the policy. */
+    static final String TENANT_ROLE = "sofra_tenant";
+    /** Whether the connecting user bypasses row-level security, and whether {@link #TENANT_ROLE} exists. */
+    static final String BYPASS_QUERY = """
+            SELECT r.rolsuper OR r.rolbypassrls, EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '%s')
+            FROM pg_roles r WHERE r.rolname = current_user""".formatted(TENANT_ROLE);
     private static final Logger log = LoggerFactory.getLogger(RowLevelSecurity.class);
     private static final String POLICY = "sofra_business_isolation";
 
@@ -57,6 +66,13 @@ class RowLevelSecurity implements Callback {
             apply(connection);
         } catch (SQLException ex) {
             throw new IllegalStateException("Row-level security could not be set up", ex);
+        }
+    }
+
+    private static String schema(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement(); ResultSet row = statement.executeQuery("SELECT current_schema()")) {
+            row.next();
+            return row.getString(1).replace("\"", "\"\"");
         }
     }
 
@@ -91,6 +107,26 @@ class RowLevelSecurity implements Callback {
                         + " USING (sofra_business_visible(business_id)) WITH CHECK (sofra_business_visible(business_id))");
             }
         }
-        log.info("Row-level security: {} tables limited to their business", tables.size());
+        boolean bypasses;
+        try (Statement statement = connection.createStatement(); ResultSet row = statement.executeQuery(BYPASS_QUERY)) {
+            bypasses = row.next() && row.getBoolean(1);
+        }
+        if (bypasses) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("""
+                        DO $$ BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '%1$s') THEN
+                                CREATE ROLE %1$s NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+                            END IF;
+                        END $$""".formatted(TENANT_ROLE));
+                statement.execute("GRANT USAGE ON SCHEMA \"" + schema(connection) + "\" TO " + TENANT_ROLE);
+                statement.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA \"" + schema(connection)
+                        + "\" TO " + TENANT_ROLE);
+                statement.execute("GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA \"" + schema(connection)
+                        + "\" TO " + TENANT_ROLE);
+            }
+        }
+        log.info("Row-level security: {} tables limited to their business{}", tables.size(),
+                bypasses ? " (the database user bypasses it, so businesses' transactions run as " + TENANT_ROLE + ")" : "");
     }
 }

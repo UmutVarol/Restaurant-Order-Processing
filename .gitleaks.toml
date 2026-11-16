@@ -22,4 +22,6 @@ regexes = [
   '''getir-api-token-12345678''',
   # push tests: a stand-in Firebase access token
   '''ya29\.test-token''',
+  # FCM test: a PEM wrapped around a key pair generated when the test runs; no key is written down
+  '''encodeToString\(ACCOUNT_KEY\.getPrivate\(\)\.getEncoded\(\)\)''',
 ]

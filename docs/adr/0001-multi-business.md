@@ -70,7 +70,11 @@ account; a 14-day trial with sample tables and dishes. Rate-limited per client.
   `sofra.business_id` (`set_config(..., true)`, reset when it ends, so pooled connections never carry it over); a row
   of another business is then neither read nor written, even by native SQL past Hibernate. Work that names no
   business (migrations, start-up) and work across all businesses (`BusinessContext.ALL`, "0") pass, as they do in
-  the application. Tested on PostgreSQL 16: another business's id reads nothing, changes nothing and cannot insert.
+  the application. A superuser or a role with BYPASSRLS ignores every policy, and the official PostgreSQL image makes
+  `POSTGRES_USER` a superuser; when the application connects as such a user, the migration keeps a role
+  `sofra_tenant` (no login, no bypass, only reading and writing rows) and each business's transaction runs as it
+  (`SET LOCAL ROLE`, reset when it ends). Tested on PostgreSQL 16, as the tables' owner and as a superuser: another
+  business's id reads nothing, changes nothing and cannot insert.
 
 ## Considered and not chosen
 

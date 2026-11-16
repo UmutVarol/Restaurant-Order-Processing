@@ -21,6 +21,8 @@ class BranchTransactionManager {
     JpaTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
         return new JpaTransactionManager(entityManagerFactory) {
             private volatile Boolean postgres;
+            /** Whether a business's transaction has to take on RowLevelSecurity.TENANT_ROLE (see there). */
+            private volatile boolean asTenant;
 
             @Override
             protected void doBegin(Object transaction, TransactionDefinition definition) {
@@ -38,7 +40,11 @@ class BranchTransactionManager {
                 if (business != null && postgres != Boolean.FALSE) {
                     session.doWork(connection -> {
                         if (postgres == null) {
-                            postgres = "PostgreSQL".equals(connection.getMetaData().getDatabaseProductName());
+                            boolean isPostgres = "PostgreSQL".equals(connection.getMetaData().getDatabaseProductName());
+                            if (isPostgres) {
+                                asTenant = tenantRoleNeeded(connection);
+                            }
+                            postgres = isPostgres;
                         }
                         if (postgres) {
                             try (java.sql.PreparedStatement set = connection.prepareStatement("SELECT set_config(?, ?, true)")) {
@@ -46,10 +52,35 @@ class BranchTransactionManager {
                                 set.setString(2, Long.toString(business));
                                 set.execute();
                             }
+                            if (asTenant) {
+                                // ends with the transaction, like the setting above
+                                try (java.sql.Statement role = connection.createStatement()) {
+                                    role.execute("SET LOCAL ROLE " + RowLevelSecurity.TENANT_ROLE);
+                                }
+                            }
                         }
                     });
                 }
             }
         };
+    }
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BranchTransactionManager.class);
+
+    /** A superuser or BYPASSRLS user ignores the policies; its businesses' transactions then run as the tenant role. */
+    private static boolean tenantRoleNeeded(java.sql.Connection connection) throws java.sql.SQLException {
+        try (java.sql.Statement statement = connection.createStatement();
+             java.sql.ResultSet row = statement.executeQuery(RowLevelSecurity.BYPASS_QUERY)) {
+            if (!row.next() || !row.getBoolean(1)) {
+                return false;
+            }
+            if (!row.getBoolean(2)) {
+                log.warn("The database user bypasses row-level security and the role {} does not exist: only Hibernate's "
+                        + "tenant filter separates businesses. Run the migrations as this user, or connect as a user "
+                        + "that is not a superuser.", RowLevelSecurity.TENANT_ROLE);
+                return false;
+            }
+            return true;
+        }
     }
 }
