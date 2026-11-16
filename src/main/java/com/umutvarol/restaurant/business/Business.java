@@ -19,9 +19,9 @@ public class Business {
     public enum Plan {
         STARTER, BUSINESS, CHAIN;
 
-        /** The Starter plan is the core of Sofra; Business and Chain have every part. */
+        /** The Starter plan is the core of Sofra; Business has every part but the Chain plan's own tools. */
         public boolean includes(Feature feature) {
-            return this != STARTER;
+            return feature == Feature.CHAIN ? this == CHAIN : this != STARTER;
         }
     }
 

@@ -42,6 +42,12 @@ class PublicTableController {
         return guests.table(token);
     }
 
+    @Operation(summary = "The menu at this table", description = "As the table's branch sells it: its own prices and sold-out dishes.")
+    @GetMapping("/menu")
+    List<com.umutvarol.restaurant.menu.dto.MenuItemResponse> menu(@PathVariable @Pattern(regexp = "[A-Za-z0-9_-]{20,100}") String token) {
+        return guests.menu(token);
+    }
+
     @Operation(summary = "The restaurant's logo", description = "404 when it has none.")
     @GetMapping("/logo")
     ResponseEntity<byte[]> logo(@PathVariable @Pattern(regexp = "[A-Za-z0-9_-]{20,100}") String token) {

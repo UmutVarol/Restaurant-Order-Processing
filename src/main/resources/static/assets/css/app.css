@@ -2210,3 +2210,26 @@ button.rota-shift { cursor: pointer; }
 .push-topics { display: flex; flex-direction: column; gap: 10px; }
 .push-topics .checkbox { align-items: flex-start; }
 .push-topics .checkbox span { display: flex; flex-direction: column; gap: 2px; }
+
+/* Chain plan: each branch's own price of a dish, and the branches side by side on the dashboard */
+.branch-prices-wrap { display: flex; flex-direction: column; gap: 12px; }
+.branch-prices { display: flex; flex-direction: column; gap: 8px; }
+.branch-price { display: grid; grid-template-columns: minmax(0, 1fr) 120px minmax(0, 170px) auto; gap: 8px; align-items: center;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.branch-price.differs { border-color: color-mix(in srgb, var(--brand) 40%, var(--border)); background: var(--brand-soft); }
+.branch-price-name { display: flex; flex-direction: column; min-width: 0; }
+.branch-price-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.branch-price .field { margin: 0; }
+@media (max-width: 560px) {
+  .branch-price { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .branch-price-name { grid-column: 1 / -1; }
+}
+.branch-report { display: flex; flex-direction: column; gap: 14px; }
+.branch-row { display: flex; flex-direction: column; gap: 6px; }
+.branch-row-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.branch-row-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.branch-bar { height: 8px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+.branch-bar i { display: block; height: 100%; width: 100%; border-radius: 99px; background: var(--brand); transform-origin: left center;
+  transition: transform var(--dur-slow) var(--ease); }
+[dir="rtl"] .branch-bar i { transform-origin: right center; }
+.branch-row-foot { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 12.5px; }

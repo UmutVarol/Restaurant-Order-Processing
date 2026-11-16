@@ -32,12 +32,15 @@ class MenuController {
         this.menuService = menuService;
     }
 
-    @Operation(summary = "List menu items", description = "Public endpoint. Items are sorted by category, popularity and name.")
+    @Operation(summary = "List menu items", description = """
+            Public endpoint. Items are sorted by category, popularity and name, priced as the branch the request works in \
+            sells them; central=true gives the central menu (what managers edit).""")
     @GetMapping
     List<MenuItemResponse> list(@RequestParam(required = false) MenuCategory category,
                                 @RequestParam(required = false) String q,
-                                @RequestParam(defaultValue = "true") boolean includeUnavailable) {
-        return menuService.list(category, q, includeUnavailable);
+                                @RequestParam(defaultValue = "true") boolean includeUnavailable,
+                                @RequestParam(defaultValue = "false") boolean central) {
+        return central ? menuService.list(category, q, includeUnavailable, null) : menuService.list(category, q, includeUnavailable);
     }
 
     @Operation(summary = "Get a single menu item")
@@ -64,6 +67,30 @@ class MenuController {
     @PatchMapping("/{id}/availability")
     MenuItemResponse changeAvailability(@PathVariable Long id, @Valid @RequestBody AvailabilityRequest request) {
         return menuService.changeAvailability(id, request.available());
+    }
+
+    record BranchPriceRequest(@jakarta.validation.constraints.DecimalMin("0.01") @jakarta.validation.constraints.Digits(integer = 8, fraction = 2)
+                              java.math.BigDecimal price, Boolean available) {
+    }
+
+    @Operation(summary = "Each branch's own price and sale state of a dish", description = "Chain plan. Requires ADMIN.")
+    @com.umutvarol.restaurant.business.RequiresFeature(com.umutvarol.restaurant.business.Feature.CHAIN)
+    @GetMapping("/{id}/branches")
+    List<MenuService.BranchPrice> branchPrices(@PathVariable Long id) {
+        return menuService.branchPrices(id);
+    }
+
+    @Operation(summary = "Set one branch's own price and sale state of a dish",
+            description = "Chain plan. A null price or availability goes back to the central menu. A branch manager sets only their own branch.")
+    @com.umutvarol.restaurant.business.RequiresFeature(com.umutvarol.restaurant.business.Feature.CHAIN)
+    @PutMapping("/{id}/branches/{branchId}")
+    List<MenuService.BranchPrice> setBranchPrice(@PathVariable Long id, @PathVariable Long branchId, @Valid @RequestBody BranchPriceRequest request,
+                                                 org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken auth) {
+        Object own = auth.getToken().getClaim(com.umutvarol.restaurant.business.BusinessFilter.BRANCH_CLAIM);
+        if (own != null && !own.toString().equals(branchId.toString())) {
+            throw new com.umutvarol.restaurant.common.error.AccessRefusedException("BRANCH_NOT_YOURS", "A branch manager changes only their own branch");
+        }
+        return menuService.setBranchPrice(id, branchId, request.price(), request.available(), auth.getName());
     }
 
     @Operation(summary = "Archive a menu item", description = "Requires ADMIN. Soft delete — order history is preserved.")

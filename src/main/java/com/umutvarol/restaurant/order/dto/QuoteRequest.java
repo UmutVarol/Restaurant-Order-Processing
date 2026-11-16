@@ -11,5 +11,11 @@ import java.util.List;
 public record QuoteRequest(
         @NotNull OrderType type,
         @Size(max = 32) String couponCode,
-        @NotEmpty @Size(max = 50) List<@Valid @NotNull OrderLineRequest> items) {
+        @NotEmpty @Size(max = 50) List<@Valid @NotNull OrderLineRequest> items,
+        Long tableId) {
+
+    /** @param tableId prices the dishes at its branch (a branch can have its own prices); null for the till's branch */
+    public QuoteRequest(OrderType type, String couponCode, List<OrderLineRequest> items) {
+        this(type, couponCode, items, null);
+    }
 }

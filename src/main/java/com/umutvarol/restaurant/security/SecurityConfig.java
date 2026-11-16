@@ -176,6 +176,8 @@ class SecurityConfig {
                         .requestMatchers("/api/v1/payments/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/bills", "/api/v1/bills/**")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
+                        // each branch's own prices are for managers, not for anyone reading the menu
+                        .requestMatchers("/api/v1/menu/*/branches", "/api/v1/menu/*/branches/*").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.GET, "/api/v1/menu", "/api/v1/menu/**").permitAll()
                         .requestMatchers("/api/v1/menu", "/api/v1/menu/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/analytics/**").hasRole(Role.ADMIN.name())

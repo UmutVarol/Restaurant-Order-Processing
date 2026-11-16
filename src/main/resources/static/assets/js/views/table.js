@@ -430,7 +430,7 @@ export function renderTable(root, token) {
 
   async function load() {
     try {
-      const [table, menu] = await Promise.all([api.publicTable(token), api.menu({ includeUnavailable: false })]);
+      const [table, menu] = await Promise.all([api.publicTable(token), api.publicTableMenu(token)]);
       state.table = table;
       state.calls = new Set(table.openCalls);
       state.menu = menu;

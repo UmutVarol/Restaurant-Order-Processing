@@ -57,10 +57,15 @@ public class OrderService {
     private final ApplicationEventPublisher events;
     private final SettlementPolicy settlement;
     private final Clock clock;
+    private final com.umutvarol.restaurant.menu.BranchMenu branchMenu;
+    private final com.umutvarol.restaurant.business.WorkingBranch workingBranch;
 
     public OrderService(OrderRepository orders, MenuItemRepository menuItems, DiningTableRepository tables,
                         CouponService coupons, PricingCalculator pricing, ApplicationEventPublisher events,
-                        SettlementPolicy settlement, Clock clock) {
+                        SettlementPolicy settlement, Clock clock, com.umutvarol.restaurant.menu.BranchMenu branchMenu,
+                        com.umutvarol.restaurant.business.WorkingBranch workingBranch) {
+        this.branchMenu = branchMenu;
+        this.workingBranch = workingBranch;
         this.orders = orders;
         this.menuItems = menuItems;
         this.tables = tables;
@@ -73,7 +78,7 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public QuoteResponse quote(QuoteRequest request) {
-        List<OrderLine> lines = buildLines(request.items());
+        List<OrderLine> lines = buildLines(request.items(), pricingBranch(request.tableId() == null ? null : findTable(request.tableId())));
         BigDecimal subtotal = subtotalOf(lines);
 
         Coupon coupon = null;
@@ -116,12 +121,12 @@ public class OrderService {
                 return earlier.get();
             }
         }
-        List<OrderLine> lines = buildLines(request.items());
+        DiningTable table = request.type() == OrderType.DINE_IN ? findTable(request.tableId()) : null;
+        List<OrderLine> lines = buildLines(request.items(), pricingBranch(table));
         BigDecimal subtotal = subtotalOf(lines);
         Coupon coupon = isBlank(request.couponCode())
                 ? null
                 : coupons.validate(request.couponCode(), subtotal).orElseThrow();
-        DiningTable table = request.type() == OrderType.DINE_IN ? findTable(request.tableId()) : null;
 
         OrderDetails details = new OrderDetails(request.type(), request.customerName(), request.customerPhone(), table,
                 request.deliveryAddress(), request.note(), request.paymentMethod(),
@@ -251,7 +256,13 @@ public class OrderService {
                 "Table %d does not exist".formatted(tableId), Map.of("tableId", tableId)));
     }
 
-    private List<OrderLine> buildLines(List<OrderLineRequest> items) {
+    /** The branch an order is priced for: its table's, else the branch the request works in, else the first one. */
+    private long pricingBranch(@Nullable DiningTable table) {
+        return table != null && table.getBranchId() != null ? table.getBranchId() : workingBranch.forNew();
+    }
+
+    private List<OrderLine> buildLines(List<OrderLineRequest> items, long branchId) {
+        Map<Long, com.umutvarol.restaurant.menu.BranchMenuItem> branch = branchMenu.of(branchId);
         Map<Long, MenuItem> menu = menuItems.findAllById(items.stream().map(OrderLineRequest::menuItemId).toList())
                 .stream()
                 .collect(Collectors.toMap(MenuItem::getId, Function.identity()));
@@ -262,12 +273,14 @@ public class OrderService {
                         "Menu item %d does not exist".formatted(item.menuItemId()),
                         Map.of("menuItemId", item.menuItemId()));
             }
-            if (!menuItem.isOrderable()) {
+            com.umutvarol.restaurant.menu.BranchMenuItem here = branch.get(menuItem.getId());
+            if (!com.umutvarol.restaurant.menu.BranchMenu.orderable(menuItem, here)) {
                 throw new BusinessRuleException("MENU_ITEM_UNAVAILABLE",
                         "%s is sold out".formatted(menuItem.getName()),
                         Map.of("menuItemId", menuItem.getId(), "name", menuItem.getName()));
             }
-            return OrderLine.of(menuItem, item.quantity(), item.note(), menuItem.resolveOptions(item.optionIds()))
+            return OrderLine.of(menuItem, com.umutvarol.restaurant.menu.BranchMenu.price(menuItem, here), item.quantity(), item.note(),
+                            menuItem.resolveOptions(item.optionIds()))
                     .inCourse(item.course());
         }).toList();
     }

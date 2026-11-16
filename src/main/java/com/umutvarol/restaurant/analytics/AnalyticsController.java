@@ -26,4 +26,15 @@ class AnalyticsController {
     DashboardResponse dashboard(@RequestParam(defaultValue = "7") @Min(1) @Max(90) int days) {
         return analyticsService.dashboard(days);
     }
+
+    @Operation(summary = "The branches side by side", description = "Chain plan; for managers of all branches.")
+    @com.umutvarol.restaurant.business.RequiresFeature(com.umutvarol.restaurant.business.Feature.CHAIN)
+    @GetMapping("/branches")
+    BranchReport branches(@RequestParam(defaultValue = "7") @Min(1) @Max(90) int days,
+                          org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken auth) {
+        if (auth.getToken().getClaim(com.umutvarol.restaurant.business.BusinessFilter.BRANCH_CLAIM) != null) {
+            throw new com.umutvarol.restaurant.common.error.AccessRefusedException("BRANCH_MANAGER_ONLY", "The branches side by side are for managers of all branches");
+        }
+        return analyticsService.branches(days);
+    }
 }

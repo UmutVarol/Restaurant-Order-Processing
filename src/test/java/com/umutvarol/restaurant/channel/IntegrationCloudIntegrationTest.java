@@ -112,6 +112,21 @@ class IntegrationCloudIntegrationTest {
     }
 
     @Test
+    void theChainToolsBelongToTheChainPlan() throws Exception {
+        String[] cafe = open("Plan");
+        // a new business tries the Business plan: everything but the Chain plan's own tools
+        mvc.perform(with(cafe[1], get("/api/v1/plan")))
+                .andExpect(jsonPath("$.features", org.hamcrest.Matchers.hasItem("STOCK")))
+                .andExpect(jsonPath("$.features", org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("CHAIN"))));
+        String menu = mvc.perform(with(cafe[1], get("/api/v1/menu"))).andReturn().getResponse().getContentAsString();
+        int dish = ((java.util.List<Integer>) JsonPath.read(menu, "$[*].id")).getFirst();
+        mvc.perform(with(cafe[1], get("/api/v1/menu/{id}/branches", dish)))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.code").value("PLAN_FEATURE"));
+        mvc.perform(with(cafe[1], get("/api/v1/analytics/branches"))).andExpect(status().isPaymentRequired());
+    }
+
+    @Test
     void publicAddressesAreTold() throws Exception {
         assertThat(OutboundUrls.isPublic(InetAddress.getByName("93.184.215.14"))).isTrue();
         assertThat(OutboundUrls.isPublic(InetAddress.getByName("192.168.1.10"))).isFalse();

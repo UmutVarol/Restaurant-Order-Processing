@@ -607,7 +607,7 @@
   const PLAN_OFFERS = {
     STARTER: { monthlyCentsPerBranch: 1900, minimumBranches: 1, limits: { branches: 1, activeStaff: 5, tables: 15 }, features: [] },
     BUSINESS: { monthlyCentsPerBranch: 3900, minimumBranches: 1, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
-    CHAIN: { monthlyCentsPerBranch: 2900, minimumBranches: 3, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
+    CHAIN: { monthlyCentsPerBranch: 2900, minimumBranches: 3, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS', 'CHAIN'] },
   };
   const billing = () => (state.billing ??= { plan: 'BUSINESS', status: 'TRIAL', trialEndsAt: Date.now() + 10 * 86_400_000, interval: null, periodEndsAt: null });
   function paymentAccountView() {
@@ -2556,6 +2556,14 @@
       return brandView();
     }],
     ['GET', /^branding\/logo$/, 'staff', () => logoResponse()],
+    // the menu at a table: the demo has one branch, so it is the central menu
+    ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})\/menu$/, 'public', ({ params }) => {
+      tableForToken(params[0]);
+      const order = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'];
+      return state.menu.filter((m) => !m.archived && m.available)
+        .sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category) || Number(b.popular) - Number(a.popular) || a.name.localeCompare(b.name))
+        .map(menuView);
+    }],
     ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})\/logo$/, 'public', ({ params }) => { tableForToken(params[0]); return logoResponse(); }],
     ['GET', /^public\/pay\/([A-Za-z0-9_-]+)\/logo$/, 'public', ({ params }) => { findLink(params[0]); return logoResponse(); }],
     // Settings › Connections: the business's own e-Arşiv integrator and delivery platforms (keys are never returned)

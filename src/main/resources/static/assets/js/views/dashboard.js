@@ -3,7 +3,7 @@ import { debounce, h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t, tn } from '../core/i18n.js';
 import { dayLabel, durationMinutes, money, moneyShort, number, percent } from '../core/format.js';
-import { api, errorMessage } from '../core/api.js';
+import { api, errorMessage, hasFeature } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { areaChart, barChart, donutChart, sparkline } from '../core/charts.js';
 import { countUp, reveal, toast } from '../core/ui.js';
@@ -18,8 +18,11 @@ let period = 7;
 export default {
   title: 'dash.title',
   subtitle: 'dash.sub',
-  mount(container, { actions }) {
+  mount(container, { actions, user }) {
     let data = null;
+    // Chain plan: the branches side by side, for whoever manages all of them
+    const comparesBranches = user?.branchId == null && hasFeature('CHAIN');
+    let branchReport = null;
     const switcher = h('div', { class: 'segmented period-switch' });
 
     function renderSwitcher() {
@@ -62,7 +65,8 @@ export default {
           card('span-6', t('dash.channels'), null, h('div', { class: 'split-bars' },
             splitBar(t('orders.col.type'), data.orderTypes.map((x) => ({ key: x.type, label: t(`type.${x.type}`), value: x.orders, revenue: x.revenue, color: TYPE_COLORS[x.type] }))),
             splitBar(t('detail.payment'), data.payments.map((x) => ({ key: x.method, label: t(`pay.${x.method}`), value: x.orders, revenue: x.revenue, color: PAY_COLORS[x.method] }))))),
-          card('span-6', t('orders.col.status'), null, statusMix())));
+          card('span-6', t('orders.col.status'), null, statusMix()),
+          branchReport && branchReport.branches.length > 1 ? card('span-12', t('branchReport.title'), t('branchReport.sub'), branchesCard()) : null));
       if (!shown) settle(container, current);
       shown = true;
     }
@@ -144,12 +148,26 @@ export default {
           h('i', { style: { display: 'block', height: '100%', width: `${(s.count / total) * 100}%`, background: STATUS_COLORS[s.status], borderRadius: '99px' } })))));
     }
 
+    function branchesCard() {
+      const rows = branchReport.branches;
+      const top = Math.max(1, ...rows.map((row) => Number(row.revenue)));
+      return h('div', { class: 'branch-report', 'data-testid': 'branch-report' }, rows.map((row) => h('div', { class: 'branch-row' },
+        h('div', { class: 'branch-row-head' }, h('b', { dir: 'auto' }, row.name), h('span', { class: 'num' }, moneyShort(row.revenue)),
+          delta(row.revenue, row.previousRevenue)),
+        h('div', { class: 'branch-bar', 'aria-hidden': 'true' }, h('i', { style: { transform: `scaleX(${Number(row.revenue) / top})` } })),
+        h('div', { class: 'branch-row-foot muted' },
+          h('span', null, tn('dash.orders', row.orders)),
+          h('span', null, t('branchReport.average', { amount: money(row.averageOrderValue) })),
+          row.averageKitchenMinutes != null ? h('span', null, t('branchReport.kitchen', { time: durationMinutes(row.averageKitchenMinutes) })) : null))));
+    }
+
     function empty() {
       return h('div', { class: 'empty' }, h('div', { class: 'art' }, '📭'), h('p', null, t('dash.noData')));
     }
 
     async function load() {
       try {
+        if (comparesBranches) branchReport = await api.branchReport(period).catch(() => null);
         data = await api.dashboard(period);
       } catch (error) {
         toast({ title: errorMessage(error), kind: 'error' });

@@ -49,7 +49,8 @@ class AnalyticsServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AnalyticsService(orders, salesReports, Clock.fixed(NOW, ISTANBUL));
+        service = new AnalyticsService(orders, salesReports, Clock.fixed(NOW, ISTANBUL),
+                org.mockito.Mockito.mock(com.umutvarol.restaurant.business.BranchRepository.class));
         when(salesReports.salesByCategory(any(), any())).thenReturn(List.of());
         when(salesReports.topItems(any(), any(), any())).thenReturn(List.of());
     }

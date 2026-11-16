@@ -27,22 +27,77 @@ public class MenuService {
     private final StationService stations;
     private final ApplicationEventPublisher events;
 
-    public MenuService(MenuItemRepository repository, StationService stations, ApplicationEventPublisher events) {
+    private final BranchMenu branchMenu;
+    private final BranchMenuItemRepository branchOverrides;
+    private final com.umutvarol.restaurant.business.BranchRepository branches;
+    private final java.time.Clock clock;
+
+    public MenuService(MenuItemRepository repository, StationService stations, ApplicationEventPublisher events,
+                       BranchMenu branchMenu, BranchMenuItemRepository branchOverrides,
+                       com.umutvarol.restaurant.business.BranchRepository branches, java.time.Clock clock) {
+        this.branchMenu = branchMenu;
+        this.branchOverrides = branchOverrides;
+        this.branches = branches;
+        this.clock = clock;
         this.repository = repository;
         this.stations = stations;
         this.events = events;
     }
 
+    /** The menu as the branch this request works in sells it; the central menu for someone working in all branches. */
     @Transactional(readOnly = true)
     public List<MenuItemResponse> list(MenuCategory category, String query, boolean includeUnavailable) {
+        return list(category, query, includeUnavailable, com.umutvarol.restaurant.business.BranchContext.current());
+    }
+
+    /** The menu as one branch sells it (null: the central menu). */
+    @Transactional(readOnly = true)
+    public List<MenuItemResponse> list(MenuCategory category, String query, boolean includeUnavailable, Long branchId) {
         String needle = query == null ? "" : query.strip().toLowerCase(Locale.ROOT);
+        java.util.Map<Long, BranchMenuItem> branch = branchMenu.of(branchId);
         return repository.findByArchivedFalse().stream()
                 .filter(item -> category == null || item.getCategory() == category)
-                .filter(item -> includeUnavailable || item.isOrderable())
+                .filter(item -> includeUnavailable || BranchMenu.orderable(item, branch.get(item.getId())))
                 .filter(item -> needle.isEmpty() || matches(item, needle))
                 .sorted(MENU_ORDER)
-                .map(MenuItemResponse::from)
+                .map(item -> MenuItemResponse.from(item, branch.get(item.getId())))
                 .toList();
+    }
+
+    /** One dish across the open branches: the central price and each branch's own, where it has one. */
+    public record BranchPrice(Long branchId, String branch, java.math.BigDecimal centralPrice, java.math.BigDecimal price,
+                              Boolean available, boolean centralAvailable) {
+    }
+
+    @Transactional(readOnly = true)
+    public List<BranchPrice> branchPrices(Long itemId) {
+        MenuItem item = find(itemId);
+        java.util.Map<Long, BranchMenuItem> own = branchOverrides.findByMenuItemId(itemId).stream()
+                .collect(java.util.stream.Collectors.toMap(BranchMenuItem::getBranchId, java.util.function.Function.identity()));
+        return com.umutvarol.restaurant.business.BranchContext.acrossBranches(() -> branches.findAllByOrderByIdAsc()).stream()
+                .filter(com.umutvarol.restaurant.business.Branch::isActive)
+                .map(branch -> {
+                    BranchMenuItem differs = own.get(branch.getId());
+                    return new BranchPrice(branch.getId(), branch.getName(), item.getPrice(),
+                            differs == null ? null : differs.getPrice(), differs == null ? null : differs.getAvailable(), item.isAvailable());
+                }).toList();
+    }
+
+    /** Sets one branch's own price and sale state of a dish; nulls go back to the central menu. */
+    public List<BranchPrice> setBranchPrice(Long itemId, Long branchId, java.math.BigDecimal price, Boolean available, String actor) {
+        find(itemId);
+        com.umutvarol.restaurant.business.BranchContext.acrossBranches(() -> branches.findById(branchId))
+                .filter(com.umutvarol.restaurant.business.Branch::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("branch", branchId));
+        java.util.Optional<BranchMenuItem> existing = branchOverrides.findByBranchIdAndMenuItemId(branchId, itemId);
+        if (price == null && available == null) {
+            existing.ifPresent(branchOverrides::delete); // the branch sells it like the central menu again
+        } else {
+            BranchMenuItem row = existing.orElseGet(() -> new BranchMenuItem(branchId, itemId));
+            row.change(price == null ? null : com.umutvarol.restaurant.common.money.Money.normalize(price), available, clock.instant(), actor);
+            branchOverrides.save(row);
+        }
+        return branchPrices(itemId);
     }
 
     @Transactional(readOnly = true)

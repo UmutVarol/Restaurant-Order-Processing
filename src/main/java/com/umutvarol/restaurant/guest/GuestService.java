@@ -78,13 +78,16 @@ public class GuestService {
     private final RestaurantProperties restaurant;
     private final com.umutvarol.restaurant.business.BusinessProfile profile;
     private final BrandingService branding;
+    private final com.umutvarol.restaurant.menu.MenuService menuService;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public GuestService(GuestRequestRepository requests, DiningTableRepository tables, OrderService orders,
                         MenuItemRepository menuItems, ServiceSettingsService serviceSettings, StationService stations,
                         RestaurantProperties restaurant, ApplicationEventPublisher events, Clock clock,
-                        com.umutvarol.restaurant.business.BusinessProfile profile, BrandingService branding) {
+                        com.umutvarol.restaurant.business.BusinessProfile profile, BrandingService branding,
+                        com.umutvarol.restaurant.menu.MenuService menuService) {
+        this.menuService = menuService;
         this.profile = profile;
         this.branding = branding;
         this.requests = requests;
@@ -122,7 +125,7 @@ public class GuestService {
                         item.optionIds() == null ? List.of() : List.copyOf(item.optionIds())))
                 .toList();
         // priced (and every dish and option checked) exactly like the till would
-        QuoteResponse quote = orders.quote(new QuoteRequest(OrderType.DINE_IN, null, lines));
+        QuoteResponse quote = orders.quote(new QuoteRequest(OrderType.DINE_IN, null, lines, table.getId()));
         GuestRequest request = GuestRequest.order(table, blankToNull(cart.guestName()), blankToNull(cart.note()), now);
         for (int i = 0; i < lines.size(); i++) {
             OrderLineRequest asked = lines.get(i);
@@ -298,6 +301,13 @@ public class GuestService {
      * The table behind a QR code. The code is the guest's permission for what they do at that table, here and in
      * other features (paying the table's bill).
      */
+    /** The menu as this table's branch sells it (a branch can have its own prices and sold-out dishes). */
+    @Transactional(readOnly = true)
+    public List<com.umutvarol.restaurant.menu.dto.MenuItemResponse> menu(String token) {
+        DiningTable table = tableFor(token);
+        return menuService.list(null, null, false, table.getBranchId());
+    }
+
     /** The restaurant's logo for the guest at this table; empty when it has none. */
     @Transactional(readOnly = true)
     public java.util.Optional<BrandingService.Logo> logo(String token) {

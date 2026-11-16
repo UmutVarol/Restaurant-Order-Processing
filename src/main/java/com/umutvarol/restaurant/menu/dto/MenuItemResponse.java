@@ -27,16 +27,21 @@ public record MenuItemResponse(
         Set<Allergen> allergens) {
 
     public static MenuItemResponse from(MenuItem item) {
+        return from(item, null);
+    }
+
+    /** The dish as one branch sells it: its own price and sale state where it has them (Chain plan). */
+    public static MenuItemResponse from(MenuItem item, com.umutvarol.restaurant.menu.@org.jspecify.annotations.Nullable BranchMenuItem branch) {
         return new MenuItemResponse(
                 item.getId(),
                 item.getName(),
                 item.getDescription(),
                 item.getCategory(),
-                item.getPrice(),
+                com.umutvarol.restaurant.menu.BranchMenu.price(item, branch),
                 item.getIcon(),
                 item.getPrepTimeMinutes(),
                 item.isPopular(),
-                item.isOrderable(),
+                com.umutvarol.restaurant.menu.BranchMenu.orderable(item, branch),
                 new TreeSet<>(item.getTags()),
                 item.getOptionGroups().stream().map(OptionGroupResponse::from).toList(),
                 item.getStationCode(),

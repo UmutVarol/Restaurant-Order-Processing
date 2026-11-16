@@ -4,7 +4,7 @@ import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { money, number, percent } from '../core/format.js';
 import { allergenList, allergenPicker } from './allergens.js';
-import { api, ApiError, errorMessage } from '../core/api.js';
+import { api, ApiError, errorMessage, hasFeature } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
 import { optionGroupsEditor } from './options.js';
@@ -26,6 +26,8 @@ export default {
     let stations = [];
     let costs = new Map();
     let category = 'ALL';
+    // Chain plan: each open branch can sell a dish at its own price, or not at all
+    let openBranches = [];
     const chips = h('div', { class: 'chips' });
     const tableCard = h('div', { class: 'card table-wrap menu-admin' });
 
@@ -74,6 +76,8 @@ export default {
         h('td', { class: 'm-on' }, h('label', { class: 'switch', title: item.stockOut ? t('stock.outOfStockHint') : t('menu.col.available') },
           h('input', { type: 'checkbox', role: 'switch', checked: item.available, disabled: item.stockOut, 'aria-label': `${t('menu.col.available')}: ${item.name}`, onchange: (event) => toggle(item, event.target) }), h('span'))),
         h('td', { class: 'right m-actions' }, h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '4px' } },
+          openBranches.length > 1 ? h('button', { class: 'icon-btn sm', title: t('branchMenu.title'), 'data-testid': 'branch-prices',
+            'aria-label': `${t('branchMenu.title')}: ${item.name}`, onclick: () => editBranchPrices(item) }, icon('store', 'sm')) : null,
           h('button', { class: 'icon-btn sm', title: t('recipe.title'), 'data-testid': 'edit-recipe', 'aria-label': `${t('recipe.title')}: ${item.name}`, onclick: () => editRecipe(item) }, icon('basket', 'sm')),
           h('button', { class: 'icon-btn sm', title: t('common.edit'), 'aria-label': `${t('common.edit')}: ${item.name}`, onclick: () => editItem(item) }, icon('edit', 'sm')),
           h('button', { class: 'icon-btn sm', title: t('menu.archive'), 'aria-label': `${t('menu.archive')}: ${item.name}`, onclick: () => archive(item) }, icon('archive', 'sm')))));
@@ -178,6 +182,43 @@ export default {
             }
           } }, icon('check', 'sm'), t('common.save')),
         ],
+      });
+    }
+
+    /** Chain plan: the dish in each open branch, at the central price or the branch's own, sold or not. */
+    async function editBranchPrices(item) {
+      let rows;
+      try { rows = await api.branchPrices(item.id); } catch (error) { toast({ title: errorMessage(error), kind: 'error' }); return; }
+      const list = h('div', { class: 'branch-prices' });
+      const render = () => mount(list, rows.map((row) => {
+        const price = h('input', { class: 'input', type: 'number', min: '0.01', step: '0.01', inputmode: 'decimal', id: `bp-${row.branchId}`,
+          value: row.price ?? '', placeholder: money(row.centralPrice), 'aria-label': `${t('branchMenu.price')}: ${row.branch}` });
+        const sale = h('select', { class: 'select', 'aria-label': `${t('branchMenu.sale')}: ${row.branch}`, 'data-testid': `bp-sale-${row.branchId}` },
+          ['central', 'on', 'off'].map((value) => h('option', { value,
+            selected: (row.available == null && value === 'central') || (row.available === true && value === 'on') || (row.available === false && value === 'off') },
+          t(`branchMenu.sale.${value}`))));
+        const save = h('button', { class: 'btn sm', 'data-testid': `bp-save-${row.branchId}`, onclick: async () => {
+          save.disabled = true;
+          try {
+            rows = await api.setBranchPrice(item.id, row.branchId, {
+              price: price.value === '' ? null : Number(price.value),
+              available: sale.value === 'central' ? null : sale.value === 'on',
+            });
+            toast({ title: t('branchMenu.saved', { branch: row.branch }) });
+            render();
+          } catch (error) { toast({ title: errorMessage(error), kind: 'error' }); save.disabled = false; }
+        } }, t('common.save'));
+        const differs = row.price != null || row.available != null;
+        return h('div', { class: ['branch-price', differs ? 'differs' : ''] },
+          h('div', { class: 'branch-price-name' }, h('b', null, row.branch),
+            h('small', { class: 'faint' }, differs ? t('branchMenu.own') : t('branchMenu.asCentral'))),
+          h('label', { class: 'field' }, h('span', { class: 'sr-only' }, t('branchMenu.price')), price),
+          sale, save);
+      }));
+      render();
+      openModal({
+        title: `${item.icon || '🍽️'} ${item.name}`,
+        body: h('div', { class: 'branch-prices-wrap' }, h('p', { class: 'muted' }, t('branchMenu.hint', { price: money(item.price) })), list),
       });
     }
 
@@ -301,7 +342,10 @@ export default {
     }
 
     async function load() {
-      const [menuResult, costResult] = await Promise.allSettled([api.menu(), api.dishCosts()]);
+      // the central menu, whatever branch the manager works in: what is edited here is every branch's starting point
+      const [menuResult, costResult, branchResult] = await Promise.allSettled([api.menu({ central: true }), api.dishCosts(),
+        hasFeature('CHAIN') ? api.branches() : Promise.resolve([])]);
+      openBranches = branchResult.status === 'fulfilled' ? branchResult.value.filter((branch) => branch.active) : [];
       items = menuResult.status === 'fulfilled' ? menuResult.value : [];
       if (menuResult.status === 'rejected') toast({ title: errorMessage(menuResult.reason), kind: 'error' });
       costs = new Map(costResult.status === 'fulfilled' ? costResult.value.map((c) => [c.menuItemId, c]) : []);

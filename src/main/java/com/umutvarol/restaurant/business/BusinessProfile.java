@@ -14,8 +14,11 @@ public class BusinessProfile {
     private final Cache<Long, String> names = Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(5)).build();
     private final Cache<Long, Business.Plan> plans = Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(1)).build();
 
-    BusinessProfile(BusinessRepository businesses) {
+    private final boolean cloud;
+
+    BusinessProfile(BusinessRepository businesses, @org.springframework.beans.factory.annotation.Value("${restaurant.cloud.enabled:false}") boolean cloud) {
         this.businesses = businesses;
+        this.cloud = cloud;
     }
 
     public String name(String fallback) {
@@ -40,8 +43,9 @@ public class BusinessProfile {
         return cached;
     }
 
+    /** On a restaurant's own server everything is included; on Sofra Cloud the plan decides. */
     public boolean includes(Feature feature) {
-        return plan().includes(feature);
+        return !cloud || plan().includes(feature);
     }
 
     /** Forgets what was read about a business, after its name or plan changed. */

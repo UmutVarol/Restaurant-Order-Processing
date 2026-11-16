@@ -101,6 +101,8 @@ Benim yapacaklarım:
   işletmesiyle sınırlanır (Hibernate'in işletme kimliği desteği). Ek güvence olarak PostgreSQL satır güvenliği
   (RLS) de kullanılır.
 - Testler, bir işletmenin diğerinin hiçbir verisini göremediğini ve değiştiremediğini her uç nokta için kanıtlar.
-- Zincir için: merkezi menü (şube bazında fiyat ve stok farkı), şubeler arası satış raporu, şube seçici.
+- Zincir için (Zincir planına özel, `Feature.CHAIN`; kendi sunucusunda her şey açık): merkezi menü, şube bazında fiyat ve
+  satış durumu (V34 `branch_menu_items`; kasa, QR menü, sepet ve platform siparişi aynı fiyatı kullanır), şubeler arası
+  rapor (Panel › Şubeler), şube seçici. Şube bazında ayrı stok sayımı yok; stok işletme genelinde tutulur.
 - Misafir QR'ı ve ödeme bağlantıları işletmeyi kendi belirteçlerinden bulur; misafir hiçbir zaman başka
   işletmeye ulaşamaz.

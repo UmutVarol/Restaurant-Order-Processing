@@ -100,7 +100,7 @@ public class OrderLine {
         // for JPA
     }
 
-    private OrderLine(MenuItem item, int quantity, @Nullable String note, List<OptionChoice> choices) {
+    private OrderLine(MenuItem item, BigDecimal price, int quantity, @Nullable String note, List<OptionChoice> choices) {
         if (quantity < 1) {
             throw new IllegalArgumentException("quantity must be at least 1");
         }
@@ -111,7 +111,7 @@ public class OrderLine {
         this.stationCode = item.getStationCode();
         this.course = defaultCourse(item.getCategory());
         BigDecimal extras = choices.stream().map(OptionChoice::getPriceDelta).reduce(BigDecimal.ZERO, BigDecimal::add);
-        this.unitPrice = Money.normalize(item.getPrice().add(extras));
+        this.unitPrice = Money.normalize(price.add(extras));
         this.quantity = quantity;
         this.note = note == null || note.isBlank() ? null : note.strip();
         this.lineTotal = Money.normalize(unitPrice.multiply(BigDecimal.valueOf(quantity)));
@@ -120,12 +120,17 @@ public class OrderLine {
     }
 
     public static OrderLine of(MenuItem item, int quantity, @Nullable String note) {
-        return new OrderLine(item, quantity, note, List.of());
+        return new OrderLine(item, item.getPrice(), quantity, note, List.of());
     }
 
     /** A line with the given menu options; the unit price includes what they add. */
     public static OrderLine of(MenuItem item, int quantity, @Nullable String note, List<OptionChoice> choices) {
-        return new OrderLine(item, quantity, note, choices);
+        return new OrderLine(item, item.getPrice(), quantity, note, choices);
+    }
+
+    /** A line at the price of the branch it is sold in (Chain plan: a branch can have its own price). */
+    public static OrderLine of(MenuItem item, BigDecimal price, int quantity, @Nullable String note, List<OptionChoice> choices) {
+        return new OrderLine(item, price, quantity, note, choices);
     }
 
     void attachTo(Order order) {

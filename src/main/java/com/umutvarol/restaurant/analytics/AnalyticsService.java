@@ -50,7 +50,11 @@ public class AnalyticsService {
     private final SalesReportRepository salesReports;
     private final Clock clock;
 
-    public AnalyticsService(OrderRepository orders, SalesReportRepository salesReports, Clock clock) {
+    private final com.umutvarol.restaurant.business.BranchRepository branchRepository;
+
+    public AnalyticsService(OrderRepository orders, SalesReportRepository salesReports, Clock clock,
+                            com.umutvarol.restaurant.business.BranchRepository branchRepository) {
+        this.branchRepository = branchRepository;
         this.orders = orders;
         this.salesReports = salesReports;
         this.clock = clock;
@@ -82,6 +86,31 @@ public class AnalyticsService {
                 statuses(current),
                 byType(current),
                 byPayment(current));
+    }
+
+    /** Each open branch's sales in the period, best first; for someone who works in all branches. */
+    public BranchReport branches(int days) {
+        ZoneId zone = clock.getZone();
+        LocalDate today = LocalDate.now(clock);
+        LocalDate from = today.minusDays(days - 1L);
+        Instant start = from.atStartOfDay(zone).toInstant();
+        Instant end = today.plusDays(1).atStartOfDay(zone).toInstant();
+        Instant previousStart = from.minusDays(days).atStartOfDay(zone).toInstant();
+        List<Order> window = orders.findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(previousStart, end);
+        Map<Long, List<Order>> byBranch = window.stream().filter(o -> o.getBranchId() != null)
+                .collect(Collectors.groupingBy(Order::getBranchId));
+        List<BranchReport.Row> rows = branchRepository.findAllByOrderByIdAsc().stream()
+                .filter(com.umutvarol.restaurant.business.Branch::isActive)
+                .map(branch -> {
+                    List<Order> own = byBranch.getOrDefault(branch.getId(), List.of());
+                    Kpis now = kpis(own.stream().filter(o -> !o.getCreatedAt().isBefore(start)).toList());
+                    Kpis before = kpis(own.stream().filter(o -> o.getCreatedAt().isBefore(start)).toList());
+                    return new BranchReport.Row(branch.getId(), branch.getName(), now.revenue(), before.revenue(), now.orders(),
+                            now.averageOrderValue(), now.cancelledOrders(), now.averageKitchenMinutes());
+                })
+                .sorted(java.util.Comparator.comparing(BranchReport.Row::revenue).reversed())
+                .toList();
+        return new BranchReport(days, rows);
     }
 
     private static Kpis kpis(List<Order> orders) {

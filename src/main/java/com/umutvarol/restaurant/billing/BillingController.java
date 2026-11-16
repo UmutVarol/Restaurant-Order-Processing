@@ -50,7 +50,11 @@ class BillingController {
     private final SubscriptionService subscriptions;
     private final BillingProperties properties;
 
-    BillingController(SubscriptionService subscriptions, BillingProperties properties) {
+    private final com.umutvarol.restaurant.business.BusinessProfile profile;
+
+    BillingController(SubscriptionService subscriptions, BillingProperties properties,
+                      com.umutvarol.restaurant.business.BusinessProfile profile) {
+        this.profile = profile;
         this.subscriptions = subscriptions;
         this.properties = properties;
     }
@@ -73,8 +77,14 @@ class BillingController {
     @GetMapping("/api/v1/plan")
     PlanResponse plan() {
         SubscriptionService.Summary summary = subscriptions.summary();
-        return new PlanResponse(summary.business().getPlan(), summary.business().getStatus(), summary.writable(),
-                summary.offer().features());
+        // what this business may use now: its plan's parts on Sofra Cloud, everything on a restaurant's own server
+        java.util.Set<com.umutvarol.restaurant.business.Feature> features = java.util.EnumSet.noneOf(com.umutvarol.restaurant.business.Feature.class);
+        for (com.umutvarol.restaurant.business.Feature feature : com.umutvarol.restaurant.business.Feature.values()) {
+            if (profile.includes(feature)) {
+                features.add(feature);
+            }
+        }
+        return new PlanResponse(summary.business().getPlan(), summary.business().getStatus(), summary.writable(), features);
     }
 
     @Operation(summary = "Pay for a plan", description = "Returns the provider's checkout page.")

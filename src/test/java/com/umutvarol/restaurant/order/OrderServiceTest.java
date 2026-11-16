@@ -77,7 +77,8 @@ class OrderServiceTest {
                     @Override
                     public void requireCovered(Order order) {
                     }
-                }, clock);
+                }, clock, org.mockito.Mockito.mock(com.umutvarol.restaurant.menu.BranchMenu.class),
+                org.mockito.Mockito.mock(com.umutvarol.restaurant.business.WorkingBranch.class));
     }
 
     @Test
@@ -129,7 +130,7 @@ class OrderServiceTest {
 
     @Test
     void refusesUnknownTables() {
-        when(menuItems.findAllById(anyIterable())).thenReturn(List.of(kebap));
+        // the table is looked at first: it decides which branch's prices apply
         when(tables.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.placeOrder(new PlaceOrderRequest(OrderType.DINE_IN, "Ayşe", null, 99L, null,
