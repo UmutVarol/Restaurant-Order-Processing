@@ -2154,3 +2154,39 @@ button.rota-shift { cursor: pointer; }
 .wait-look { color: var(--amber); }
 .wait-long { color: var(--red); }
 .table-card.waiting-long { border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
+
+/* F2: the day's card, on receipt paper. The figures count up (countUp), the hours rise one after another and the star
+   dish settles in, once; reduced motion shows the card as it ends. Paper stays light in the dark theme, like a slip. */
+.modal.day-card-modal { width: min(520px, calc(100vw - 32px)); }
+.day-card-wrap { display: flex; flex-direction: column; gap: 10px; }
+.day-card { --paper: #fffdf8; --ink: #2b2522; --ink-2: #6f645b; background: var(--paper); color: var(--ink); border: 1px solid #e9e0d2;
+  border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: var(--shadow-md);
+  border-top: 6px solid var(--day-accent, var(--brand)); }
+.day-card header { display: flex; flex-direction: column; gap: 2px; }
+.day-card-rest, .day-card-date { color: var(--ink-2); font-size: 13px; }
+.day-card-rest { font-weight: 600; }
+.day-card h3 { font-family: var(--font-display); font-size: 26px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); }
+.day-card-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.day-card-fig { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px dashed #cfc3b2; min-width: 0; }
+.day-card-fig small { color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.day-card-fig b { font-family: var(--font-display); font-size: 22px; font-weight: 600; overflow-wrap: anywhere; }
+.day-card-star { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #f6efe3;
+  animation: day-rise var(--dur-slow) var(--ease) 520ms both; }
+.day-card-star .emoji { font-size: 30px; }
+.day-card-star small { display: block; color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.day-card-hours { display: flex; flex-direction: column; gap: 8px; }
+.day-card-hours > small { color: var(--ink-2); font-size: 12.5px; }
+.day-card-hours b { color: var(--ink); }
+.day-card-bars { display: flex; align-items: flex-end; gap: 4px; height: 72px; }
+.day-card-bars i { flex: 1; background: #e3b98a; border-radius: 4px 4px 0 0; transform-origin: bottom;
+  animation: day-grow var(--dur-slow) var(--ease) both; animation-delay: calc(var(--i) * 35ms); }
+.day-card-bars i.peak { background: var(--day-accent, var(--brand)); }
+.day-card-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.day-card-empty { color: var(--ink-2); }
+.day-card footer { display: flex; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid #e9e0d2; font-size: 12px; color: var(--ink-2); }
+@keyframes day-grow { from { transform: scaleY(0); } }
+@keyframes day-rise { from { opacity: 0; transform: translateY(8px); } }
+@media (max-width: 480px) {
+  .day-card-figs { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .day-card-fig { flex-direction: row; justify-content: space-between; align-items: baseline; }
+}

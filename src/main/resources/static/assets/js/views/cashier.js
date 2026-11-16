@@ -92,10 +92,23 @@ export default {
         report.closing ? closing(report.closing) : closeForm(summary)));
     }
 
+    function showDayCardOnce(day) {
+      const key = `sofra.dayCard.${day}`;
+      try {
+        if (sessionStorage.getItem(key)) return;
+        sessionStorage.setItem(key, '1');
+      } catch { /* private window: show it anyway */ }
+      import('./daycard.js').then(({ openDayCard }) => openDayCard(day));
+    }
+
     function closing(c) {
       const variance = Number(c.variance);
       return h('div', { class: 'day-closed' },
-        h('div', { class: 'row' }, icon('check', 'sm'), h('b', null, t('cashier.closedBy', { name: c.closedBy, at: dateTime(c.closedAt) }))),
+        h('div', { class: 'row' }, icon('check', 'sm'), h('b', null, t('cashier.closedBy', { name: c.closedBy, at: dateTime(c.closedAt) })),
+          date === today() ? h('button', {
+            class: 'btn sm', style: { marginInlineStart: 'auto' }, 'data-testid': 'open-day-card',
+            onclick: () => import('./daycard.js').then(({ openDayCard }) => openDayCard(date)),
+          }, icon('sparkle', 'sm'), t('dayCard.open')) : null),
         h('dl', { class: 'kv' },
           h('dt', null, t('cashier.counted')), h('dd', null, money(c.countedCash)),
           h('dt', null, t('cashier.variance')), h('dd', { class: variance === 0 ? '' : variance < 0 ? 'short' : 'over' },
@@ -124,6 +137,8 @@ export default {
             report = closed;
             toast({ title: t('cashier.dayClosed') });
             renderReport();
+            // F2: closing today shows the day's card, once
+            if (date === today()) showDayCardOnce(date);
           } catch (error) {
             toast({ title: errorMessage(error), kind: 'error' });
           }

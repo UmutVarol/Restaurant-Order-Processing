@@ -139,6 +139,9 @@ Status is always shown as a dot and a word, never as colour alone.
 - **Quick search (E3):** Ctrl/⌘ K or the magnifier: screens, tables, orders and dishes, accent-insensitive.
 - **Waiting rings (F1):** each occupied table shows how long its guests have waited for someone (an open call, else
   the last order change); amber and red at limits chosen per device; crossing one rings once.
+- **Day card (F2):** closing today at the till shows the day once on receipt paper: figures count up, the hours rise,
+  the star dish settles in. "Share" gives the phone's share sheet a 1080 × 1350 picture drawn on the device (right to
+  left in Arabic), or saves it as a PNG; it never goes to the server.
 
 ## Accessibility and input
 
