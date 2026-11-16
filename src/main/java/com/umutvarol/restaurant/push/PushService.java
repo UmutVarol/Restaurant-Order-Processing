@@ -53,9 +53,11 @@ public class PushService {
     private final Clock clock;
     private final TransactionTemplate tx;
     private final ExecutorService senders = Executors.newVirtualThreadPerTaskExecutor();
+    private final FcmSender fcm;
 
     PushService(PushSubscriptionRepository subscriptions, VapidKeys vapid, PushTransport transport,
-                Clock clock, PlatformTransactionManager transactions) {
+                Clock clock, PlatformTransactionManager transactions, FcmSender fcm) {
+        this.fcm = fcm;
         this.subscriptions = subscriptions;
         this.vapid = vapid;
         this.transport = transport;
@@ -65,6 +67,36 @@ public class PushService {
 
     public String publicKey() {
         return vapid.publicKey();
+    }
+
+    /** Whether the store apps can be told too (a Firebase project is set up). */
+    public boolean nativeEnabled() {
+        return fcm.enabled();
+    }
+
+    /** Saves (or updates) a store app on this phone, by its Firebase token. */
+    public Device subscribeNative(String token, Set<PushTopic> topics, String requestedLang, String username, @Nullable Long branchId) {
+        if (!fcm.enabled()) {
+            throw new BusinessRuleException("PUSH_NATIVE_UNAVAILABLE", "This server has no Firebase project for the store apps");
+        }
+        if (token == null || !token.matches("[A-Za-z0-9_:.\\-]{20,900}") || topics == null) {
+            throw new BusinessRuleException("PUSH_SUBSCRIPTION_INVALID", "This is not a store app's notification token");
+        }
+        String endpoint = "fcm:" + token;
+        String lang = PushMessages.supports(requestedLang) ? requestedLang : "en";
+        Long business = BusinessContext.current();
+        BusinessContext.acrossAll(() -> tx.execute(status -> {
+            subscriptions.findByEndpoint(endpoint)
+                    .filter(other -> business != null && !other.getBusinessId().equals(business))
+                    .ifPresent(subscriptions::delete);
+            return null;
+        }));
+        return tx.execute(status -> {
+            PushSubscription own = subscriptions.findByEndpoint(endpoint).orElseGet(() -> new PushSubscription(endpoint, "FCM", clock.instant()));
+            own.set(username, branchId, null, null, topics, lang);
+            subscriptions.save(own);
+            return new Device(own.getEndpoint(), own.getTopics(), own.getLang());
+        });
     }
 
     /** Saves (or updates) this device for the signed-in person. */
@@ -128,9 +160,16 @@ public class PushService {
 
     private void send(@Nullable Long business, PushSubscription device, PushMessages.Text text, String url, String tag) {
         Long id = device.getId();
+        String fcmToken = device.fcmToken();
         senders.submit(() -> {
             int status;
             try {
+                if (fcmToken != null) {
+                    status = fcm.send(fcmToken, text.title(), text.body(), url, tag);
+                    if (status == 0) {
+                        return; // not set up, or Firebase not reached: nothing to learn about the device
+                    }
+                } else {
                 Map<String, Object> message = new LinkedHashMap<>();
                 message.put("title", text.title());
                 message.put("body", text.body());
@@ -149,6 +188,7 @@ public class PushService {
                 headers.put("Content-Type", "application/octet-stream");
                 headers.put("Authorization", vapid.authorization(endpoint));
                 status = transport.post(endpoint, headers, body);
+                }
             } catch (Exception ex) {
                 log.warn("Push: a message could not be prepared: {}", ex.getMessage());
                 return;

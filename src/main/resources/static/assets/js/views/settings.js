@@ -8,7 +8,7 @@ import { api, currentDevice, errorMessage, forgetDevice, hasFeature, saveDevice,
 import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
 import { PRESETS, fitAccent, paintAccent } from '../core/brand.js';
-import { DEFAULT_TOPICS, currentSubscription, disablePush, enablePush, unsupportedReason } from '../core/push.js';
+import { DEFAULT_TOPICS, currentSubscription, disablePush, enablePush, isNativeApp, unsupportedReason } from '../core/push.js';
 import { qrCode } from './qr.js';
 import { withRecentSignIn } from './reauth.js';
 
@@ -113,7 +113,12 @@ export default {
       }
       let devices = [];
       let available = true;
-      try { await api.pushKey(); devices = await api.pushDevices(); } catch { available = false; }
+      try {
+        const key = await api.pushKey();
+        // the store app needs the server's Firebase project; a browser needs nothing more
+        if (isNativeApp() && !key.native) available = false;
+        devices = await api.pushDevices();
+      } catch { available = false; }
       if (!available) {
         mount(pushCard, top, h('div', { class: 'card-body' }, h('p', { class: 'muted' }, t('push.unavailable'))));
         return;
@@ -144,7 +149,8 @@ export default {
         try { await api.testPush(); toast({ title: t('push.testSent') }); } catch (error) { fail(error); }
       } }, t('push.test')) : null;
       mount(pushCard, top, h('div', { class: 'card-body settings-form' },
-        h('p', { class: mine ? '' : 'muted', 'data-testid': 'push-status' }, t(mine ? 'push.on' : Notification.permission === 'denied' ? 'push.denied' : 'push.off')),
+        h('p', { class: mine ? '' : 'muted', 'data-testid': 'push-status' },
+          t(mine ? 'push.on' : !isNativeApp() && Notification.permission === 'denied' ? 'push.denied' : 'push.off')),
         h('div', { class: 'push-topics', role: 'group', 'aria-label': t('push.title') }, boxes),
         problem,
         h('div', { class: 'setup-more' }, turnOn, turnOff, test)));

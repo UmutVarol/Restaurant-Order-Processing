@@ -1611,7 +1611,7 @@ export default {
   "push.unavailable": "الإشعارات غير متاحة على هذا الخادم.",
   "push.unsupported.browser": "هذا المتصفح لا يدعم الإشعارات.",
   "push.unsupported.ios": "على iPhone وiPad: في Safari اختر مشاركة › إضافة إلى الشاشة الرئيسية، ثم افتح Sofra من الشاشة الرئيسية وحاول هنا مجددًا.",
-  "push.unsupported.native": "تصل الإشعارات في تطبيق المتجر في الإصدار القادم؛ فعّلها حاليًا من المتصفح.",
+  "push.unsupported.native": "إشعارات تطبيق المتجر غير مُعدّة على هذا الخادم؛ فعّلها حاليًا من المتصفح.",
   "push.topic.NEW_ORDER": "طلب جديد",
   "push.topic.READY": "الطلب جاهز",
   "push.topic.GUEST_CALL": "نداء ضيف",
@@ -1619,4 +1619,5 @@ export default {
   "push.topicHint.READY": "عندما يضع المطبخ علامة جاهز على طلب",
   "push.topicHint.GUEST_CALL": "نداء النادل أو طلب الفاتورة أو سلة من الطاولة",
   "error.PUSH_SUBSCRIPTION_INVALID": "لم يُقبل عنوان الإشعارات لهذا الجهاز.",
+  "error.PUSH_NATIVE_UNAVAILABLE": "إشعارات تطبيق المتجر غير مُعدّة على هذا الخادم.",
 };

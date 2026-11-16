@@ -1591,7 +1591,7 @@ export default {
   "push.unavailable": "Notifications are not available on this server.",
   "push.unsupported.browser": "This browser does not support notifications.",
   "push.unsupported.ios": "On iPhone and iPad: in Safari choose Share › Add to Home Screen, then open Sofra from the home screen and try here again.",
-  "push.unsupported.native": "Notifications in the store app come in the next version; for now turn them on in a browser.",
+  "push.unsupported.native": "Store app notifications are not set up on this server; for now turn them on in a browser.",
   "push.topic.NEW_ORDER": "New order",
   "push.topic.READY": "Order ready",
   "push.topic.GUEST_CALL": "Guest calling",
@@ -1599,4 +1599,5 @@ export default {
   "push.topicHint.READY": "When the kitchen marks an order ready",
   "push.topicHint.GUEST_CALL": "A waiter call, a bill request or a cart from a table",
   "error.PUSH_SUBSCRIPTION_INVALID": "This device's notification address was not accepted.",
+  "error.PUSH_NATIVE_UNAVAILABLE": "Store app notifications are not set up on this server.",
 };

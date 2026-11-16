@@ -39,10 +39,23 @@ class PushController {
         this.push = push;
     }
 
-    @Operation(summary = "The server's push key", description = "What browsers subscribe with (applicationServerKey).")
+    record NativeRequest(@NotBlank @Size(max = 900) String token, @NotNull @Size(max = 3) Set<PushTopic> topics, @Size(max = 5) String lang) {
+    }
+
+    @Operation(summary = "The server's push key", description = """
+            What browsers subscribe with (applicationServerKey); native: whether the store apps can be told too.""")
     @GetMapping("/api/v1/push/key")
-    Map<String, String> key() {
-        return Map.of("publicKey", push.publicKey());
+    Map<String, Object> key() {
+        return Map.of("publicKey", push.publicKey(), "native", push.nativeEnabled());
+    }
+
+    @Operation(summary = "Get notifications in the store app on this phone", description = "By its Firebase token.")
+    @PostMapping("/api/v1/push/native")
+    @ResponseStatus(HttpStatus.CREATED)
+    PushService.Device subscribeNative(@Valid @RequestBody NativeRequest request, JwtAuthenticationToken auth) {
+        Object branch = auth.getToken().getClaim(BusinessFilter.BRANCH_CLAIM);
+        return push.subscribeNative(request.token(), request.topics(), request.lang() == null ? "en" : request.lang(), auth.getName(),
+                branch == null ? null : Long.valueOf(branch.toString()));
     }
 
     @Operation(summary = "My devices that get notifications")

@@ -1575,7 +1575,7 @@ export default {
   "push.unavailable": "Bu sunucuda bildirimler kullanılamıyor.",
   "push.unsupported.browser": "Bu tarayıcı bildirim desteklemiyor.",
   "push.unsupported.ios": "iPhone ve iPad'de: Safari'de Paylaş › Ana Ekrana Ekle, sonra Sofra'yı ana ekrandan açıp burayı yeniden deneyin.",
-  "push.unsupported.native": "Mağaza uygulamasında bildirimler bir sonraki sürümde geliyor; şimdilik tarayıcıdan açabilirsiniz.",
+  "push.unsupported.native": "Mağaza uygulamasında bildirimler bu sunucuda kurulmamış; şimdilik tarayıcıdan açabilirsiniz.",
   "push.topic.NEW_ORDER": "Yeni sipariş",
   "push.topic.READY": "Sipariş hazır",
   "push.topic.GUEST_CALL": "Misafir çağrısı",
@@ -1583,4 +1583,5 @@ export default {
   "push.topicHint.READY": "Mutfak bir siparişi hazır işaretlediğinde",
   "push.topicHint.GUEST_CALL": "Garson çağrısı, hesap isteği ya da masadan gelen sepet",
   "error.PUSH_SUBSCRIPTION_INVALID": "Bu cihazın bildirim adresi kabul edilmedi.",
+  "error.PUSH_NATIVE_UNAVAILABLE": "Bu sunucuda mağaza uygulaması bildirimleri kurulmamış.",
 };

@@ -6,6 +6,7 @@ import { api, branchChoice, clearSession, currentDevice, currentSession, hasFeat
 import { bus, chime, prefs } from './core/store.js';
 import { realtimeStatus, startRealtime, stopRealtime } from './core/realtime.js';
 import { clearOutbox, entries as outboxEntries, flush, isOnline, registerServiceWorker } from './core/offline.js';
+import { listenToNativeTaps } from './core/push.js';
 import { time } from './core/format.js';
 import { bump, chooseLanguage, confirmDialog, flushUndoables, langButton, openModal, themeButton, toast } from './core/ui.js';
 
@@ -530,4 +531,6 @@ async function boot() {
 }
 
 registerServiceWorker();
+// in the store app a tapped notification opens the screen it is about
+listenToNativeTaps();
 boot();

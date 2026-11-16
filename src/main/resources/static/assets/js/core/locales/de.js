@@ -1577,7 +1577,7 @@ export default {
   "push.unavailable": "Benachrichtigungen sind auf diesem Server nicht verfügbar.",
   "push.unsupported.browser": "Dieser Browser unterstützt keine Benachrichtigungen.",
   "push.unsupported.ios": "Auf iPhone und iPad: In Safari Teilen › Zum Home-Bildschirm, dann Sofra vom Home-Bildschirm öffnen und hier erneut versuchen.",
-  "push.unsupported.native": "Benachrichtigungen in der Store-App kommen mit der nächsten Version; schalten Sie sie bis dahin im Browser ein.",
+  "push.unsupported.native": "Benachrichtigungen in der Store-App sind auf diesem Server nicht eingerichtet; schalten Sie sie bis dahin im Browser ein.",
   "push.topic.NEW_ORDER": "Neue Bestellung",
   "push.topic.READY": "Bestellung fertig",
   "push.topic.GUEST_CALL": "Gast ruft",
@@ -1585,4 +1585,5 @@ export default {
   "push.topicHint.READY": "Wenn die Küche eine Bestellung als fertig markiert",
   "push.topicHint.GUEST_CALL": "Bedienungsruf, Rechnungswunsch oder Warenkorb vom Tisch",
   "error.PUSH_SUBSCRIPTION_INVALID": "Die Benachrichtigungsadresse dieses Geräts wurde nicht angenommen.",
+  "error.PUSH_NATIVE_UNAVAILABLE": "Benachrichtigungen für die Store-App sind auf diesem Server nicht eingerichtet.",
 };

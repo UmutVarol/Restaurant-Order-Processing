@@ -109,6 +109,15 @@ and on an iPhone or iPad once Sofra is added to the home screen (iOS 16.4 or lat
   `updates.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`. Sofra sends to no other address.
 - **Clean-up.** A device the push service no longer knows (404, 410) is dropped at once; one that fails five times in a
   row is dropped too, and has to be turned on again.
+- **Store apps.** Inside the Android and iOS apps (Capacitor, `mobile/`) browsers' Web Push does not exist; the apps
+  use Firebase Cloud Messaging instead. To turn it on:
+  1. Create a Firebase project; add the Android app (`app.sofra.restaurant`) and put its `google-services.json` in
+     `mobile/android/app/`; add the iOS app and put `GoogleService-Info.plist` in `mobile/ios/App/App/`.
+  2. For iOS, upload an APNs key (Apple Developer › Keys) in Firebase › Project settings › Cloud Messaging.
+  3. Give the server the project's service account: `FCM_SERVICE_ACCOUNT` holds its JSON, or the path of the file
+     (Firebase › Project settings › Service accounts › Generate new private key). Keep it as secret as a password.
+  4. The server must reach `oauth2.googleapis.com` and `fcm.googleapis.com`.
+  Without it the apps say notifications are not set up on this server, and browsers keep working as before.
 
 ## Backups
 

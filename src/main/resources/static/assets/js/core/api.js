@@ -369,6 +369,7 @@ export const api = {
   pushKey: () => request('GET', '/push/key'),
   pushDevices: () => request('GET', '/push/subscriptions'),
   subscribePush: (subscription) => request('POST', '/push/subscriptions', subscription),
+  subscribeNativePush: (device) => request('POST', '/push/native', device),
   unsubscribePush: (endpoint) => request('POST', '/push/subscriptions/remove', { endpoint }),
   testPush: () => request('POST', '/push/test'),
   saveIntegration: (kind, body) => request('PUT', `/integrations/${encodeURIComponent(kind)}`, body),

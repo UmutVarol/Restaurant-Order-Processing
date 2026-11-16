@@ -1578,7 +1578,7 @@ export default {
   "push.unavailable": "Les notifications ne sont pas disponibles sur ce serveur.",
   "push.unsupported.browser": "Ce navigateur ne prend pas en charge les notifications.",
   "push.unsupported.ios": "Sur iPhone et iPad : dans Safari, Partager › Sur l’écran d’accueil, puis ouvrez Sofra depuis l’écran d’accueil et réessayez ici.",
-  "push.unsupported.native": "Les notifications de l’app arrivent dans la prochaine version ; en attendant, activez-les dans un navigateur.",
+  "push.unsupported.native": "Les notifications de l’app ne sont pas configurées sur ce serveur ; en attendant, activez-les dans un navigateur.",
   "push.topic.NEW_ORDER": "Nouvelle commande",
   "push.topic.READY": "Commande prête",
   "push.topic.GUEST_CALL": "Appel d’un client",
@@ -1586,4 +1586,5 @@ export default {
   "push.topicHint.READY": "Quand la cuisine marque une commande prête",
   "push.topicHint.GUEST_CALL": "Appel du serveur, demande d’addition ou panier d’une table",
   "error.PUSH_SUBSCRIPTION_INVALID": "L’adresse de notification de cet appareil a été refusée.",
+  "error.PUSH_NATIVE_UNAVAILABLE": "Les notifications de l’app ne sont pas configurées sur ce serveur.",
 };

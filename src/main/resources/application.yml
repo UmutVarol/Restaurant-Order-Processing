@@ -172,6 +172,8 @@ restaurant:
     vapid-public-key: ${PUSH_VAPID_PUBLIC_KEY:}
     vapid-private-key: ${PUSH_VAPID_PRIVATE_KEY:}
     contact: ${PUSH_CONTACT:https://sofra.app}
+    # the store apps: the Firebase project's service account JSON, or the path of its file
+    fcm-service-account: ${FCM_SERVICE_ACCOUNT:}
   fiscal:
     retry-interval: 60s
     okc:

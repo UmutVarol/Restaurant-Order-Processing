@@ -66,12 +66,17 @@ public class PushSubscription {
     }
 
     PushSubscription(String endpoint, Instant at) {
+        this(endpoint, "WEB", at);
+    }
+
+    /** {@code kind}: WEB for a browser (Web Push), FCM for a store app (its Firebase token, as {@code fcm:<token>}). */
+    PushSubscription(String endpoint, String kind, Instant at) {
         this.endpoint = endpoint;
-        this.kind = "WEB";
+        this.kind = kind;
         this.createdAt = at;
     }
 
-    void set(String username, @Nullable Long branchId, String p256dh, String auth, Set<PushTopic> topics, String lang) {
+    void set(String username, @Nullable Long branchId, @Nullable String p256dh, @Nullable String auth, Set<PushTopic> topics, String lang) {
         this.username = username;
         this.branchId = branchId;
         this.p256dh = p256dh;
@@ -109,6 +114,15 @@ public class PushSubscription {
 
     public String getEndpoint() {
         return endpoint;
+    }
+
+    public String getKind() {
+        return kind;
+    }
+
+    /** A store app's Firebase token. */
+    @Nullable String fcmToken() {
+        return "FCM".equals(kind) && endpoint.startsWith("fcm:") ? endpoint.substring(4) : null;
     }
 
     public String getP256dh() {

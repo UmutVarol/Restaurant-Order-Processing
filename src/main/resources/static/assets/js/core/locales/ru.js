@@ -1602,7 +1602,7 @@ export default {
   "push.unavailable": "На этом сервере уведомления недоступны.",
   "push.unsupported.browser": "Этот браузер не поддерживает уведомления.",
   "push.unsupported.ios": "На iPhone и iPad: в Safari «Поделиться» › «На экран Домой», затем откройте Sofra с экрана Домой и повторите здесь.",
-  "push.unsupported.native": "Уведомления в приложении появятся в следующей версии; пока включите их в браузере.",
+  "push.unsupported.native": "Уведомления в приложении на этом сервере не настроены; пока включите их в браузере.",
   "push.topic.NEW_ORDER": "Новый заказ",
   "push.topic.READY": "Заказ готов",
   "push.topic.GUEST_CALL": "Вызов гостя",
@@ -1610,4 +1610,5 @@ export default {
   "push.topicHint.READY": "Когда кухня отмечает заказ готовым",
   "push.topicHint.GUEST_CALL": "Вызов официанта, просьба о счёте или корзина со стола",
   "error.PUSH_SUBSCRIPTION_INVALID": "Адрес уведомлений этого устройства не принят.",
+  "error.PUSH_NATIVE_UNAVAILABLE": "Уведомления приложения на этом сервере не настроены.",
 };
