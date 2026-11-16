@@ -94,6 +94,22 @@ No verified backup for more than 26 hours. Run one now (`docker compose --profil
 sofra-backup backup`, or `ops/backup.sh` on the host) and read its error: usually a full disk, a changed password, or the
 database not reachable.
 
+## Push notifications
+
+Staff turn notifications on per device in **Settings › Notifications**: new orders (kitchen), ready plates and guests
+calling (waiters). They are Web Push (RFC 8291 encryption, RFC 8292 VAPID), so they work in Chrome, Edge and Firefox,
+and on an iPhone or iPad once Sofra is added to the home screen (iOS 16.4 or later).
+
+- **Keys.** The server makes its VAPID key pair on first use and keeps it in the database (`push_keys`; the private
+  key sealed with `TOTP_ENCRYPTION_KEY` when it is set). To manage them yourself, set `PUSH_VAPID_PUBLIC_KEY` and
+  `PUSH_VAPID_PRIVATE_KEY` (raw P-256 keys, base64url). Changing them makes every device subscribe again.
+- **Contact.** `PUSH_CONTACT` (default `https://sofra.app`) is the address push services see in the signature; set it
+  to a page or `mailto:` of whoever runs the server.
+- **Network.** The server must reach the browsers' push services over HTTPS: `fcm.googleapis.com`,
+  `updates.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`. Sofra sends to no other address.
+- **Clean-up.** A device the push service no longer knows (404, 410) is dropped at once; one that fails five times in a
+  row is dropped too, and has to be turned on again.
+
 ## Backups
 
 [`ops/backup.sh`](../ops/backup.sh) makes a compressed `pg_dump`, checks that `pg_restore` can read all of it and

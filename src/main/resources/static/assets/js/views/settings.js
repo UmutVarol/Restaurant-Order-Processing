@@ -8,6 +8,7 @@ import { api, currentDevice, errorMessage, forgetDevice, hasFeature, saveDevice,
 import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
 import { PRESETS, fitAccent, paintAccent } from '../core/brand.js';
+import { DEFAULT_TOPICS, currentSubscription, disablePush, enablePush, unsupportedReason } from '../core/push.js';
 import { qrCode } from './qr.js';
 import { withRecentSignIn } from './reauth.js';
 
@@ -20,6 +21,8 @@ export default {
   mount(container, { user, navigate }) {
     const manager = user.role === 'ADMIN';
     const pinCard = h('div', { class: 'card settings-card' });
+    // push notifications on this device: for everyone
+    const pushCard = h('div', { class: 'card settings-card push-card', 'data-testid': 'push-card' });
     const deviceCard = h('div', { class: 'card settings-card' });
     const devicesCard = h('div', { class: 'card settings-card' });
     const qrCard = h('div', { class: 'card settings-card' });
@@ -41,7 +44,7 @@ export default {
     let tables = null;
     let printers = null;
     let stations = null;
-    mount(container, h('div', { class: 'settings-grid' }, manager ? serviceCard : null, ownsBrand ? brandCard : null, ownsBrand ? integrationsCard : null, ownsPayments ? paymentsCard : null, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
+    mount(container, h('div', { class: 'settings-grid' }, manager ? serviceCard : null, ownsBrand ? brandCard : null, ownsBrand ? integrationsCard : null, ownsPayments ? paymentsCard : null, manager ? totpCard : null, pushCard, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
       manager ? stationsCard : null, manager ? printersCard : null));
 
     const head = (iconName, title, sub) => h('div', { class: 'card-head' },
@@ -97,6 +100,54 @@ export default {
             problem,
             h('div', { class: 'setup-more' }, save, remove),
           ] : h('p', { class: 'form-error-text' }, t('error.ENCRYPTION_KEY_MISSING'))));
+    }
+
+    // ------------------------------------------------------------------ notifications on this device
+    const PUSH_TOPICS = ['NEW_ORDER', 'READY', 'GUEST_CALL'];
+    async function renderPush() {
+      const top = head('bell', t('push.title'), t('push.sub'));
+      const why = unsupportedReason();
+      if (why) {
+        mount(pushCard, top, h('div', { class: 'card-body' }, h('p', { class: 'muted', 'data-testid': 'push-unsupported' }, t(`push.unsupported.${why}`))));
+        return;
+      }
+      let devices = [];
+      let available = true;
+      try { await api.pushKey(); devices = await api.pushDevices(); } catch { available = false; }
+      if (!available) {
+        mount(pushCard, top, h('div', { class: 'card-body' }, h('p', { class: 'muted' }, t('push.unavailable'))));
+        return;
+      }
+      const subscription = await currentSubscription().catch(() => null);
+      const mine = subscription && devices.find((device) => device.endpoint === subscription.endpoint);
+      const chosen = new Set(mine ? mine.topics : DEFAULT_TOPICS[user.role] || ['NEW_ORDER']);
+      const boxes = PUSH_TOPICS.map((topic) => h('label', { class: 'checkbox' },
+        h('input', { type: 'checkbox', checked: chosen.has(topic), 'data-topic': topic,
+          onchange: (event) => { if (event.target.checked) chosen.add(topic); else chosen.delete(topic); } }),
+        h('span', null, h('b', null, t(`push.topic.${topic}`)), h('small', { class: 'faint' }, t(`push.topicHint.${topic}`)))));
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const fail = (error) => {
+        problem.replaceChildren(icon('alert', 'sm'), error instanceof Error && error.message.startsWith('push.') ? t(error.message) : errorMessage(error));
+        problem.hidden = false;
+      };
+      const turnOn = h('button', { class: 'btn primary', 'data-testid': 'push-enable', onclick: async () => {
+        problem.hidden = true;
+        turnOn.disabled = true;
+        try { await enablePush([...chosen]); toast({ title: t('push.enabled') }); renderPush(); } catch (error) { fail(error); turnOn.disabled = false; }
+      } }, icon('bell', 'sm'), t(mine ? 'push.update' : 'push.enable'));
+      const turnOff = mine ? h('button', { class: 'btn ghost', 'data-testid': 'push-disable', onclick: async () => {
+        await disablePush();
+        toast({ title: t('push.disabled') });
+        renderPush();
+      } }, icon('bellOff', 'sm'), t('push.disable')) : null;
+      const test = mine ? h('button', { class: 'btn ghost', 'data-testid': 'push-test', onclick: async () => {
+        try { await api.testPush(); toast({ title: t('push.testSent') }); } catch (error) { fail(error); }
+      } }, t('push.test')) : null;
+      mount(pushCard, top, h('div', { class: 'card-body settings-form' },
+        h('p', { class: mine ? '' : 'muted', 'data-testid': 'push-status' }, t(mine ? 'push.on' : Notification.permission === 'denied' ? 'push.denied' : 'push.off')),
+        h('div', { class: 'push-topics', role: 'group', 'aria-label': t('push.title') }, boxes),
+        problem,
+        h('div', { class: 'setup-more' }, turnOn, turnOff, test)));
     }
 
     // ------------------------------------------------------------------ connections: e-Arşiv and platforms (owner)
@@ -947,6 +998,7 @@ export default {
     loadBrand();
     renderIntegrations();
     loadIntegrations();
+    renderPush();
     if (ownsPayments) {
       renderAccount();
       loadAccount();

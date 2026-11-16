@@ -167,6 +167,11 @@ restaurant:
       api-token: ${TRENDYOL_API_TOKEN:}
   # Legal documents. The ÖKC bridge runs on the till's network (GMP-3 vendor software); the e-Arşiv integrator is
   # a GİB-authorised özel entegratör. Not set up: simulated in demo mode, not issued at all otherwise.
+  # Push notifications to staff devices (docs/OPERATIONS.md): made on first use unless given here
+  push:
+    vapid-public-key: ${PUSH_VAPID_PUBLIC_KEY:}
+    vapid-private-key: ${PUSH_VAPID_PRIVATE_KEY:}
+    contact: ${PUSH_CONTACT:https://sofra.app}
   fiscal:
     retry-interval: 60s
     okc:

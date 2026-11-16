@@ -3,7 +3,7 @@
 // hold guest names, phone numbers and bills. Orders taken offline wait in the till's own queue (core/offline.js).
 'use strict';
 
-const CACHE = 'sofra-shell-v15';
+const CACHE = 'sofra-shell-v16';
 
 // Every file of the app shell. A build test checks that each static asset is listed here.
 const SHELL = [
@@ -22,6 +22,7 @@ const SHELL = [
   'assets/js/theme-init.js',
   'assets/js/core/api.js',
   'assets/js/core/brand.js',
+  'assets/js/core/push.js',
   'assets/js/core/charts.js',
   'assets/js/core/dom.js',
   'assets/js/core/format.js',
@@ -120,3 +121,30 @@ function withTimeout(promise, ms) {
     promise.then((value) => { clearTimeout(timer); resolve(value); }, (error) => { clearTimeout(timer); reject(error); });
   });
 }
+
+// ------------------------------------------------------------------ push notifications (docs/OPERATIONS.md)
+
+// A message from Sofra: new order, ready plate, a guest calling. The server wrote it in this device's language.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data ? event.data.text() : '' }; }
+  event.waitUntil(self.registration.showNotification(data.title || 'Sofra', {
+    body: data.body || '',
+    tag: data.tag || undefined,
+    renotify: Boolean(data.tag),
+    icon: 'favicon.svg',
+    badge: 'favicon.svg',
+    data: { url: typeof data.url === 'string' && data.url.startsWith('#/') ? data.url : '#/' },
+  }));
+});
+
+// A tap opens the screen it is about, in a Sofra window already open if there is one.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || '#/', self.registration.scope).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+    const open = windows.find((client) => client.url.startsWith(self.registration.scope));
+    if (open) return open.focus().then((client) => (client && 'navigate' in client ? client.navigate(target) : null));
+    return self.clients.openWindow(target);
+  }));
+});

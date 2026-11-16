@@ -2205,3 +2205,8 @@ button.rota-shift { cursor: pointer; }
 .copy-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .copy-row code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 8px 10px; border-radius: 8px; background: var(--surface-3); font-size: 12.5px; user-select: all; }
 .integrations-okc { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; }
+
+/* Settings › Notifications: one line per topic, its word and what it covers */
+.push-topics { display: flex; flex-direction: column; gap: 10px; }
+.push-topics .checkbox { align-items: flex-start; }
+.push-topics .checkbox span { display: flex; flex-direction: column; gap: 2px; }

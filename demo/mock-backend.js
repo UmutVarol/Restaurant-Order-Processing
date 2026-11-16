@@ -2559,6 +2559,8 @@
     ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})\/logo$/, 'public', ({ params }) => { tableForToken(params[0]); return logoResponse(); }],
     ['GET', /^public\/pay\/([A-Za-z0-9_-]+)\/logo$/, 'public', ({ params }) => { findLink(params[0]); return logoResponse(); }],
     // Settings › Connections: the business's own e-Arşiv integrator and delivery platforms (keys are never returned)
+    // the demo has no server to send notifications from
+    ['GET', /^push\/key$/, 'staff', () => { throw new Problem(404, 'NOT_FOUND', 'Notifications are not available in the demo'); }],
     ['GET', /^integrations$/, 'manager', () => integrationsView()],
     ['PUT', /^integrations\/(E_ARSIV|YEMEKSEPETI|GETIR|TRENDYOL)$/, 'manager', ({ params, user }, body) => {
       const kind = params[0];
