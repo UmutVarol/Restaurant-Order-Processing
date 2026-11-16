@@ -9,15 +9,15 @@ Commit mesajları kullanıcının istediği imza satırlarıyla biter; depoya mo
 Sprint 1–4 bitti; Sprint 5'in (Sofra Cloud, ücretli ürün) kodu bitti: kayıt ve deneme, planlar ve sınırlar,
 Paddle aboneliği, yalnızca okuma modu, işletme başına iyzico, yazıcı köprüsü, mağaza kabukları, kapalı lisans.
 Ayrıntı: `docs/ROADMAP.md`, `docs/SOFRA_CLOUD_PLAN.md`, `docs/CLOUD.md`, `docs/PRINT_BRIDGE.md`.
-Fiyatlar (16 Kasım 2026, kullanıcı "Premium"u seçti): şube başına aylık Başlangıç $39, İşletme $79, Zincir $89
-(3+ şube; $119 liste fiyatından "zincire özel %25" gösterilir, İşletme'den yüksek kalır). `PlanCatalog` ile Paddle
+Fiyatlar (16 Kasım 2026, kullanıcının son kararı): şube başına aylık Başlangıç $29, İşletme $59, Zincir $79
+(3+ şube; $99 liste fiyatından "zincire özel %20" gösterilir, İşletme'den yüksek kalır). `PlanCatalog` ile Paddle
 fiyatları aynı olmalı.
 
 ## Kullanıcının yapacakları (kodla çözülemez)
 
 - [ ] GitHub deposunu gizli yapmak; demoyu GitHub Pages'ten Vercel/Cloudflare'e taşımak (Claude hazırlar).
-- [ ] Paddle hesabı açmak, Türkiye'den satıcı kabulünü teyit etmek; sandbox'ta 6 fiyat ($39/$79/$89 aylık,
-  $390/$790/$890 yıllık) ve webhook tanımlamak.
+- [ ] Paddle hesabı açmak, Türkiye'den satıcı kabulünü teyit etmek; sandbox'ta 6 fiyat ($29/$59/$79 aylık,
+  $290/$590/$790 yıllık) ve webhook tanımlamak.
 - [ ] Alan adı ve bulut sunucusu (`sofra.app` belgelerde yer tutucu).
 - [ ] Sunucuda `TOTP_ENCRYPTION_KEY` ayarlayıp yedeklemek (iyzico anahtarları bununla şifrelenir).
 - [ ] iyzico üye işyeri ve e-Arşiv entegratörü sözleşmeleri.

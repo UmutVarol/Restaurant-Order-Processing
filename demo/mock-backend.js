@@ -605,9 +605,9 @@
   // the demo keeps one set of data: a second branch shows the screens for chains, it does not split the floor
   const branches = () => (state.branches ??= [{ id: 1, code: 'merkez', name: 'Merkez', active: true }]);
   const PLAN_OFFERS = {
-    STARTER: { monthlyCentsPerBranch: 3900, listCentsPerBranch: 0, minimumBranches: 1, limits: { branches: 1, activeStaff: 5, tables: 15 }, features: [] },
-    BUSINESS: { monthlyCentsPerBranch: 7900, listCentsPerBranch: 0, minimumBranches: 1, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
-    CHAIN: { monthlyCentsPerBranch: 8900, listCentsPerBranch: 11900, minimumBranches: 3, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS', 'CHAIN'] },
+    STARTER: { monthlyCentsPerBranch: 2900, listCentsPerBranch: 0, minimumBranches: 1, limits: { branches: 1, activeStaff: 5, tables: 15 }, features: [] },
+    BUSINESS: { monthlyCentsPerBranch: 5900, listCentsPerBranch: 0, minimumBranches: 1, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
+    CHAIN: { monthlyCentsPerBranch: 7900, listCentsPerBranch: 9900, minimumBranches: 3, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS', 'CHAIN'] },
   };
   const billing = () => (state.billing ??= { plan: 'BUSINESS', status: 'TRIAL', trialEndsAt: Date.now() + 10 * 86_400_000, interval: null, periodEndsAt: null });
   function paymentAccountView() {

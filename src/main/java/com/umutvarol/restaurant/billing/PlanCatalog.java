@@ -32,10 +32,10 @@ public final class PlanCatalog {
         }
     }
 
-    private static final Offer STARTER = new Offer(Plan.STARTER, 3900, 0, 1, new Limits(1, 5, 15), features(Plan.STARTER));
-    private static final Offer BUSINESS = new Offer(Plan.BUSINESS, 7900, 0, 1,
+    private static final Offer STARTER = new Offer(Plan.STARTER, 2900, 0, 1, new Limits(1, 5, 15), features(Plan.STARTER));
+    private static final Offer BUSINESS = new Offer(Plan.BUSINESS, 5900, 0, 1,
             new Limits(UNLIMITED, UNLIMITED, UNLIMITED), features(Plan.BUSINESS));
-    private static final Offer CHAIN = new Offer(Plan.CHAIN, 8900, 11900, 3,
+    private static final Offer CHAIN = new Offer(Plan.CHAIN, 7900, 9900, 3,
             new Limits(UNLIMITED, UNLIMITED, UNLIMITED), features(Plan.CHAIN));
 
     private PlanCatalog() {
