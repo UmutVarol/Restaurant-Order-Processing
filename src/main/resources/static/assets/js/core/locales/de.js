@@ -1606,4 +1606,6 @@ export default {
   "error.WAIT_LIMITS_INVALID": "Die rote Grenze muss nach der gelben liegen (oder beide 0, um die Ringe auszuschalten).",
   "service.waiting": "Tische, die auf jemanden warten",
   "service.waitedFor": "wartet seit {time}",
+  "billing.listPrice": "Listenpreis {price}",
+  "billing.chainDeal": "{percent} % Rabatt für Ketten",
 };

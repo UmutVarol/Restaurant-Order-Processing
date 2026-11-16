@@ -58,7 +58,14 @@ class SubscriptionIntegrationTest {
                 .andExpect(jsonPath("$.writable").value(true))
                 .andExpect(jsonPath("$.billingEnabled").value(true))
                 .andExpect(jsonPath("$.usage.tables").value(12))
+                .andExpect(jsonPath("$.offers[0].monthlyCentsPerBranch").value(3900))
+                .andExpect(jsonPath("$.offers[1].monthlyCentsPerBranch").value(7900))
+                .andExpect(jsonPath("$.offers[1].yearlyCentsPerBranch").value(79000))
+                .andExpect(jsonPath("$.offers[1].listCentsPerBranch").value(0))
                 .andExpect(jsonPath("$.offers[2].plan").value("CHAIN"))
+                // a chain's own price: below its list price, above the Business plan
+                .andExpect(jsonPath("$.offers[2].monthlyCentsPerBranch").value(8900))
+                .andExpect(jsonPath("$.offers[2].listCentsPerBranch").value(11900))
                 .andExpect(jsonPath("$.offers[2].billedBranches").value(3));
 
         mvc.perform(with(owner, json(post("/api/v1/billing/checkout"), """

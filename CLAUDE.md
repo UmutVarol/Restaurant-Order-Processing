@@ -4,16 +4,20 @@ Kullanıcıyla **Türkçe** konuş. Geliştirme dalı: `claude/gracious-davinci-
 PR açma. Tanıtım videosu commit'i (yerel `promo-video-v2` dalı) **push edilmez**; `main` üzerinde çalışılmaz.
 Commit mesajları kullanıcının istediği imza satırlarıyla biter; depoya model adı yazılmaz.
 
-## Durum (15 Kasım 2026)
+## Durum (16 Kasım 2026)
 
 Sprint 1–4 bitti; Sprint 5'in (Sofra Cloud, ücretli ürün) kodu bitti: kayıt ve deneme, planlar ve sınırlar,
 Paddle aboneliği, yalnızca okuma modu, işletme başına iyzico, yazıcı köprüsü, mağaza kabukları, kapalı lisans.
 Ayrıntı: `docs/ROADMAP.md`, `docs/SOFRA_CLOUD_PLAN.md`, `docs/CLOUD.md`, `docs/PRINT_BRIDGE.md`.
+Fiyatlar (16 Kasım 2026, kullanıcı "Premium"u seçti): şube başına aylık Başlangıç $39, İşletme $79, Zincir $89
+(3+ şube; $119 liste fiyatından "zincire özel %25" gösterilir, İşletme'den yüksek kalır). `PlanCatalog` ile Paddle
+fiyatları aynı olmalı.
 
 ## Kullanıcının yapacakları (kodla çözülemez)
 
 - [ ] GitHub deposunu gizli yapmak; demoyu GitHub Pages'ten Vercel/Cloudflare'e taşımak (Claude hazırlar).
-- [ ] Paddle hesabı açmak, Türkiye'den satıcı kabulünü teyit etmek; sandbox'ta 6 fiyat ve webhook tanımlamak.
+- [ ] Paddle hesabı açmak, Türkiye'den satıcı kabulünü teyit etmek; sandbox'ta 6 fiyat ($39/$79/$89 aylık,
+  $390/$790/$890 yıllık) ve webhook tanımlamak.
 - [ ] Alan adı ve bulut sunucusu (`sofra.app` belgelerde yer tutucu).
 - [ ] Sunucuda `TOTP_ENCRYPTION_KEY` ayarlayıp yedeklemek (iyzico anahtarları bununla şifrelenir).
 - [ ] iyzico üye işyeri ve e-Arşiv entegratörü sözleşmeleri.
@@ -62,7 +66,7 @@ Kaynak: kullanıcının notu "UI UX Tasarım Stüdyosu" (14 Kasım 2026). Bağla
 - 2. tur adaylar (D1 işletme rengi, D2 uzaktan okunur mutfak, D3 kategori şeridi, E1 geri al, E2 kaydırarak hazır,
   E3 hızlı arama, F1 masa bekleme halkası, F2 günün kartı): https://claude.ai/artifact/MAXCSVmBM4LJwjST84UgWa.
   Kullanıcı **sekizini de onayladı** (16 Kasım 2026); **hepsi uygulandı** (ayrıntı: `DESIGN.md` → Round two).
-  2. turun eksikleri de tamamlandı (16 Kasım 2026): kalem iptali (PIN gerekmeyen) ve kat planında masa temizleme
-  geri alınabilir; F1 eşikleri işletme ayarı (Ayarlar › Servis modu, V35); garson ekranı en uzun bekleyeni öne alır.
+  2. turun eksikleri de tamamlandı (16 Kasım 2026): PIN gerekmeyen iptal, ikram ve indirim (yöneticinin kendi
+  yaptıkları dahil) ve kat planında masa temizleme geri alınabilir; F1 eşikleri işletme ayarı (Ayarlar › Servis modu, V35); garson ekranı en uzun bekleyeni öne alır.
 - Sofra'nın kendi tasarım dili: `DESIGN.md` (lokanta sıcaklığı, domates kırmızısı, safran; Fraunces + Inter;
   easing `cubic-bezier(.2,.8,.2,1)`; yalnızca transform/opacity animasyonu).

@@ -8,7 +8,7 @@ import { api, errorMessage, storeApp } from '../core/api.js';
 import { toast } from '../core/ui.js';
 
 const PLANS = ['STARTER', 'BUSINESS', 'CHAIN'];
-const FEATURES = ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'];
+const FEATURES = ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS', 'CHAIN'];
 
 export function usd(cents) {
   return new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: cents % 100 ? 2 : 0 }).format(cents / 100);
@@ -95,6 +95,11 @@ export default {
           h('div', { class: 'card-body' },
             h('h3', null, t(`billing.plan.${plan}`)),
             h('p', { class: 'muted' }, t(`billing.for.${plan}`)),
+            // the Chain plan: a chain's own price, under its list price struck through
+            offer.listCentsPerBranch > offer.monthlyCentsPerBranch ? h('div', { class: 'billing-deal', 'data-testid': `plan-${plan}-deal` },
+              h('s', { 'aria-label': t('billing.listPrice', { price: usd(offer.listCentsPerBranch) }) }, usd(offer.listCentsPerBranch)),
+              h('span', { class: 'pill plain billing-badge' }, t('billing.chainDeal', {
+                percent: Math.round((1 - offer.monthlyCentsPerBranch / offer.listCentsPerBranch) * 100) }))) : null,
             h('div', { class: 'billing-price' }, h('b', null, usd(offer.monthlyCentsPerBranch)), h('span', null, t('billing.perBranchMonth'))),
             h('p', { class: 'faint', 'data-testid': `plan-${plan}-total` }, t(interval === 'YEARLY' ? 'billing.totalYear' : 'billing.totalMonth',
               { total: usd(total), branches: offer.billedBranches })),

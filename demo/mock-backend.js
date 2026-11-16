@@ -605,9 +605,9 @@
   // the demo keeps one set of data: a second branch shows the screens for chains, it does not split the floor
   const branches = () => (state.branches ??= [{ id: 1, code: 'merkez', name: 'Merkez', active: true }]);
   const PLAN_OFFERS = {
-    STARTER: { monthlyCentsPerBranch: 1900, minimumBranches: 1, limits: { branches: 1, activeStaff: 5, tables: 15 }, features: [] },
-    BUSINESS: { monthlyCentsPerBranch: 3900, minimumBranches: 1, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
-    CHAIN: { monthlyCentsPerBranch: 2900, minimumBranches: 3, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS', 'CHAIN'] },
+    STARTER: { monthlyCentsPerBranch: 3900, listCentsPerBranch: 0, minimumBranches: 1, limits: { branches: 1, activeStaff: 5, tables: 15 }, features: [] },
+    BUSINESS: { monthlyCentsPerBranch: 7900, listCentsPerBranch: 0, minimumBranches: 1, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
+    CHAIN: { monthlyCentsPerBranch: 8900, listCentsPerBranch: 11900, minimumBranches: 3, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS', 'CHAIN'] },
   };
   const billing = () => (state.billing ??= { plan: 'BUSINESS', status: 'TRIAL', trialEndsAt: Date.now() + 10 * 86_400_000, interval: null, periodEndsAt: null });
   function paymentAccountView() {
@@ -622,7 +622,7 @@
     return { plan: b.plan, status: b.status, trialEndsAt: b.trialEndsAt ? iso(b.trialEndsAt) : null, periodEndsAt: b.periodEndsAt ? iso(b.periodEndsAt) : null,
       interval: b.interval, billedBranches: Math.max(PLAN_OFFERS[b.plan].minimumBranches, open), pastDueSince: null, graceDays: 14, writable: true, usage,
       limits: PLAN_OFFERS[b.plan].limits, billingEnabled: true, portal: false,
-      offers: Object.entries(PLAN_OFFERS).map(([plan, o]) => ({ plan, monthlyCentsPerBranch: o.monthlyCentsPerBranch, yearlyCentsPerBranch: o.monthlyCentsPerBranch * 10,
+      offers: Object.entries(PLAN_OFFERS).map(([plan, o]) => ({ plan, monthlyCentsPerBranch: o.monthlyCentsPerBranch, yearlyCentsPerBranch: o.monthlyCentsPerBranch * 10, listCentsPerBranch: o.listCentsPerBranch,
         minimumBranches: o.minimumBranches, limits: o.limits, features: o.features, billedBranches: Math.max(o.minimumBranches, open) })) };
   }
   const staffView = (username, u, id) => ({ id, username, displayName: u.displayName, role: u.role, enabled: u.enabled !== false,

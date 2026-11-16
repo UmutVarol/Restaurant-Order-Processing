@@ -1604,4 +1604,6 @@ export default {
   "error.WAIT_LIMITS_INVALID": "Kırmızı sınır sarıdan sonra olmalı (ya da halkaları kapatmak için ikisi de 0).",
   "service.waiting": "Uğranmayı bekleyen masalar",
   "service.waitedFor": "{time} bekliyor",
+  "billing.listPrice": "Liste fiyatı {price}",
+  "billing.chainDeal": "Zincire özel %{percent} indirim",
 };

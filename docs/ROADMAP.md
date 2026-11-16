@@ -300,8 +300,8 @@ Decision record: [adr/0001-multi-business.md](adr/0001-multi-business.md).
 Plan and prices: [SOFRA_CLOUD_PLAN.md](SOFRA_CLOUD_PLAN.md); going live: [CLOUD.md](CLOUD.md).
 
 - **Sign-up** with a 14-day trial, no card (S4.6).
-- **Plans** per open branch and month: Starter $19 (one branch, five staff, fifteen tables), Business $39, Chain
-  $29 from three branches; a year costs ten months. The Starter limits are enforced (`PLAN_LIMIT`).
+- **Plans** per open branch and month: Starter $39 (one branch, five staff, fifteen tables), Business $79, Chain
+  $89 from three branches (shown as 25% off a $119 list price, still above Business); a year costs ten months. The Starter limits are enforced (`PLAN_LIMIT`).
 - **Subscriptions** through a `BillingProvider`: Paddle (merchant of record, in dollars: checkout, customer portal,
   signed webhooks, the billed branches follow the open ones) and a simulation for development and the demo.
 - **Never deleted for being unpaid:** an ended trial or a payment late beyond 14 days makes the business read-only
@@ -363,8 +363,8 @@ siparişler, adisyonlar, yazıcılar, rezervasyonlar, vardiyalar, gün sonu ve b
 personel hesapları işletmenin. Personel tek şubede ya da tüm şubelerde çalışır; tüm şubelerin yöneticisi cihazın
 çalıştığı şubeyi üstten seçer. Şubeler Kurulum ekranından açılır ve kapatılır.
 
-**Sprint 5 (sürüyor): Sofra Cloud, ücretli ürün.** Planlar (şube başına aylık Başlangıç $19, İşletme $39, 3+
-şubede Zincir $29; yıllıkta 2 ay bedava), Başlangıç sınırları, Paddle ile abonelik (ödeme sayfası, kart/fatura
+**Sprint 5 (sürüyor): Sofra Cloud, ücretli ürün.** Planlar (şube başına aylık Başlangıç $39, İşletme $79, 3+
+şubede Zincir $89, liste fiyatı $119'dan indirimli; yıllıkta 2 ay bedava), Başlangıç sınırları, Paddle ile abonelik (ödeme sayfası, kart/fatura
 sayfası, imzalı webhook), deneme bitince ya da ödeme 14 günden fazla gecikince yalnızca okuma (veri silinmez),
 Plan ve ödeme ekranı, mağaza uygulaması kabukları ve kapalı lisans. Yayına alma: [CLOUD.md](CLOUD.md).
 

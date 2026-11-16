@@ -27,7 +27,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @RestController
 class BillingController {
 
-    record Offer(Plan plan, int monthlyCentsPerBranch, int yearlyCentsPerBranch, int minimumBranches,
+    record Offer(Plan plan, int monthlyCentsPerBranch, int yearlyCentsPerBranch, int listCentsPerBranch, int minimumBranches,
                  PlanCatalog.Limits limits, Set<Feature> features, int billedBranches) {
     }
 
@@ -66,7 +66,7 @@ class BillingController {
         SubscriptionService.Summary summary = subscriptions.summary();
         Business b = summary.business();
         List<Offer> offers = Arrays.stream(Plan.values()).map(PlanCatalog::of).map(o -> new Offer(o.plan(),
-                o.monthlyCentsPerBranch(), o.yearlyCentsPerBranch(), o.minimumBranches(), o.limits(), o.features(),
+                o.monthlyCentsPerBranch(), o.yearlyCentsPerBranch(), o.listCentsPerBranch(), o.minimumBranches(), o.limits(), o.features(),
                 PlanCatalog.billedBranches(o.plan(), summary.usage().openBranches()))).toList();
         return new BillingResponse(b.getPlan(), b.getStatus(), b.getTrialEndsAt(), b.getPeriodEndsAt(), b.getBillingInterval(),
                 b.getBilledBranches(), b.getPastDueSince(), properties.graceDays(), summary.writable(), summary.usage(),

@@ -1607,4 +1607,6 @@ export default {
   "error.WAIT_LIMITS_INVALID": "La limite rouge doit venir après l’orange (ou les deux à 0 pour désactiver les anneaux).",
   "service.waiting": "Tables en attente",
   "service.waitedFor": "attend depuis {time}",
+  "billing.listPrice": "Prix catalogue {price}",
+  "billing.chainDeal": "−{percent} % pour les chaînes",
 };

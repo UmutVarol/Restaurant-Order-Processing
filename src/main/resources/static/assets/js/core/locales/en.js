@@ -1620,4 +1620,6 @@ export default {
   "error.WAIT_LIMITS_INVALID": "The red limit must come after the amber one (or both 0 to switch the rings off).",
   "service.waiting": "Tables waiting for someone",
   "service.waitedFor": "waiting {time}",
+  "billing.listPrice": "List price {price}",
+  "billing.chainDeal": "{percent}% off for chains",
 };

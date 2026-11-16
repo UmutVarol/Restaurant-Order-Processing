@@ -1631,4 +1631,6 @@ export default {
   "error.WAIT_LIMITS_INVALID": "Красный порог должен быть позже жёлтого (или оба 0, чтобы отключить кольца).",
   "service.waiting": "Столы ждут официанта",
   "service.waitedFor": "ждут {time}",
+  "billing.listPrice": "Обычная цена {price}",
+  "billing.chainDeal": "Скидка {percent}% для сетей",
 };

@@ -9,7 +9,7 @@ sunucusundaki kurulum ([INSTALL.md](INSTALL.md)) bundan etkilenmez: orada abonel
 |---|---|
 | Birden çok işletme, işletme içinde şubeler, yalıtım testleri | hazır (S4.6) |
 | Kayıt ol: 14 gün ücretsiz deneme, kart istemeden | hazır |
-| Planlar: Başlangıç $19, İşletme $39, Zincir $29 (3+ şube), şube başına aylık; yıllıkta 2 ay bedava | hazır |
+| Planlar: Başlangıç $39, İşletme $79, Zincir $89 (3+ şube; liste $119'dan indirimli), şube başına aylık; yıllıkta 2 ay bedava | hazır |
 | Başlangıç planı sınırları: 1 şube, 5 etkin personel, 15 masa (aşılınca `PLAN_LIMIT`) | hazır |
 | Deneme bitince / ödeme 14 günden fazla gecikince **yalnızca okuma**: veri silinmez; rapor, dışa aktarma, giriş ve ödeme çalışır; sipariş alınamaz (`402 SUBSCRIPTION_INACTIVE`). Ödeme gelince hemen açılır | hazır |
 | İşletmenin kendi iyzico hesabı (misafir telefondan öder), şifreli saklanır | hazır |
@@ -69,7 +69,8 @@ bilgisini hiç görmez.
 
 1. paddle.com'da hesap açın; Türkiye'den satıcı kabul ettiklerini **kendi ülke listelerinden teyit edin**.
 2. Önce **sandbox** hesabında: Catalog > Products: "Sofra Başlangıç", "Sofra İşletme", "Sofra Zincir". Her birine
-   iki fiyat: aylık ($19 / $39 / $29) ve yıllık ($190 / $390 / $290), "per unit" (adet = şube sayısı).
+   iki fiyat: aylık ($39 / $79 / $89) ve yıllık ($390 / $790 / $890), "per unit" (adet = şube sayısı). Zincirin
+   $119 liste fiyatı yalnızca uygulamada gösterilir; Paddle'da tanımlanmaz.
 3. Checkout > Settings: **default payment link** olarak `https://app.sofra.app/` ekleyin ve alan adını onaylatın
    (Paddle ödeme sayfası açmak için bunu ister).
 4. Notifications > New destination: `https://app.sofra.app/api/v1/public/billing/webhook/paddle`; olaylar:

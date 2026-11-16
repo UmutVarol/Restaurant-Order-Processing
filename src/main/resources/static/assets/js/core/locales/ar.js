@@ -1640,4 +1640,6 @@ export default {
   "error.WAIT_LIMITS_INVALID": "يجب أن يأتي الحد الأحمر بعد الكهرماني (أو كلاهما 0 لإيقاف الحلقات).",
   "service.waiting": "طاولات تنتظر أحدًا",
   "service.waitedFor": "تنتظر منذ {time}",
+  "billing.listPrice": "السعر الأصلي {price}",
+  "billing.chainDeal": "خصم {percent}٪ للسلاسل",
 };

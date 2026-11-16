@@ -7,7 +7,8 @@ import java.util.Set;
 
 /**
  * What each plan costs and includes (docs/SOFRA_CLOUD_PLAN.md). Prices are per open branch and month, in US cents;
- * a year costs ten months. The billing provider holds the prices that are actually charged; these are what the app
+ * a year costs ten months. The Chain plan is sold as a chain's own price below its list price ({@code listCentsPerBranch},
+ * shown struck through), yet above the Business plan, since it has the Chain tools on top. The billing provider holds the prices that are actually charged; these are what the app
  * shows and must match them.
  */
 public final class PlanCatalog {
@@ -18,7 +19,9 @@ public final class PlanCatalog {
     public record Limits(int branches, int activeStaff, int tables) {
     }
 
-    public record Offer(Plan plan, int monthlyCentsPerBranch, int minimumBranches, Limits limits, Set<Feature> features) {
+    /** @param listCentsPerBranch the list price the offer is a discount on, or 0 when it is not one */
+    public record Offer(Plan plan, int monthlyCentsPerBranch, int listCentsPerBranch, int minimumBranches, Limits limits,
+                        Set<Feature> features) {
 
         public int yearlyCentsPerBranch() {
             return monthlyCentsPerBranch * 10;
@@ -29,10 +32,10 @@ public final class PlanCatalog {
         }
     }
 
-    private static final Offer STARTER = new Offer(Plan.STARTER, 1900, 1, new Limits(1, 5, 15), features(Plan.STARTER));
-    private static final Offer BUSINESS = new Offer(Plan.BUSINESS, 3900, 1,
+    private static final Offer STARTER = new Offer(Plan.STARTER, 3900, 0, 1, new Limits(1, 5, 15), features(Plan.STARTER));
+    private static final Offer BUSINESS = new Offer(Plan.BUSINESS, 7900, 0, 1,
             new Limits(UNLIMITED, UNLIMITED, UNLIMITED), features(Plan.BUSINESS));
-    private static final Offer CHAIN = new Offer(Plan.CHAIN, 2900, 3,
+    private static final Offer CHAIN = new Offer(Plan.CHAIN, 8900, 11900, 3,
             new Limits(UNLIMITED, UNLIMITED, UNLIMITED), features(Plan.CHAIN));
 
     private PlanCatalog() {

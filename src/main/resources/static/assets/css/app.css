@@ -1940,6 +1940,9 @@ button.rota-shift { cursor: pointer; }
 .billing-price { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .billing-price b { font-size: 30px; letter-spacing: -.02em; }
 .billing-price span { color: var(--text-2); font-size: 13px; }
+.billing-deal { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: -4px; }
+.billing-deal s { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+.billing-badge { background: var(--brand-soft); color: var(--brand-strong); }
 .billing-features { list-style: none; padding: 0; margin: 4px 0 8px; display: grid; gap: 6px; font-size: 13px; }
 .billing-features li { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
 .billing-features li .icon { flex: none; color: var(--brand); margin-top: 1px; }
