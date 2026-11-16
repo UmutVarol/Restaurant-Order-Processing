@@ -22,7 +22,8 @@ Ayrıntı: `docs/ROADMAP.md`, `docs/SOFRA_CLOUD_PLAN.md`, `docs/CLOUD.md`, `docs
 
 ## Claude'un yapacakları (sırayla önerilen)
 
-1. [ ] e-Arşiv / ÖKC ve paket servis platformları için işletme başına ayar ekranı (bulutta şu an kapalı).
+1. [x] e-Arşiv ve paket servis platformları için işletme başına ayar ekranı (16 Kasım 2026, Ayarlar › Bağlantılar; V32).
+   ÖKC yerel cihaz olduğundan bulutta yok; isteyen kendi sunucusunda çalıştırır.
 2. [x] Yasal belge listesini şubeye göre süzmek (16 Kasım 2026: belge adisyonunun şubesine ait; V31).
 3. [ ] Yeni sipariş push bildirimi (App Store başvurusundan önce gerekli).
 4. [ ] Zincir planı vaatleri: merkezi menü, şube bazında fiyat, şubeler arası rapor (ya yap ya plan metninden çıkar).

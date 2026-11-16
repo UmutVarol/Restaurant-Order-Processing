@@ -150,6 +150,7 @@ class SecurityConfig {
                         .requestMatchers("/api/v1/staff", "/api/v1/staff/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/billing", "/api/v1/billing/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/payment-settings").hasRole(Role.ADMIN.name())
+                        .requestMatchers("/api/v1/integrations", "/api/v1/integrations/**").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST, "/api/v1/branches").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/branches/*").hasRole(Role.ADMIN.name())
                         // everyone clocks themselves in and reads the rota; managers see and fix everyone's time
@@ -180,7 +181,7 @@ class SecurityConfig {
                         .requestMatchers("/api/v1/analytics/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/stock/**", "/api/v1/recipes/**").hasRole(Role.ADMIN.name())
                         // platforms sign their orders; the signature, not a session, is the permission
-                        .requestMatchers(HttpMethod.POST, "/api/v1/channels/*/webhook").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/channels/*/webhook", "/api/v1/channels/*/webhook/*").permitAll()
                         .requestMatchers("/api/v1/channels", "/api/v1/channels/**").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/fiscal/z-report").hasRole(Role.ADMIN.name())
                         .requestMatchers("/api/v1/fiscal/**").hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())

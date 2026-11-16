@@ -33,13 +33,15 @@ export default {
     // D1: the colour and logo guests see belong to the whole business
     const ownsBrand = manager && user.branchId == null;
     const brandCard = h('div', { class: 'card settings-card brand-card', 'data-testid': 'brand-card' });
+    // the business's own e-Arşiv integrator and delivery platforms, for whoever manages all branches
+    const integrationsCard = h('div', { class: 'card settings-card integrations-card', 'data-testid': 'integrations-card' });
     let totp = null;
     let service = null;
     let devices = null;
     let tables = null;
     let printers = null;
     let stations = null;
-    mount(container, h('div', { class: 'settings-grid' }, manager ? serviceCard : null, ownsBrand ? brandCard : null, ownsPayments ? paymentsCard : null, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
+    mount(container, h('div', { class: 'settings-grid' }, manager ? serviceCard : null, ownsBrand ? brandCard : null, ownsBrand ? integrationsCard : null, ownsPayments ? paymentsCard : null, manager ? totpCard : null, pinCard, deviceCard, manager ? devicesCard : null, manager ? qrCard : null,
       manager ? stationsCard : null, manager ? printersCard : null));
 
     const head = (iconName, title, sub) => h('div', { class: 'card-head' },
@@ -95,6 +97,82 @@ export default {
             problem,
             h('div', { class: 'setup-more' }, save, remove),
           ] : h('p', { class: 'form-error-text' }, t('error.ENCRYPTION_KEY_MISSING'))));
+    }
+
+    // ------------------------------------------------------------------ connections: e-Arşiv and platforms (owner)
+    let integrations = null;
+    const PLATFORM_NAMES = { YEMEKSEPETI: 'Yemeksepeti', GETIR: 'Getir Yemek', TRENDYOL: 'Trendyol Go' };
+    async function loadIntegrations() {
+      if (!ownsBrand) return;
+      try { integrations = await api.integrations(); } catch { integrationsCard.hidden = true; return; }
+      renderIntegrations();
+    }
+
+    function renderIntegrations() {
+      const top = head('switchUser', t('integrations.title'), t('integrations.sub'));
+      if (!integrations) {
+        mount(integrationsCard, top, h('div', { class: 'card-body' }, h('div', { class: 'skeleton', style: { height: '120px' } })));
+        return;
+      }
+      mount(integrationsCard, top, h('div', { class: 'card-body integrations' },
+        integrations.encryptionReady ? null : h('p', { class: 'form-error-text' }, t('error.ENCRYPTION_KEY_MISSING')),
+        integrations.entries.map(connection),
+        h('p', { class: 'faint integrations-okc' }, icon('info', 'sm'), t(integrations.cloud ? 'integrations.okcCloud' : 'integrations.okcLocal'))));
+    }
+
+    function connection(entry) {
+      const kind = entry.kind;
+      const platform = kind !== 'E_ARSIV';
+      const name = platform ? PLATFORM_NAMES[kind] : t('integrations.eArsiv');
+      const status = !entry.inPlan ? t('integrations.notInPlan') : entry.configured
+        ? t('integrations.connected', { hint: entry.keyHint || '••••' }) : t('integrations.notConnected');
+      const field = (id, label, input, hint) => h('div', { class: 'field' }, h('label', { for: id }, label), input,
+        hint ? h('small', { class: 'faint' }, hint) : null);
+      const keep = entry.configured ? t('integrations.keep') : null;
+      const url = h('input', { class: 'input', id: `int-${kind}-url`, type: 'url', inputmode: 'url', autocomplete: 'off', spellcheck: false,
+        value: entry.baseUrl || '', placeholder: 'https://', maxlength: 255, dir: 'ltr' });
+      const key = h('input', { class: 'input', id: `int-${kind}-key`, type: 'password', autocomplete: 'new-password', maxlength: 300, dir: 'ltr' });
+      const secret = h('input', { class: 'input', id: `int-${kind}-secret`, type: 'password', autocomplete: 'new-password', maxlength: 300, dir: 'ltr' });
+      const problem = h('div', { class: 'form-error', hidden: true, role: 'alert' });
+      const fail = (error) => { problem.replaceChildren(icon('alert', 'sm'), errorMessage(error)); problem.hidden = false; };
+      const save = h('button', { class: 'btn primary', 'data-testid': `int-${kind}-save`, disabled: !entry.inPlan || !integrations.encryptionReady, onclick: async () => {
+        save.disabled = true;
+        problem.hidden = true;
+        try {
+          const body = { baseUrl: url.value.trim() || null, apiKey: key.value.trim() || null, ...(platform ? { webhookSecret: secret.value.trim() || null } : {}) };
+          const saved = await withRecentSignIn(() => api.saveIntegration(kind, body));
+          if (saved) { integrations = saved; toast({ title: t('integrations.saved', { name }) }); renderIntegrations(); }
+        } catch (error) { fail(error); }
+        save.disabled = false;
+      } }, icon('check', 'sm'), t('common.save'));
+      const remove = entry.configured ? h('button', { class: 'btn ghost danger-text', 'data-testid': `int-${kind}-remove`, onclick: async () => {
+        if (!(await confirmDialog({ title: t('integrations.removeTitle', { name }), text: t('integrations.removeText'), confirmLabel: t('integrations.remove'), danger: true }))) return;
+        try {
+          const saved = await withRecentSignIn(() => api.removeIntegration(kind));
+          if (saved) { integrations = saved; renderIntegrations(); }
+        } catch (error) { fail(error); }
+      } }, icon('trash', 'sm'), t('integrations.remove')) : null;
+      const webhook = platform && entry.webhookPath ? `${location.origin}${entry.webhookPath}` : null;
+      return h('details', { class: 'integration', 'data-testid': `integration-${kind}`, open: false },
+        h('summary', null,
+          h('span', { class: 'integration-name' }, name),
+          h('span', { class: ['pill', entry.configured ? 'ok' : 'plain'], 'data-testid': `int-${kind}-status` }, status)),
+        h('div', { class: 'integration-body' },
+          platform ? [
+            webhook ? h('div', { class: 'field' }, h('label', null, t('integrations.webhookUrl')),
+              h('div', { class: 'copy-row' }, h('code', { dir: 'ltr', 'data-testid': `int-${kind}-webhook` }, webhook),
+                h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+                  try { await navigator.clipboard.writeText(webhook); toast({ title: t('bridge.copied') }); } catch { /* the address stays selectable */ }
+                } }, t('integrations.copy')))) : null,
+            field(`int-${kind}-secret`, t('integrations.webhookSecret'), secret, keep),
+            field(`int-${kind}-url`, t('integrations.apiUrl'), url, t('integrations.apiHint')),
+            field(`int-${kind}-key`, t('integrations.apiKey'), key, keep),
+          ] : [
+            field(`int-${kind}-url`, t('integrations.integratorUrl'), url, t('integrations.urlHint')),
+            field(`int-${kind}-key`, t('integrations.apiKey'), key, keep),
+          ],
+          problem,
+          h('div', { class: 'setup-more' }, save, remove)));
     }
 
     // ------------------------------------------------------------------ service mode (managers)
@@ -867,6 +945,8 @@ export default {
     loadService();
     renderBrand();
     loadBrand();
+    renderIntegrations();
+    loadIntegrations();
     if (ownsPayments) {
       renderAccount();
       loadAccount();

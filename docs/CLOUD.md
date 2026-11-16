@@ -48,8 +48,16 @@ PRICE_CHAIN_MONTHLY=pri_...    PRICE_CHAIN_YEARLY=pri_...
   `TOTP_ENCRYPTION_KEY` kullanılır (`openssl rand -base64 32`); bulutta mutlaka ayarlanmalı ve yedeklenmeli, kaybolursa
   kayıtlı anahtarlar çözülemez ve işletmelerin yeniden girmesi gerekir. Sunucu genelinde iyzico hesabı yoktur
   (`PAYMENT_PROVIDER=NONE`).
-- **e-Arşiv ve paket servis platformları** bugün hâlâ sunucu genelinde ayardır; işletme başına ekranları gelene kadar
-  bulutta kapalıdır.
+- **e-Arşiv ve paket servis platformları:** her işletme kendi e-Arşiv entegratörünü ve Yemeksepeti / Getir Yemek /
+  Trendyol Go bağlantısını **Ayarlar › Bağlantılar** kartından kurar (yalnızca tüm şubelerin yöneticisi, şifre
+  onayıyla). Anahtarlar ve webhook gizli anahtarları ödeme anahtarları gibi AES-GCM ile şifrelenip saklanır, bir daha
+  gösterilmez. Platforma verilecek adres işletmenin kodunu taşır (`/api/v1/channels/{platform}/webhook/{kod}`) ve
+  yalnızca o işletmenin kendi gizli anahtarıyla imzalı siparişi kabul eder. İşletmenin girdiği adresler yalnızca
+  https ve genel internet adresi olabilir; özel ağ, yerel ve bulut meta veri adresleri reddedilir (kaydederken ve
+  bağlanmadan önce yeniden). Bulutta sunucu genelindeki e-Arşiv ve platform ayarları **hiç kullanılmaz**; böylece bir
+  işletmenin belgesi başkasının hesabından kesilemez.
+- **ÖKC (yazar kasa)** restorandaki cihazdır ve yalnızca yerel ağdan bağlanır; bulut sunucusu ona ulaşamaz. ÖKC fişi
+  isteyen işletme Sofra'yı kendi sunucusunda çalıştırır (`FISCAL_OKC_BRIDGE_URL`).
 - **Yazıcılar:** buluttaki sunucu restoranın yerel ağındaki yazıcıya ulaşamaz ve güvenlik için hiçbir adrese kendisi
   bağlanmaz (işletmenin yazdığı bir adres sunucunun iç ağını gösterebilirdi). Fişleri restoranda çalışan **yazıcı
   köprüsü** alıp yazdırır: [PRINT_BRIDGE.md](PRINT_BRIDGE.md).

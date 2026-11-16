@@ -34,4 +34,15 @@ class ChannelWebhookController {
                                  HttpServletRequest request) {
         return channels.receive(Channel.fromPath(channel), body, timestamp, signature, request.getRemoteAddr());
     }
+
+    @Operation(summary = "Receive a platform order for one business", description = """
+            The address a business gives the platform on Sofra Cloud (Settings › Connections). Signed like the one \
+            above, with the business's own webhook secret only.""")
+    @PostMapping("/api/v1/channels/{channel}/webhook/{business}")
+    ChannelOrderResponse receiveFor(@PathVariable String channel, @PathVariable String business, @RequestBody byte[] body,
+                                    @RequestHeader(name = WebhookSignature.TIMESTAMP_HEADER, required = false) String timestamp,
+                                    @RequestHeader(name = WebhookSignature.SIGNATURE_HEADER, required = false) String signature,
+                                    HttpServletRequest request) {
+        return channels.receive(Channel.fromPath(channel), business, body, timestamp, signature, request.getRemoteAddr());
+    }
 }

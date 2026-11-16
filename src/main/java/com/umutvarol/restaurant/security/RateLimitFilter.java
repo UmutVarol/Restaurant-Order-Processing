@@ -91,7 +91,7 @@ class RateLimitFilter extends OncePerRequestFilter {
     /** Delivery platforms send bursts at lunchtime, from a few addresses: they get their own budget. */
     private static boolean isChannelWebhook(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return uri.startsWith("/api/v1/channels/") && uri.endsWith("/webhook");
+        return uri.matches("/api/v1/channels/[^/]+/webhook(/[^/]+)?");
     }
 
     private static boolean isLogin(HttpServletRequest request) {

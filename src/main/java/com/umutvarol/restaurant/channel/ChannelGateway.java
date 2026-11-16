@@ -1,5 +1,15 @@
 package com.umutvarol.restaurant.channel;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.umutvarol.restaurant.business.BusinessContext;
+import com.umutvarol.restaurant.common.error.DomainException;
+import com.umutvarol.restaurant.integration.IntegrationKind;
+import com.umutvarol.restaurant.integration.IntegrationService;
+import com.umutvarol.restaurant.integration.OutboundUrls;
+import java.net.URI;
+import java.util.Optional;
+
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
@@ -15,8 +25,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * Knows how each platform is connected and routes updates to the right adapter. A platform with a webhook secret is
- * connected; without one it is a simulation in demo mode and switched off otherwise.
+ * Knows how each platform is connected and routes updates to the right adapter. A business that connected a
+ * platform itself (Settings › Connections) uses its own secret and API; otherwise the server's settings apply: a
+ * platform with a webhook secret is connected, without one it is a simulation in demo mode and switched off
+ * otherwise. On Sofra Cloud the server's own platform settings are never shared between businesses.
  */
 @Component
 class ChannelGateway {
@@ -27,13 +39,18 @@ class ChannelGateway {
     private final Map<Channel, ChannelMode> modes = new EnumMap<>(Channel.class);
     private final Map<Channel, ChannelAdapter> adapters = new EnumMap<>(Channel.class);
     private final SimulatedChannelAdapter simulated;
+    private final IntegrationService integrations;
+    /** Each business's own API adapter, built once per saved version of its settings. */
+    private final Cache<String, ChannelAdapter> own = Caffeine.newBuilder().maximumSize(10_000).build();
 
-    ChannelGateway(ChannelProperties properties, Clock clock, @Value("${restaurant.demo.enabled:true}") boolean demoMode) {
+    ChannelGateway(ChannelProperties properties, Clock clock, @Value("${restaurant.demo.enabled:true}") boolean demoMode,
+                   IntegrationService integrations) {
         this.properties = properties;
         this.simulated = new SimulatedChannelAdapter(clock);
+        this.integrations = integrations;
         for (Channel channel : Channel.values()) {
             ChannelProperties.Platform platform = properties.platform(channel);
-            ChannelMode mode = platform.hasSecret() ? ChannelMode.CONNECTED
+            ChannelMode mode = platform.hasSecret() && !integrations.cloud() ? ChannelMode.CONNECTED
                     : demoMode || properties.simulateUnconfigured() ? ChannelMode.SIMULATED : ChannelMode.OFF;
             modes.put(channel, mode);
             if (mode == ChannelMode.CONNECTED && platform.hasApi()) {
@@ -50,13 +67,26 @@ class ChannelGateway {
         }
     }
 
+    private Optional<IntegrationService.Connection> ownConnection(Channel channel) {
+        return integrations.connection(IntegrationKind.valueOf(channel.name()));
+    }
+
     ChannelMode mode(Channel channel) {
-        return modes.get(channel);
+        return ownConnection(channel).isPresent() ? ChannelMode.CONNECTED : modes.get(channel);
     }
 
     /** The secret webhooks for this platform are signed with, or null when it takes none. */
     @Nullable String webhookSecret(Channel channel) {
-        return mode(channel) == ChannelMode.CONNECTED ? properties.platform(channel).webhookSecret() : null;
+        Optional<IntegrationService.Connection> mine = ownConnection(channel);
+        if (mine.isPresent()) {
+            return mine.get().webhookSecret();
+        }
+        return modes.get(channel) == ChannelMode.CONNECTED ? properties.platform(channel).webhookSecret() : null;
+    }
+
+    /** Only the business's own secret: a webhook addressed to one business never falls back to the server's. */
+    @Nullable String ownWebhookSecret(Channel channel) {
+        return ownConnection(channel).map(IntegrationService.Connection::webhookSecret).orElse(null);
     }
 
     Duration webhookTolerance() {
@@ -64,7 +94,28 @@ class ChannelGateway {
     }
 
     @Nullable ChannelAdapter adapter(Channel channel) {
-        return adapters.get(channel);
+        Optional<IntegrationService.Connection> mine = ownConnection(channel);
+        if (mine.isEmpty()) {
+            return adapters.get(channel);
+        }
+        IntegrationService.Connection connection = mine.get();
+        if (!connection.hasApi()) {
+            return simulated; // webhook only: updates are recorded, not sent
+        }
+        String key = BusinessContext.current() + ":" + channel + ":" + connection.version();
+        ChannelAdapter cached = own.getIfPresent(key);
+        if (cached == null) {
+            try {
+                // checked again now: the name the business gave may point somewhere else than when it was saved
+                URI base = OutboundUrls.requirePublicHttps(connection.baseUrl().toString());
+                cached = new HttpChannelAdapter(base, connection.apiKey(), RestClient.builder().requestFactory(requestFactory()));
+            } catch (DomainException refused) {
+                log.warn("Delivery channel {}: the business's API address is refused ({})", channel, refused.getCode());
+                return simulated;
+            }
+            own.put(key, cached);
+        }
+        return cached;
     }
 
     List<SimulatedChannelAdapter.Sent> recentUpdates(Channel channel) {

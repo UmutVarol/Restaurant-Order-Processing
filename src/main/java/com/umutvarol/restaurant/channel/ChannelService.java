@@ -78,10 +78,13 @@ public class ChannelService {
     private final Clock clock;
     private final TransactionTemplate tx;
     private final TransactionTemplate newTx;
+    private final com.umutvarol.restaurant.business.BusinessRepository businesses;
 
     ChannelService(ChannelOrderRepository orders, ChannelItemMappingRepository mappings, ChannelGateway gateway,
                    OrderService orderService, PaymentService payments, MenuService menu, Validator validator,
-                   ChannelAuditLog audit, Clock clock, PlatformTransactionManager transactions) {
+                   ChannelAuditLog audit, Clock clock, PlatformTransactionManager transactions,
+                   com.umutvarol.restaurant.business.BusinessRepository businesses) {
+        this.businesses = businesses;
         this.orders = orders;
         this.mappings = mappings;
         this.gateway = gateway;
@@ -105,7 +108,16 @@ public class ChannelService {
      */
     public ChannelOrderResponse receive(Channel channel, byte[] body, @Nullable String timestamp,
                                         @Nullable String signature, String client) {
-        String secret = gateway.webhookSecret(channel);
+        return receive(channel, null, body, timestamp, signature, client);
+    }
+
+    /**
+     * A delivery addressed to one business ({@code /webhook/{business code}}): only that business's own webhook
+     * secret is accepted, never the server's.
+     */
+    public ChannelOrderResponse receive(Channel channel, @Nullable String businessCode, byte[] body, @Nullable String timestamp,
+                                        @Nullable String signature, String client) {
+        String secret = businessCode == null ? gateway.webhookSecret(channel) : addressedTo(businessCode) ? gateway.ownWebhookSecret(channel) : null;
         if (secret == null) {
             audit.refused(channel, "NOT_CONNECTED", client);
             throw new ResourceNotFoundException("channel", channel.name().toLowerCase(Locale.ROOT));
@@ -117,6 +129,13 @@ public class ChannelService {
             throw ex;
         }
         return ingest(channel, parse(body));
+    }
+
+    /** Whether the business this request works for is the one the address names. */
+    private boolean addressedTo(String businessCode) {
+        Long current = com.umutvarol.restaurant.business.BusinessContext.current();
+        return current != null && com.umutvarol.restaurant.business.BusinessContext.acrossAll(() -> businesses.findBySlug(businessCode))
+                .map(business -> business.getId().equals(current)).orElse(false);
     }
 
     /** Keeps the platform order once, then tries to place it. A second delivery of the same order changes nothing. */

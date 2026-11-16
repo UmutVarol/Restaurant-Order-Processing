@@ -827,6 +827,16 @@
     const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
     return new Response(new Blob([bytes], { type }), { status: 200, headers: { 'Content-Type': type } });
   }
+  const integrationsView = () => ({
+    cloud: true, encryptionReady: true,
+    entries: ['E_ARSIV', 'YEMEKSEPETI', 'GETIR', 'TRENDYOL'].map((kind) => {
+      const own = state.integrations?.[kind];
+      return { kind, inPlan: PLAN_OFFERS[billing().plan].features.includes(kind === 'E_ARSIV' ? 'FISCAL' : 'DELIVERY_PLATFORMS'),
+        configured: Boolean(own), baseUrl: own?.baseUrl || null, keyHint: own?.hint || null, webhookSecretSet: Boolean(own?.hasSecret),
+        webhookPath: kind === 'E_ARSIV' ? null : `/api/v1/channels/${kind.toLowerCase()}/webhook/sofra-bistro`,
+        updatedAt: own ? iso(own.at) : null, updatedBy: own?.by || null };
+    }),
+  });
   const serviceSettings = () => (state.serviceSettings ??= { mode: 'MIXED', autoAcceptLimit: 1500, firstCartNeedsStaff: true, updatedAt: null, updatedBy: null });
   const BURST_LIMIT = 6;
   const BURST_WINDOW_MS = 10 * 60_000;
@@ -2548,6 +2558,35 @@
     ['GET', /^branding\/logo$/, 'staff', () => logoResponse()],
     ['GET', /^public\/table\/([A-Za-z0-9_-]{20,100})\/logo$/, 'public', ({ params }) => { tableForToken(params[0]); return logoResponse(); }],
     ['GET', /^public\/pay\/([A-Za-z0-9_-]+)\/logo$/, 'public', ({ params }) => { findLink(params[0]); return logoResponse(); }],
+    // Settings › Connections: the business's own e-Arşiv integrator and delivery platforms (keys are never returned)
+    ['GET', /^integrations$/, 'manager', () => integrationsView()],
+    ['PUT', /^integrations\/(E_ARSIV|YEMEKSEPETI|GETIR|TRENDYOL)$/, 'manager', ({ params, user }, body) => {
+      const kind = params[0];
+      const all = state.integrations || (state.integrations = {});
+      const own = all[kind] || {};
+      const url = (body.baseUrl || '').trim();
+      if (url && (!/^https:\/\/[^/@:?#]+(\/[^?#]*)?$/i.test(url) || /^https:\/\/(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[)/i.test(url))) {
+        throw new Problem(422, 'INTEGRATION_URL_INVALID', 'Use the provider\'s https address; addresses on a private network are not allowed');
+      }
+      const key = (body.apiKey || '').trim();
+      const secret = (body.webhookSecret || '').trim();
+      for (const value of [key, secret]) {
+        if (value && (value.length < 8 || /\s/.test(value))) throw new Problem(422, 'INTEGRATION_KEY_INVALID', 'Paste the key exactly as the provider shows it');
+      }
+      const hasKey = Boolean(key || own.hasKey);
+      const hasSecret = Boolean(secret || own.hasSecret);
+      if (kind === 'E_ARSIV' && (!url || !hasKey)) throw new Problem(422, 'INTEGRATION_INCOMPLETE', 'The integrator\'s address and API key are both needed');
+      if (kind !== 'E_ARSIV' && !hasSecret) throw new Problem(422, 'INTEGRATION_INCOMPLETE', 'The platform\'s webhook secret is needed');
+      if (kind !== 'E_ARSIV' && Boolean(url) !== hasKey) throw new Problem(422, 'INTEGRATION_INCOMPLETE', 'Give both the API address and its token, or neither');
+      all[kind] = { baseUrl: url || null, hasKey, hasSecret, hint: (key || secret) ? (key || secret).slice(-4) : own.hint, at: Date.now(), by: user.username };
+      save();
+      return integrationsView();
+    }],
+    ['DELETE', /^integrations\/(E_ARSIV|YEMEKSEPETI|GETIR|TRENDYOL)$/, 'manager', ({ params }) => {
+      if (state.integrations) delete state.integrations[params[0]];
+      save();
+      return integrationsView();
+    }],
     ['GET', /^service-settings$/, 'staff', () => ({ ...serviceSettings() })],
     ['PUT', /^service-settings$/, 'manager', ({ user }, body) => {
       const limit = body.autoAcceptLimit == null || body.autoAcceptLimit === '' ? null : Number(body.autoAcceptLimit);

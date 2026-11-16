@@ -2190,3 +2190,18 @@ button.rota-shift { cursor: pointer; }
   .day-card-figs { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .day-card-fig { flex-direction: row; justify-content: space-between; align-items: baseline; }
 }
+
+/* Settings › Connections: one folding row per provider, its state at a glance */
+.integrations { gap: 8px; }
+.integration { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.integration > summary { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; list-style: none; min-height: 48px; }
+.integration > summary::-webkit-details-marker { display: none; }
+.integration > summary::after { content: ""; margin-inline-start: 4px; width: 8px; height: 8px; border-inline-end: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg); transition: transform var(--dur-fast) var(--ease); flex: none; }
+.integration[open] > summary::after { transform: rotate(225deg); }
+.integration-name { font-weight: 650; flex: 1; min-width: 0; }
+.integration .pill.ok { background: var(--green-soft); color: var(--green); }
+.integration-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 14px 14px; }
+.copy-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.copy-row code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 8px 10px; border-radius: 8px; background: var(--surface-3); font-size: 12.5px; user-select: all; }
+.integrations-okc { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; }
