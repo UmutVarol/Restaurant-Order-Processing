@@ -84,6 +84,48 @@ beacon (ucuz, iBeacon iOS'ta çalışır), son okutulan QR.
 - **Gizlilik algısı:** konum yalnızca açıkken, saklanmadan; açık ve kısa izin metinleri.
 - **Maliyet:** SMS kodları, mağaza hesapları, bildirim altyapısı.
 
+## Ortak platform: misafir ve restoran birlikte (22 Kasım 2026)
+
+Kullanıcının yönü: Sofra, müşterinin de restoranın da birlikte kullandığı bir platforma evrilmeli.
+
+- **Doğrulanmış ziyaret puanı:** yalnızca check-in yapıp ödeme yapan misafir puan verir. Restoran panelde görür ve
+  herkese açık yanıt verir. Hakaret ve kişisel veri içeren yorumlar bildirilebilir ve moderasyondan geçer.
+- **Puanlama bildirimi:** ödemeden 30–60 dakika sonra tek bildirim, fişin altında yıldızlar, sonraki açılışta ziyaret
+  kartı (aday sayfası, satır P).
+- **Kurallar:** seçici isteme yok (memnunu Google'a, memnun olmayanı özel geri bildirime yönlendirmek Google'ın
+  kurallarına aykırı); uygulamanın mağaza puanı sistem penceresiyle, iyi bir anda (ör. 3. başarılı ziyaret) ve
+  önceden "sevdin mi?" sorusu sormadan istenir; puan karşılığı ödül verilen puana göre değişmez.
+- **Restoran paneli:** içerideki Sofra misafirleri, haftalık puan, doğrulanmış ziyaret sayısı, geri gelen misafir
+  oranı, yorumlar ve yanıt (satır R).
+
+Tasarım adayları (3. tur): https://claude.ai/artifact/449CATSWPdLNyrXg54WddH (G1–G3 "burada mısın?", H1–H3 restoran
+sayfası ve masaya bağlanma, P1–P3 puanlama, R1 restoran paneli). Kullanıcı seçecek.
+
+## Eksik olanlar (bu fikir için)
+
+**Arka uç**
+- Platform düzeyinde misafir hesabı (işletmelerden bağımsız, satır güvenliği dışında), giriş (SMS kodu ve/veya
+  Apple/Google), hesabı silme, KVKK açık rıza kayıtları.
+- Şube konumu, adres, çalışma saatleri, fotoğraf ve "rehberde görün" izni; yakındakileri bulma servisi.
+- Check-in kaydı ve masa oturumuna bağlanma; NFC etiketleri için masa bağlantısı (QR ile aynı adres).
+- Puan ve yorum modeli: doğrulanmış ziyaret, restoran yanıtı, bildir/moderasyon, kötüye kullanım sınırları.
+- Misafire bildirim (FCM altyapısı var; misafir cihazları ve zamanlanmış "nasıldı?" bildirimi yok).
+- Sofra Puan (işletmeler arası sadakat), kayıtlı kart (iyzico kart saklama), sipariş geçmişi ve fatura cüzdanı.
+
+**Uygulama**
+- Ayrı misafir uygulaması (Capacitor; konum, NFC ve bildirim eklentileri), universal/app links
+  (apple-app-site-association, assetlinks.json), iOS App Clip; personel uygulaması "Sofra İşletme" olarak ayrılır.
+- Keşfet sayfası ve harita (G1 seçilirse harita sağlayıcısı).
+
+**Restoran tarafı**
+- Rehber profili düzenleme (konum iğnesi, fotoğraf, saatler), puanlar ve yanıt ekranı, panelde R1 kartı,
+  garson ekranında "masadakiler".
+
+**Hukuk ve işletme**
+- Misafir için gizlilik politikası ve kullanım koşulları, konum izni metinleri, mağaza gizlilik beyanları.
+- SMS sağlayıcısı (ücretli), harita sağlayıcısı, NFC etiketleri.
+- Misafirin gördüğü fiyat KDV dahil olmalı (bekleyen mevzuat maddesi); misafir uygulaması bunu daha görünür kılar.
+
 ## Karar bekleyenler
 
 - Misafir uygulamasının adı ve işletme uygulamasından ayrı olup olmayacağı.

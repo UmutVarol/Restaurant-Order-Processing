@@ -47,7 +47,9 @@ bir maddeye geçince oradan devam edilir, işaretler orada güncellenir).
 ## Bekleyen fikirler (22 Kasım 2026, kullanıcı "bir dursun, sonra düzeltip geliştireceğiz" dedi)
 
 - **Misafir uygulaması fikri** (kullanıcının): restorana girip uygulamayı açınca en yakın işletme çıkar, onaylanır,
-  menü/sipariş başlar. Plan ve fizibilite: `docs/GUEST_APP_PLAN.md`; kararlar bekleniyor.
+  menü/sipariş başlar. Plan, fizibilite ve eksikler: `docs/GUEST_APP_PLAN.md`; kararlar bekleniyor. Yön: Sofra misafir ve
+  restoranın **ortak** platformu olacak; doğrulanmış ziyaret puanı ve "nasıldı?" bildirimi istendi.
+  3. tur aday sayfası (G1–G3, H1–H3, P1–P3, R1): https://claude.ai/artifact/449CATSWPdLNyrXg54WddH; kullanıcı seçecek.
 - **Mevzuat (öncelikli):** Sofra KDV'yi menü fiyatının üstüne tek oranla ekliyor (`PricingCalculator`, %10); KDV dahil
   fiyat ve ürün bazında KDV oranı gerekir (mali müşavirle teyit edilecek). Kapı önü basılı fiyat listesi + "TL" +
   son fiyat değişiklik tarihi (2026 cezası ihlal başına 3.973 TL). Servis/kuver/masa ücreti 30.01.2026'dan beri
@@ -55,7 +57,7 @@ bir maddeye geçince oradan devam edilir, işaretler orada güncellenir).
   Bakanlığa elektronik fiyat listesi bildirimi.
 - **Gerçek sorunlar:** komisyonsuz kendi online sipariş kanalı (platformlar %10–38), rezervasyonda kapora +
   SMS/WhatsApp hatırlatma (gelmeme %10–30), enflasyon araçları (toplu zam, marj uyarısı), personel maliyeti yüzdesi
-  ve vardiya önerisi, talep tahmini/hazırlık listesi/israf, sadakat + Google yorum yönlendirme, yeni nesil ÖKC POS
+  ve vardiya önerisi, talep tahmini/hazırlık listesi/israf, sadakat ve puanlama (seçici Google yorumu isteme Google kurallarına aykırı, yapılmayacak), yeni nesil ÖKC POS
   entegrasyonu, muhasebe dışa aktarımı (Logo/Mikro/Paraşüt), tedarikçiye otomatik sipariş.
 - Önerilen sıra: mevzuat → kendi online sipariş → kapora/hatırlatma → enflasyon araçları → sadakat → tahmin.
 - Küçük düzeltme: `ChainToolsIntegrationTest` yorumu %10'u "service charge" diyor, aslında KDV.
