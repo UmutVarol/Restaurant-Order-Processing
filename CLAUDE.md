@@ -44,6 +44,22 @@ bir maddeye geçince oradan devam edilir, işaretler orada güncellenir).
 6. [ ] Paddle'ı sandbox'ta kullanıcıyla birlikte doğrulamak (bu ortamdan Paddle'a erişim yok).
 7. [ ] İsteğe bağlı: iyzico aboneliği (TL), sadakat, saatlik fiyat, müşteri ekranı.
 
+## Bekleyen fikirler (22 Kasım 2026, kullanıcı "bir dursun, sonra düzeltip geliştireceğiz" dedi)
+
+- **Misafir uygulaması fikri** (kullanıcının): restorana girip uygulamayı açınca en yakın işletme çıkar, onaylanır,
+  menü/sipariş başlar. Plan ve fizibilite: `docs/GUEST_APP_PLAN.md`; kararlar bekleniyor.
+- **Mevzuat (öncelikli):** Sofra KDV'yi menü fiyatının üstüne tek oranla ekliyor (`PricingCalculator`, %10); KDV dahil
+  fiyat ve ürün bazında KDV oranı gerekir (mali müşavirle teyit edilecek). Kapı önü basılı fiyat listesi + "TL" +
+  son fiyat değişiklik tarihi (2026 cezası ihlal başına 3.973 TL). Servis/kuver/masa ücreti 30.01.2026'dan beri
+  yasak (Sofra'da yok; menüde bu adla ürün girilince uyarı eklenebilir). e-Adisyon (GİB'in bildirdiği işletmeler).
+  Bakanlığa elektronik fiyat listesi bildirimi.
+- **Gerçek sorunlar:** komisyonsuz kendi online sipariş kanalı (platformlar %10–38), rezervasyonda kapora +
+  SMS/WhatsApp hatırlatma (gelmeme %10–30), enflasyon araçları (toplu zam, marj uyarısı), personel maliyeti yüzdesi
+  ve vardiya önerisi, talep tahmini/hazırlık listesi/israf, sadakat + Google yorum yönlendirme, yeni nesil ÖKC POS
+  entegrasyonu, muhasebe dışa aktarımı (Logo/Mikro/Paraşüt), tedarikçiye otomatik sipariş.
+- Önerilen sıra: mevzuat → kendi online sipariş → kapora/hatırlatma → enflasyon araçları → sadakat → tahmin.
+- Küçük düzeltme: `ChainToolsIntegrationTest` yorumu %10'u "service charge" diyor, aslında KDV.
+
 ## Tasarım: kullanıcının "UI UX Tasarım Stüdyosu" (ikinci beyin)
 
 Kaynak: kullanıcının notu "UI UX Tasarım Stüdyosu" (14 Kasım 2026). Bağlantılı notlar (43 kalıp, 24 tema × 12 hareket ×
