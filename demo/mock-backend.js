@@ -2074,6 +2074,18 @@
         reviews: ratings.filter((r) => r.comment || r.reply).slice(0, 5).map((r) => ({ stars: r.stars, tags: r.tags, comment: r.comment, at: r.at, reply: r.reply })),
         menu: state.menu.filter((m) => !m.archived && m.available && !m.stockOut).map(menuView) };
     }],
+    // the demo only: a sample table for a visitor who cannot scan one (table 7, its QR issued if it has none)
+    ['GET', /^public\/demo\/table$/, 'public', () => {
+      const table = TABLES.find((x) => x.code === '7') || TABLES[0];
+      let token = Object.entries(qr().tokens).find(([, id]) => id === table.id)?.[0];
+      if (!token) {
+        token = newToken() + newToken();
+        qr().tokens[token] = table.id;
+        qr().issued[table.id] = Date.now();
+        save();
+      }
+      return { token };
+    }],
     ['POST', /^public\/venue\/([a-z0-9-]+)\/([a-z0-9-]+)\/checkin$/, 'public', ({ params }, body) => {
       (state.checkins ??= []).push({ device: body.device || 'anon', at: iso(Date.now()), branch: params[1] });
       save();

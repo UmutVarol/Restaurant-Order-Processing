@@ -124,6 +124,13 @@ export function renderVenue(root, business, branch, { navigate = (hash) => { loc
       modal.close();
       go(await scanCode());
     }));
+    // the in-browser demo has no table to scan: it seats the visitor at a sample table instead
+    if (window.SOFRA_BACKEND?.demo === true) {
+      ways.push(way('table', t('bind.demoTable'), t('bind.demoTableSub'), false, async () => {
+        modal.close();
+        try { go(`#/t/${(await api.demoTable()).token}`); } catch { /* not in the demo */ }
+      }));
+    }
     const modal = openModal({
       title: t('bind.title'),
       size: 'sm bind-sheet',

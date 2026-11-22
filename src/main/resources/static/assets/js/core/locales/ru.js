@@ -1741,4 +1741,8 @@ export default {
   "error.RATING_STARS_INVALID": "Выберите от одной до пяти звёзд.",
   "error.RATING_COMMENT_TOO_LONG": "Не более 500 символов.",
   "error.RATING_REPLY_TOO_LONG": "Не более 500 символов.",
+  "gapp.demoLocation": "Попробовать с примерным местом (демо)",
+  "gapp.staffDemo": "Перейти в панель ресторана (демо)",
+  "bind.demoTable": "Сесть за примерный стол (демо)",
+  "bind.demoTableSub": "Стол 7 · без сканирования",
 };

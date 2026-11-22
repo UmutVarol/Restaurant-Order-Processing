@@ -1730,4 +1730,8 @@ export default {
   "error.RATING_STARS_INVALID": "Choose one to five stars.",
   "error.RATING_COMMENT_TOO_LONG": "Keep the comment under 500 characters.",
   "error.RATING_REPLY_TOO_LONG": "Keep the reply under 500 characters.",
+  "gapp.demoLocation": "Try with a sample location (demo)",
+  "gapp.staffDemo": "Go to the restaurant's panel (demo)",
+  "bind.demoTable": "Sit at a sample table (demo)",
+  "bind.demoTableSub": "Table 7 · without scanning",
 };

@@ -2271,6 +2271,7 @@ button.rota-shift { cursor: pointer; }
 .sofra-ask-mark.searching svg { animation: sofraSeek 1.2s var(--ease) 1 both; }
 @keyframes sofraSeek { from { transform: rotate(-90deg) scale(.85); opacity: .6; } to { transform: none; opacity: 1; } }
 .sofra-privacy { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+.sofra-staff { font-size: 13px; text-decoration: underline; text-underline-offset: 3px; padding: 6px; }
 
 /* G2: the restaurant's own sign */
 .venue-sign { --sign: var(--brand); border-radius: var(--radius-xl); overflow: hidden; background: var(--sign); color: #fff;

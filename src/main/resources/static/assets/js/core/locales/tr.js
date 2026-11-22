@@ -1714,4 +1714,8 @@ export default {
   "error.RATING_STARS_INVALID": "Bir ile beş arasında yıldız seçin.",
   "error.RATING_COMMENT_TOO_LONG": "Yorum 500 karakteri geçmesin.",
   "error.RATING_REPLY_TOO_LONG": "Yanıt 500 karakteri geçmesin.",
+  "gapp.demoLocation": "Örnek konumla dene (demo)",
+  "gapp.staffDemo": "Restoran paneline geç (demo)",
+  "bind.demoTable": "Örnek masaya otur (demo)",
+  "bind.demoTableSub": "Masa 7 · QR okutmadan",
 };

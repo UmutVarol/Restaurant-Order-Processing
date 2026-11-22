@@ -14,6 +14,9 @@ import { canScan, scanCode } from '../core/scan.js';
 
 /** The rings of the proximity view, in metres. */
 const RINGS = [25, 75, 150];
+/** The in-browser demo only: where a visitor can pretend to stand, since the demo cannot ask for a real position. */
+const DEMO = typeof window !== 'undefined' && window.SOFRA_BACKEND?.demo === true;
+const DEMO_SPOT = { lat: 40.98388, lng: 29.02566, accuracy: 15 };
 
 export function renderSofra(root, { navigate = (hash) => { location.hash = hash; } } = {}) {
   leaveGuestBrand();
@@ -54,7 +57,9 @@ export function renderSofra(root, { navigate = (hash) => { location.hash = hash;
         h('p', { class: 'muted' }, t('gapp.askText')),
         h('button', { class: 'btn primary lg block', 'data-testid': 'locate', onclick: locate }, icon('locate', 'sm'), t('gapp.useLocation')),
         scanButton(),
-        h('small', { class: 'faint sofra-privacy' }, icon('lock', 'sm'), t('gapp.privacy'))));
+        demoButton(),
+        h('small', { class: 'faint sofra-privacy' }, icon('lock', 'sm'), t('gapp.privacy')),
+        DEMO ? h('a', { class: 'faint sofra-staff', href: '#/' }, t('gapp.staffDemo')) : null));
   }
 
   function scanButton() {
@@ -72,29 +77,40 @@ export function renderSofra(root, { navigate = (hash) => { location.hash = hash;
     show(h('section', { class: 'sofra-ask', 'aria-busy': 'true' },
       h('span', { class: 'sofra-ask-mark searching', 'aria-hidden': 'true' }, icon('locate')),
       h('h1', null, t('gapp.locating')), h('p', { class: 'muted' }, t('gapp.locatingText'))));
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      if (stopped) return;
-      position = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
-      try {
-        found = await api.nearbyVenues(position.lat, position.lng, position.accuracy);
-      } catch (error) {
-        toast({ title: errorMessage(error), kind: 'error' });
-        ask();
-        return;
-      }
-      if (stopped) return;
-      picked = 0;
-      if (!found.venues.length) none();
-      else if (found.confident) sign(found.venues[0]);
-      else nearby();
+    navigator.geolocation.getCurrentPosition((pos) => {
+      searchFrom({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
     }, (error) => (error.code === 1 ? denied() : unknown()), { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 });
+  }
+
+  /** The demo's stand-in for the phone's position (a demo cannot ask for the real one). */
+  function demoButton() {
+    if (!DEMO) return null;
+    return h('button', { class: 'btn ghost block', 'data-testid': 'demo-location', onclick: () => searchFrom(DEMO_SPOT) },
+      icon('sparkle', 'sm'), t('gapp.demoLocation'));
+  }
+
+  async function searchFrom(spot) {
+    if (stopped) return;
+    position = spot;
+    try {
+      found = await api.nearbyVenues(position.lat, position.lng, position.accuracy);
+    } catch (error) {
+      toast({ title: errorMessage(error), kind: 'error' });
+      ask();
+      return;
+    }
+    if (stopped) return;
+    picked = 0;
+    if (!found.venues.length) none();
+    else if (found.confident) sign(found.venues[0]);
+    else nearby();
   }
 
   function denied() {
     show(h('section', { class: 'sofra-ask' },
       h('span', { class: 'sofra-ask-mark', 'aria-hidden': 'true' }, icon('lock')),
       h('h1', null, t('gapp.deniedTitle')), h('p', { class: 'muted' }, t('gapp.deniedText')),
-      scanButton()));
+      scanButton(), demoButton()));
   }
 
   function unknown() {
@@ -102,7 +118,7 @@ export function renderSofra(root, { navigate = (hash) => { location.hash = hash;
       h('span', { class: 'sofra-ask-mark', 'aria-hidden': 'true' }, icon('alert')),
       h('h1', null, t('gapp.unknownTitle')), h('p', { class: 'muted' }, t('gapp.unknownText')),
       h('button', { class: 'btn primary lg block', onclick: locate }, icon('refresh', 'sm'), t('gapp.retry')),
-      scanButton()));
+      scanButton(), demoButton()));
   }
 
   function none() {

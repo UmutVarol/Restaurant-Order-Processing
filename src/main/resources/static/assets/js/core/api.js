@@ -390,6 +390,8 @@ export const api = {
   venueCheckin: (business, branch, body) => request('POST', `/public/venue/${encodeURIComponent(business)}/${encodeURIComponent(branch)}/checkin`, body, { auth: false }),
   payRating: (token) => request('GET', `/public/pay/${encodeURIComponent(token)}/rating`, undefined, { auth: false }),
   ratePay: (token, body) => request('POST', `/public/pay/${encodeURIComponent(token)}/rating`, body, { auth: false }),
+  // the in-browser demo only: a sample table to sit at
+  demoTable: () => request('GET', '/public/demo/table', undefined, { auth: false }),
   directory: () => request('GET', '/directory'),
   placeBranch: (branchId, body) => request('PUT', `/directory/${branchId}`, body),
   ratings: (limit = 30) => request('GET', `/ratings${query({ limit })}`),

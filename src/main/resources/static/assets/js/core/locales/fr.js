@@ -1717,4 +1717,8 @@ export default {
   "error.RATING_STARS_INVALID": "Choisissez de une à cinq étoiles.",
   "error.RATING_COMMENT_TOO_LONG": "500 caractères maximum.",
   "error.RATING_REPLY_TOO_LONG": "500 caractères maximum.",
+  "gapp.demoLocation": "Essayer avec une position d'exemple (démo)",
+  "gapp.staffDemo": "Aller à l'espace restaurant (démo)",
+  "bind.demoTable": "S'asseoir à une table d'exemple (démo)",
+  "bind.demoTableSub": "Table 7 · sans scanner",
 };

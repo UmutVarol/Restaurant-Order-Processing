@@ -1750,4 +1750,8 @@ export default {
   "error.RATING_STARS_INVALID": "اختر من نجمة إلى خمس نجوم.",
   "error.RATING_COMMENT_TOO_LONG": "لا يزيد التعليق على 500 حرف.",
   "error.RATING_REPLY_TOO_LONG": "لا يزيد الرد على 500 حرف.",
+  "gapp.demoLocation": "جرّب بموقع تجريبي (عرض)",
+  "gapp.staffDemo": "انتقل إلى لوحة المطعم (عرض)",
+  "bind.demoTable": "اجلس إلى طاولة تجريبية (عرض)",
+  "bind.demoTableSub": "الطاولة 7 · دون مسح",
 };
