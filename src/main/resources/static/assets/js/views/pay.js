@@ -8,6 +8,7 @@ import { money, percent, time } from '../core/format.js';
 import { api, backendFetch, errorMessage } from '../core/api.js';
 import { haptic, langButton, themeButton } from '../core/ui.js';
 import { parseCents, typed } from './bill.js';
+import { markRated, ratingForm, rememberVisit } from '../core/visits.js';
 
 const TIP_RATES = [0, 0.05, 0.1, 0.15];
 const lira = (value) => (value / 100).toFixed(2);
@@ -77,6 +78,8 @@ function payPage(root, token) {
     bill: null, invoice: null, error: null, formError: null, busy: false,
     mode: 'ALL', people: 2, picked: new Map(), other: null, tipRate: 0.1, name: '',
     wantInvoice: false, buyer: { name: '', taxId: '', address: '' },
+    // P2: the rating form under the paid receipt, made once so a refresh of the bill keeps what the guest chose
+    rate: null, rateAsked: false,
   };
   const table = tableOf(token);
   let polls = 0;
@@ -93,10 +96,27 @@ function payPage(root, token) {
       // The provider may take a moment to confirm: look again for a short while.
       clearTimeout(timer);
       if (bill.lastPayment?.status === 'PENDING' && polls++ < 20) timer = setTimeout(load, 3000);
+      // P2: any paid visit (on the phone or at the till) can be rated; the server decides whether this one is paid
+      if (!state.rateAsked && (bill.lastPayment?.status === 'SUCCEEDED' || Number(bill.paid) > 0 || !bill.payable)) askRating(bill);
     } catch (error) {
       state.error = error;
     }
     render();
+  }
+
+  /** A paid visit can be rated once; the phone also remembers it for the guest app's home (P3). */
+  async function askRating(bill) {
+    state.rateAsked = true;
+    try {
+      const rating = await api.payRating(token);
+      if (!rating.allowed) return;
+      if (rating.rated) { markRated(token); return; }
+      rememberVisit({ token, restaurant: bill.restaurant, at: bill.lastPayment?.at });
+      state.rate = ratingForm({ token, dishes: rating.dishes, restaurant: bill.restaurant, testid: 'pay-rate' });
+      render();
+    } catch {
+      /* rating is optional; the receipt stands on its own */
+    }
   }
 
   function render() {
@@ -119,6 +139,7 @@ function payPage(root, token) {
         h('div', { class: 'muted' }, bill.restaurant),
         h('h1', { class: 'guest-title' }, bill.tableCode ? t('guest.table', { table: bill.tableCode }) : t('guest.yourBill'))),
       status(bill),
+      state.rate,
       picking ? null : h('div', { class: 'bill-lines guest-lines' }, bill.lines.map((line) => h('div', { class: 'bill-line' },
         h('span', { class: 'emoji' }, line.icon || '🍽️'),
         h('span', { class: 'n' }, `${line.quantity} × ${line.name}`, line.options ? h('small', { class: 'opts' }, line.options) : null),

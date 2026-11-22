@@ -55,4 +55,4 @@ async function freeTables(page, count = 1, accept = (t) => !t.occupied && !t.nee
   return usable;
 }
 
-module.exports = { signIn, uniqueGuest, freeTables };
+module.exports = { signIn, uniqueGuest, freeTables, call };

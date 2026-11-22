@@ -2,11 +2,11 @@
 import { debounce, h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t, tn } from '../core/i18n.js';
-import { dayLabel, durationMinutes, money, moneyShort, number, percent } from '../core/format.js';
+import { dateTime, dayLabel, durationMinutes, money, moneyShort, number, percent } from '../core/format.js';
 import { api, errorMessage, hasFeature } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { areaChart, barChart, donutChart, sparkline } from '../core/charts.js';
-import { countUp, reveal, toast } from '../core/ui.js';
+import { countUp, openDrawer, openModal, reveal, toast } from '../core/ui.js';
 import { STATUS_COLORS } from './shared.js';
 
 const CATEGORY_COLORS = { MAIN: 'var(--brand)', STARTER: 'var(--saffron)', DESSERT: 'var(--violet)', DRINK: 'var(--teal)' };
@@ -23,6 +23,8 @@ export default {
     // Chain plan: the branches side by side, for whoever manages all of them
     const comparesBranches = user?.branchId == null && hasFeature('CHAIN');
     let branchReport = null;
+    // R1 (round three): the guest app's side of the panel, made once and kept across live refreshes
+    const guestPanel = user?.role === 'ADMIN' ? h('div', { class: 'card span-12 guest-panel', 'data-testid': 'guest-panel' }) : null;
     const switcher = h('div', { class: 'segmented period-switch' });
 
     function renderSwitcher() {
@@ -58,6 +60,7 @@ export default {
           kpi('timer', t('kpi.kitchen'), current.averageKitchenMinutes == null ? '—' : durationMinutes(current.averageKitchenMinutes),
             delta(current.averageKitchenMinutes, previous.averageKitchenMinutes, true), t('kpi.target'))),
         h('div', { class: 'dash-grid' },
+          guestPanel,
           card('span-8', t('dash.trend'), t('dash.trendSub'), trendChart()),
           card('span-4', t('dash.categories'), null, categoryDonut()),
           card('span-8', t('dash.hours'), t('dash.hoursSub'), hoursChart()),
@@ -175,10 +178,91 @@ export default {
       render();
     }
 
+    // ------------------------------------------------------------------ R1: guests and verified-visit ratings
+    async function loadGuests() {
+      if (!guestPanel) return;
+      try {
+        const [summary, recent] = await Promise.all([api.ratingsSummary(), api.ratings(3)]);
+        paintGuests(summary, recent);
+      } catch {
+        guestPanel.hidden = true;
+      }
+    }
+
+    function paintGuests(summary, recent) {
+      const fig = (label, value, testid) => h('div', { class: 'guest-kpi' }, h('small', null, label), h('b', { class: 'num', 'data-testid': testid }, value));
+      mount(guestPanel,
+        h('div', { class: 'card-head' }, h('div', null, h('div', { class: 'card-title' }, t('guestPanel.title')), h('div', { class: 'card-sub' }, t('guestPanel.sub'))),
+          h('button', { class: 'btn sm', 'data-testid': 'ratings-all', onclick: openRatings }, t('guestPanel.all'))),
+        h('div', { class: 'card-body guest-panel-body' },
+          h('div', { class: 'guest-kpis' },
+            fig(t('guestPanel.inside'), number(summary.insideNow), 'guest-inside'),
+            fig(t('guestPanel.weekRating'), summary.weekRating == null ? '—' : `${number(summary.weekRating, 1)} ★`, 'guest-rating'),
+            fig(t('guestPanel.weekGuests'), number(summary.weekGuests), 'guest-week'),
+            fig(t('guestPanel.returning'), summary.returning == null ? '—' : percent(summary.returning / 100), 'guest-returning')),
+          recent.length ? h('div', { class: 'guest-reviews' }, recent.map((r) => reviewRow(r, () => loadGuests())))
+            : h('p', { class: 'faint' }, t('guestPanel.noRatings'))));
+    }
+
+    function reviewRow(r, after) {
+      return h('article', { class: 'review-row', 'data-testid': 'review-row' },
+        h('div', { class: 'review-row-head' },
+          h('span', { class: 'stars-static', 'aria-label': t('rate.nStars', { n: r.stars }) }, '★'.repeat(r.stars), h('span', { class: 'off' }, '★'.repeat(5 - r.stars))),
+          h('span', { class: 'verified' }, icon('check', 'sm'), t('rate.verifiedShort')),
+          h('span', { class: 'faint' }, dateTime(r.at))),
+        r.tags.length || r.liked.length ? h('div', { class: 'chips static' },
+          r.tags.map((tag) => h('span', { class: 'chip' }, t(`rate.tag.${tag}`))),
+          r.liked.map((dish) => h('span', { class: 'chip' }, '👍 ', h('bdi', null, dish)))) : null,
+        r.comment ? h('p', null, r.comment) : null,
+        r.reply ? h('div', { class: 'review-reply' }, h('b', null, t('guestPanel.yourReply')), h('p', null, r.reply)) : null,
+        h('button', { class: 'btn sm ghost', 'data-testid': 'review-reply', onclick: () => reply(r, after) }, icon('edit', 'sm'), r.reply ? t('guestPanel.editReply') : t('guestPanel.reply')));
+    }
+
+    function reply(r, after) {
+      const text = h('textarea', { class: 'input', id: 'review-reply-text', rows: 4, maxlength: 500, value: r.reply || '' });
+      text.value = r.reply || '';
+      const modal = openModal({
+        title: t('guestPanel.replyTitle'),
+        size: 'sm',
+        body: [h('p', { class: 'muted' }, t('guestPanel.replyHint')),
+          h('div', { class: 'field' }, h('label', { for: 'review-reply-text' }, t('guestPanel.yourReply')), text)],
+        footer: (handle) => [
+          h('button', { class: 'btn ghost', onclick: handle.close }, t('common.cancel')),
+          h('button', {
+            class: 'btn primary', 'data-testid': 'review-reply-save', onclick: async () => {
+              try {
+                await api.replyRating(r.id, text.value.trim() || null);
+                toast({ title: t('guestPanel.replied') });
+                modal.close();
+                after?.();
+              } catch (error) {
+                toast({ title: errorMessage(error), kind: 'error' });
+              }
+            },
+          }, t('common.save'))],
+      });
+    }
+
+    function openRatings() {
+      let list = null;
+      const drawer = openDrawer((handle) => [
+        h('div', { class: 'drawer-head' }, h('h2', { style: { flex: 1 } }, t('guestPanel.allTitle')),
+          h('button', { class: 'icon-btn', 'aria-label': t('common.close'), onclick: handle.close }, icon('x'))),
+        h('div', { class: 'drawer-body' }, list == null ? h('div', { class: 'skeleton', style: { height: '200px' } })
+          : list.length ? list.map((r) => reviewRow(r, refresh)) : h('p', { class: 'faint' }, t('guestPanel.noRatings')))]);
+      async function refresh() {
+        try { list = await api.ratings(50); } catch { list = []; }
+        drawer.render();
+        loadGuests();
+      }
+      refresh();
+    }
+
     const reload = debounce(load, 1500);
     const offOrder = bus.on('order', reload);
     render();
     load();
+    loadGuests();
     return {
       destroy() {
         offOrder();

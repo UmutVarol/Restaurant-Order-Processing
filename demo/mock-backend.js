@@ -604,6 +604,12 @@
   const devices = () => (state.devices ??= []);
   // the demo keeps one set of data: a second branch shows the screens for chains, it does not split the floor
   const branches = () => (state.branches ??= [{ id: 1, code: 'merkez', name: 'Merkez', active: true }]);
+  // verified-visit ratings in the demo: a few guests have already rated the restaurant
+  const demoRatings = () => (state.ratings ??= [
+    { id: 1, billId: -1, branchId: 1, stars: 5, tags: ['TASTE', 'FRIENDLY'], liked: ['Adana Kebap'], comment: 'Adana harikaydı, servis çok hızlıydı.', at: iso(Date.now() - 26 * 36e5), reply: 'Teşekkür ederiz, yine bekleriz!', repliedAt: iso(Date.now() - 20 * 36e5) },
+    { id: 2, billId: -2, branchId: 1, stars: 4, tags: ['TASTE'], liked: [], comment: 'Tatlı biraz geç geldi ama lezzetliydi.', at: iso(Date.now() - 50 * 36e5), reply: null, repliedAt: null },
+    { id: 3, billId: -3, branchId: 1, stars: 5, tags: ['CLEAN', 'VALUE'], liked: [], comment: null, at: iso(Date.now() - 80 * 36e5), reply: null, repliedAt: null },
+  ]);
   const PLAN_OFFERS = {
     STARTER: { monthlyCentsPerBranch: 2900, listCentsPerBranch: 0, minimumBranches: 1, limits: { branches: 1, activeStaff: 5, tables: 15 }, features: [] },
     BUSINESS: { monthlyCentsPerBranch: 5900, listCentsPerBranch: 0, minimumBranches: 1, limits: { branches: -1, activeStaff: -1, tables: -1 }, features: ['ONLINE_PAYMENTS', 'DELIVERY_PLATFORMS', 'STOCK', 'FISCAL', 'SHIFTS_AND_TIPS'] },
@@ -2044,6 +2050,84 @@
     ['POST', /^billing\/portal$/, 'manager', () => { throw new Problem(422, 'NO_PORTAL', 'Manage your subscription from the provider’s e-mails'); }],
     // Setup screen: staff and tables change for this tab only; the demo starts fresh on reload.
     ['GET', /^branches$/, 'staff', () => branches()],
+    // Round three: the guest app's directory. In the demo the restaurant is always a few metres from the visitor,
+    // so "I am here" works wherever the demo is opened; its position is never sent anywhere.
+    ['GET', /^public\/venues\/nearby$/, 'public', ({ query: q }) => {
+      const lat = Number(q.get('lat'));
+      const lng = Number(q.get('lng'));
+      const b = state.branding || {};
+      const ratings = demoRatings();
+      const avg = ratings.length ? Math.round((ratings.reduce((s2, r) => s2 + r.stars, 0) / ratings.length) * 10) / 10 : null;
+      const venue = (name, code, dLat, dLng, accent) => ({ business: 'sofra-bistro', branch: code, name, branchName: null, address: code === 'merkez' ? 'Moda Cd. 12, Kadıköy' : null,
+        accent, logo: false, distance: Math.round(Math.hypot(dLat * 111320, dLng * 111320 * Math.cos(lat * Math.PI / 180))), rating: code === 'merkez' ? avg : null,
+        ratings: code === 'merkez' ? ratings.length : 0, latitude: lat + dLat, longitude: lng + dLng });
+      const venues = [venue('Sofra Bistro', 'merkez', 0.00008, 0.00006, b.accent || null)];
+      if (q.get('accuracy') && Number(q.get('accuracy')) > 60) venues.push(venue('Lale Kafe', 'lale', -0.00022, 0.0002, '#2f9e6b'));
+      return { venues, confident: venues.length === 1 };
+    }],
+    ['GET', /^public\/venue\/([a-z0-9-]+)\/([a-z0-9-]+)$/, 'public', ({ params }) => {
+      if (params[1] !== 'merkez') throw new Problem(404, 'RESTAURANT_NOT_FOUND', 'Restaurant was not found', { parameters: { id: params[1] } });
+      const ratings = demoRatings();
+      const avg = ratings.length ? Math.round((ratings.reduce((s2, r) => s2 + r.stars, 0) / ratings.length) * 10) / 10 : null;
+      return { business: params[0], branch: 'merkez', name: 'Sofra Bistro', branchName: null, address: 'Moda Cd. 12, Kadıköy',
+        accent: state.branding?.accent || null, logo: false, rating: avg, ratings: ratings.length,
+        reviews: ratings.filter((r) => r.comment || r.reply).slice(0, 5).map((r) => ({ stars: r.stars, tags: r.tags, comment: r.comment, at: r.at, reply: r.reply })),
+        menu: state.menu.filter((m) => !m.archived && m.available && !m.stockOut).map(menuView) };
+    }],
+    ['POST', /^public\/venue\/([a-z0-9-]+)\/([a-z0-9-]+)\/checkin$/, 'public', ({ params }, body) => {
+      (state.checkins ??= []).push({ device: body.device || 'anon', at: iso(Date.now()), branch: params[1] });
+      save();
+      return null;
+    }],
+    ['GET', /^public\/pay\/([A-Za-z0-9_-]+)\/rating$/, 'public', ({ params }) => {
+      const link = findLink(params[0]);
+      const bill = findBill(link.billId);
+      const existing = demoRatings().find((r) => r.billId === bill.id);
+      const dishes = [...new Set(ordersOf(bill).flatMap((o) => o.lines.map((l) => l.name)))];
+      return { allowed: bill.payments.some((p) => p.status === 'SUCCEEDED'), rated: !!existing, stars: existing?.stars ?? null, dishes };
+    }],
+    ['POST', /^public\/pay\/([A-Za-z0-9_-]+)\/rating$/, 'public', ({ params }, body) => {
+      const link = findLink(params[0]);
+      const bill = findBill(link.billId);
+      if (!bill.payments.some((p) => p.status === 'SUCCEEDED')) throw new Problem(422, 'RATING_NOT_PAID', 'A visit can be rated once its bill is paid');
+      if (demoRatings().some((r) => r.billId === bill.id)) throw new Problem(422, 'RATING_ALREADY_GIVEN', 'This visit has already been rated');
+      const stars = Number(body.stars);
+      if (!(stars >= 1 && stars <= 5)) throw new Problem(422, 'RATING_STARS_INVALID', 'Give one to five stars');
+      const dishes = [...new Set(ordersOf(bill).flatMap((o) => o.lines.map((l) => l.name)))];
+      demoRatings().unshift({ id: (state.nextRatingId = (state.nextRatingId || 100) + 1), billId: bill.id, branchId: 1, stars,
+        tags: (body.tags || []).filter((tag) => ['TASTE', 'SPEED', 'FRIENDLY', 'CLEAN', 'VALUE'].includes(tag)),
+        liked: (body.liked || []).filter((d) => dishes.includes(d)).slice(0, 8), comment: body.comment || null, at: iso(Date.now()), reply: null, repliedAt: null });
+      save();
+      return { allowed: true, rated: true, stars, dishes };
+    }],
+    ['GET', /^directory$/, 'manager', () => branches().filter((b) => b.active).map((b) => ({ branchId: b.id, branch: b.name,
+      latitude: b.latitude ?? null, longitude: b.longitude ?? null, address: b.address ?? null, listed: !!b.listed }))],
+    ['PUT', /^directory\/(\d+)$/, 'manager', ({ params }, body) => {
+      const b = branches().find((x) => x.id === Number(params[0]));
+      if (!b) throw new Problem(404, 'BRANCH_NOT_FOUND', 'Branch was not found');
+      if ((body.latitude == null) !== (body.longitude == null)) throw new Problem(422, 'DIRECTORY_POSITION_INCOMPLETE', 'Give both latitude and longitude, or neither');
+      if (body.listed && body.latitude == null) throw new Problem(422, 'DIRECTORY_POSITION_NEEDED', 'Set the branch\'s position before listing it');
+      Object.assign(b, { latitude: body.latitude, longitude: body.longitude, address: body.address || null, listed: !!body.listed && body.latitude != null });
+      save();
+      return { branchId: b.id, branch: b.name, latitude: b.latitude ?? null, longitude: b.longitude ?? null, address: b.address, listed: b.listed };
+    }],
+    ['GET', /^ratings$/, 'manager', ({ query: q }) => demoRatings().slice(0, Math.min(100, Number(q.get('limit') || 30)))],
+    ['GET', /^ratings\/summary$/, 'manager', () => {
+      const now = Date.now();
+      const week = demoRatings().filter((r) => now - new Date(r.at).getTime() < 7 * 864e5);
+      const checks = state.checkins || [];
+      return { insideNow: new Set(checks.filter((c) => now - new Date(c.at).getTime() < 2 * 36e5).map((c) => c.device)).size + 6,
+        weekRating: week.length ? Math.round((week.reduce((s2, r) => s2 + r.stars, 0) / week.length) * 10) / 10 : null,
+        weekRatings: week.length, weekGuests: 41 + checks.length, returning: 31 };
+    }],
+    ['PUT', /^ratings\/(\d+)\/reply$/, 'manager', ({ params }, body) => {
+      const r = demoRatings().find((x) => x.id === Number(params[0]));
+      if (!r) throw new Problem(404, 'RATING_NOT_FOUND', 'Rating was not found');
+      r.reply = body.reply ? String(body.reply).trim() : null;
+      r.repliedAt = r.reply ? iso(Date.now()) : null;
+      save();
+      return r;
+    }],
     ['POST', /^branches$/, 'manager', (_, body) => {
       const code = String(body.code || '');
       requireFields({ code: /^[a-z0-9-]{2,20}$/.test(code) ? null : 'must match "^[a-z0-9-]{2,20}$"', name: blank(body.name) ? 'must not be blank' : null });

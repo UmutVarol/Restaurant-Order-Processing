@@ -117,9 +117,12 @@ class SecurityConfig {
             PathPatternRequestMatcher.withDefaults().matcher("/swagger-ui/**"),
             PathPatternRequestMatcher.withDefaults().matcher("/swagger-ui.html"));
 
-    /** Browser features the app never uses are switched off (OWASP HTTP Headers Cheat Sheet). */
+    /**
+     * Browser features the app never uses are switched off (OWASP HTTP Headers Cheat Sheet). The guest app (round
+     * three) uses the position to find the restaurant and the camera to read a table's code: Sofra's own pages only.
+     */
     private static final String PERMISSIONS_POLICY = String.join(", ",
-            "accelerometer=()", "camera=()", "display-capture=()", "geolocation=()", "gyroscope=()",
+            "accelerometer=()", "camera=(self)", "display-capture=()", "geolocation=(self)", "gyroscope=()",
             "magnetometer=()", "microphone=()", "midi=()", "payment=()", "usb=()", "xr-spatial-tracking=()");
 
     @Bean
@@ -202,6 +205,9 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders/*/reprint")
                                 .hasAnyRole(Role.ADMIN.name(), Role.WAITER.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/service-settings").hasRole(Role.ADMIN.name())
+                        // round three: the directory entry and the ratings are the managers'
+                        .requestMatchers("/api/v1/directory", "/api/v1/directory/**", "/api/v1/ratings", "/api/v1/ratings/**")
+                                .hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/branding", "/api/v1/branding/logo").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/branding/logo").hasRole(Role.ADMIN.name())
                         // guests' names and phone numbers: floor staff and managers, not the kitchen

@@ -43,6 +43,20 @@ public class Branch {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** Where the branch is, for the guest app's "you are here" (round three); empty until a manager sets it. */
+    @Column
+    private Double latitude;
+
+    @Column
+    private Double longitude;
+
+    @Column(length = 200)
+    private String address;
+
+    /** Whether guests can find it in the directory. Off until the restaurant turns it on. */
+    @Column(nullable = false)
+    private boolean listed;
+
     protected Branch() {
         // for JPA
     }
@@ -59,6 +73,31 @@ public class Branch {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    /** The directory entry: position (both or neither), address, and whether it is listed (needs a position). */
+    public void placeInDirectory(@org.jspecify.annotations.Nullable Double latitude, @org.jspecify.annotations.Nullable Double longitude,
+                                 @org.jspecify.annotations.Nullable String address, boolean listed) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.address = address;
+        this.listed = listed && latitude != null && longitude != null;
+    }
+
+    public @org.jspecify.annotations.Nullable Double getLatitude() {
+        return latitude;
+    }
+
+    public @org.jspecify.annotations.Nullable Double getLongitude() {
+        return longitude;
+    }
+
+    public @org.jspecify.annotations.Nullable String getAddress() {
+        return address;
+    }
+
+    public boolean isListed() {
+        return listed;
     }
 
     public Long getId() {

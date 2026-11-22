@@ -9,6 +9,24 @@ Sofra herkesin telefonunda bulunan bir uygulama olur. Kişi bir restorana girip 
 çıkar ("Sofra Bistro'dasın gibi görünüyor"), kişi onaylar ve o restoranın menüsünü, siparişini, ödemesini ve diğer
 hizmetlerini kullanmaya başlar.
 
+## Durum (22 Kasım 2026)
+
+Kullanıcı 3. tur adaylarının hepsini seçti. **Web sürümü uygulandı** (aşama 1 ve puanlama):
+
+- Şube rehberi: Kurulum › "Misafir uygulamasında görün" (konumu restoranın içinden al, adres, görün/görünme; V36).
+- `#/sofra`: konumla yakındaki restoranlar; tek net adayda tabela (G2), değilse yakınlık görünümü ve liste (G1+G3),
+  QR okutma; puanlanmamış son ziyaret kartı (P3).
+- `#/v/{işletme}/{şube}`: restoran sayfası (H1), şube fiyatlı menü (H2), masaya bağlanma (H3: NFC Android/Chrome,
+  kamerayla QR, ya da telefonun kamera uygulaması), doğrulanmış yorumlar ve restoran yanıtları.
+- Ödeme sonrası puan (P2): yalnızca ödenmiş hesap, bir kez; yıldız, iyi olanlar, beğenilen yemekler, yorum.
+- Panel kartı (R1): içerideki Sofra misafirleri, haftalık puan, haftalık misafir, geri gelen oranı, yorumlara yanıt.
+- Check-in yalnızca cihaz anahtarının özetini (hash) saklar; konum hiç saklanmaz. Güvenlik başlığında konum ve kamera
+  yalnızca Sofra'nın kendi sayfalarına açıldı.
+
+**Kalanlar:** misafire anlık "nasıldı?" bildirimi (P1: misafir uygulaması ve bildirim izni gerekir), iOS'ta NFC ile
+okutma ve App Clip (mağaza uygulaması), masa numarasıyla bağlanma (konum doğrulaması ve garson onayıyla), misafir hesabı,
+Sofra Puan, keşfet sayfası.
+
 ## Fizibilite özeti
 
 **Teknik olarak yapılabilir; asıl zorluk teknoloji değil, yaygınlaşma.**

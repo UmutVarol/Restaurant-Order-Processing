@@ -81,6 +81,23 @@ async function render() {
   activeView?.destroy?.();
   activeView = null;
 
+  // Round three: the guest app's home and a restaurant's page need no account either.
+  if (parseHash().route === 'sofra') {
+    const { renderSofra } = await import('./views/sofra.js');
+    if (token !== renderToken) return;
+    activeView = { destroy: renderSofra(root) };
+    document.title = 'Sofra';
+    return;
+  }
+  const venueRoute = parseHash().route.match(/^v\/([a-z0-9-]{2,40})\/([a-z0-9-]{2,20})$/);
+  if (venueRoute) {
+    const { renderVenue } = await import('./views/venue.js');
+    if (token !== renderToken) return;
+    activeView = { destroy: renderVenue(root, venueRoute[1], venueRoute[2]) };
+    document.title = 'Sofra';
+    return;
+  }
+
   // A guest paying by QR code needs no account and sees none of the staff app.
   const tableCode = parseHash().route.match(/^t\/([A-Za-z0-9_-]{20,100})$/);
   if (tableCode) {

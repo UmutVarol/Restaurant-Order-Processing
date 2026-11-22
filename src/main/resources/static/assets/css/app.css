@@ -2248,3 +2248,202 @@ button.rota-shift { cursor: pointer; }
   transition: transform var(--dur-slow) var(--ease); }
 [dir="rtl"] .branch-bar i { transform-origin: right center; }
 .branch-row-foot { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 12.5px; }
+
+/* ===================================================================================== round three: the guest app
+   G1–G3 "are you here?", H1–H3 a restaurant's page and the table, P2–P3 verified-visit ratings, R1 the panel card.
+   Motion follows DESIGN.md: one easing, transform and opacity only, each moment once, nothing that keeps moving. */
+.sofra-app { padding-bottom: 24px; }
+.sofra-word { display: inline-flex; align-items: center; gap: 8px; color: var(--brand); }
+.sofra-word b { color: var(--text); }
+.sofra-stage { width: min(520px, 100%); }
+.sofra-screen { display: flex; flex-direction: column; gap: 14px; }
+.sofra-screen.enter { animation: sofraIn var(--dur-base) var(--ease) both; }
+@keyframes sofraIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.sofra-ask { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 28px 22px;
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+.sofra-ask h1 { font-family: var(--font-display); font-size: 26px; line-height: 1.15; margin: 4px 0 0; text-wrap: balance; }
+.sofra-ask p { max-width: 38ch; }
+.sofra-ask .btn { margin-top: 2px; }
+.sofra-ask-mark { width: 64px; height: 64px; border-radius: 22px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
+.sofra-ask-mark svg { width: 30px; height: 30px; }
+/* while the phone looks for itself: one slow turn of the crosshair, then it waits still (no pulse, no blink) */
+.sofra-ask-mark.searching svg { animation: sofraSeek 1.2s var(--ease) 1 both; }
+@keyframes sofraSeek { from { transform: rotate(-90deg) scale(.85); opacity: .6; } to { transform: none; opacity: 1; } }
+.sofra-privacy { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+
+/* G2: the restaurant's own sign */
+.venue-sign { --sign: var(--brand); border-radius: var(--radius-xl); overflow: hidden; background: var(--sign); color: #fff;
+  box-shadow: 0 24px 50px -28px color-mix(in srgb, var(--sign) 80%, #000); }
+:root[data-theme="dark"] .venue-sign { --sign: var(--sign-dark, var(--brand)); }
+.sign-inner { padding: 34px 24px 22px; display: flex; flex-direction: column; gap: 8px; min-height: 420px; }
+.sign-logo { width: 72px; height: 72px; border-radius: 22px; background: #fff; object-fit: contain; display: grid; place-items: center;
+  color: var(--sign); font: 700 30px/1 var(--font-display); }
+.sign-hello { margin-top: 18px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+.sign-name { font-family: var(--font-display); font-size: clamp(34px, 9vw, 44px); line-height: 1.02; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.sign-branch, .sign-address, .sign-found { font-size: 14px; opacity: .92; display: inline-flex; align-items: center; gap: 6px; }
+.sign-found { margin-top: auto; padding-top: 18px; font-size: 13px; opacity: .85; }
+.sign-yes { background: #fff; color: color-mix(in srgb, var(--sign) 80%, #000); border-color: transparent; font-weight: 700; }
+.sign-no { align-self: center; background: none; border: 0; color: inherit; font: 600 14px/1 var(--font-sans); padding: 12px; opacity: .92; cursor: pointer; touch-action: manipulation; }
+.sign-no:focus-visible, .sign-yes:focus-visible { box-shadow: 0 0 0 3px rgba(255,255,255,.7); }
+@media (prefers-reduced-motion: no-preference) {
+  .venue-sign { animation: signWash var(--dur-slow) var(--ease) both; }
+  .venue-sign .sign-logo { animation: signLogo var(--dur-slow) var(--ease) 80ms both; }
+  .venue-sign .sign-name { animation: signSettle var(--dur-slow) var(--ease) 140ms both; }
+  .venue-sign .sign-yes { animation: signSettle var(--dur-slow) var(--ease) 220ms both; }
+  @keyframes signWash { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+  @keyframes signLogo { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+  @keyframes signSettle { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+}
+
+/* G1 + G3: the proximity view and the nearest places */
+.nearby { display: flex; flex-direction: column; gap: 0; }
+.prox { position: relative; aspect-ratio: 1 / .86; max-height: 340px; width: 100%; border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: radial-gradient(circle at 50% 50%, var(--surface-2), var(--surface-3)); overflow: hidden; border: 1px solid var(--border); border-bottom: 0; }
+.prox-ring { position: absolute; left: 50%; top: 50%; width: calc(var(--r) * 2); aspect-ratio: 1; transform: translate(-50%, -50%);
+  border-radius: 50%; border: 1px dashed var(--border-strong); }
+.prox-label { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); font-size: 10.5px; font-weight: 600; color: var(--muted);
+  background: var(--surface-2); padding: 0 6px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.prox-accuracy { position: absolute; left: 50%; top: 50%; width: calc(var(--r) * 2); aspect-ratio: 1; transform: translate(-50%, -50%);
+  border-radius: 50%; background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.prox-me { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; transform: translate(-50%, -50%); border-radius: 50%;
+  background: var(--blue); border: 3px solid var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.prox-pin { position: absolute; width: 34px; height: 34px; margin: -34px 0 0 -17px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg);
+  background: var(--surface); border: 2px solid var(--border-strong); display: grid; place-items: center; box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-fast) var(--ease); }
+.prox-pin span { transform: rotate(45deg); font: 700 12px/1 var(--font-display); color: var(--text-2); }
+.prox-pin.sel { background: var(--brand); border-color: var(--brand); }
+.prox-pin.sel span { color: var(--brand-ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .prox-ring { animation: proxRing var(--dur-slow) var(--ease) calc(var(--i) * 60ms) both; }
+  .prox-pin { animation: proxPin var(--dur-base) var(--ease) calc(220ms + var(--i) * 60ms) both; }
+  .near-row { animation: sofraIn var(--dur-base) var(--ease) calc(120ms + var(--i) * 40ms) both; }
+  .near-sheet { animation: sofraIn var(--dur-slow) var(--ease) both; }
+  @keyframes proxRing { from { opacity: 0; transform: translate(-50%, -50%) scale(.85); } to { opacity: 1; transform: translate(-50%, -50%); } }
+  @keyframes proxPin { from { opacity: 0; transform: rotate(-45deg) translate(6px, -6px); } to { opacity: 1; transform: rotate(-45deg); } }
+}
+.near-sheet { background: var(--surface); border: 1px solid var(--border); border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  margin-top: -18px; position: relative; padding: 12px 16px 18px; display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 -10px 24px -18px rgba(0,0,0,.35); border-top-left-radius: var(--radius-xl); border-top-right-radius: var(--radius-xl); }
+.near-sheet .grab { width: 38px; height: 4px; border-radius: 4px; background: var(--border-strong); align-self: center; }
+.near-title { font-family: var(--font-display); font-size: 22px; margin: 0; }
+.near-list { display: flex; flex-direction: column; gap: 8px; }
+.near-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--surface); text-align: start; font: inherit; color: inherit; cursor: pointer; min-height: 56px; touch-action: manipulation;
+  transition: transform var(--dur-fast) var(--ease); }
+.near-row:active { transform: scale(.98); }
+.near-row.sel { border-color: var(--brand); background: var(--brand-soft); }
+.near-logo { width: 38px; height: 38px; border-radius: 12px; flex: none; object-fit: contain; background: var(--surface-2); }
+.near-logo.initials, .sign-logo.initials { display: grid; place-items: center; }
+.near-logo.initials { background: var(--brand); color: var(--brand-ink); font: 700 15px/1 var(--font-display); }
+.near-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.near-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.near-likely { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--brand-strong); }
+.near-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border-strong); flex: none; transition: border-width var(--dur-fast) var(--ease); }
+.near-row.sel .near-radio { border: 6px solid var(--brand); }
+
+/* P3: the last visit, waiting for stars */
+.visit-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.visit-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.visit-card .rate-card { border: 0; padding: 0; background: none; box-shadow: none; }
+
+/* P2 and P3: the rating form */
+.rate-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.rate-card h3 { font-family: var(--font-display); font-size: 20px; margin: 0; text-wrap: balance; }
+.rate-stars { display: flex; gap: 6px; }
+.rate-star { width: 48px; height: 48px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); color: var(--border-strong);
+  display: grid; place-items: center; cursor: pointer; touch-action: manipulation; transition: transform var(--dur-fast) var(--ease); }
+.rate-star svg { width: 26px; height: 26px; fill: currentColor; stroke: currentColor; }
+.rate-star.on { color: var(--saffron); border-color: color-mix(in srgb, var(--saffron) 45%, var(--border)); background: color-mix(in srgb, var(--saffron) 12%, var(--surface)); }
+.rate-star:active { transform: scale(.94); }
+.rate-star.bump { animation: starBump var(--dur-base) var(--ease) 1; }
+/* a settle, not a bounce: no overshoot (Impeccable) */
+@keyframes starBump { from { transform: scale(.84); } to { transform: none; } }
+.rate-extra { display: flex; flex-direction: column; gap: 12px; }
+.rate-extra:not([hidden]) { animation: sofraIn var(--dur-base) var(--ease) both; }
+.rate-group { display: flex; flex-direction: column; gap: 6px; }
+.rate-fine { display: inline-flex; align-items: center; gap: 6px; }
+.rate-thanks { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 8px 0; }
+.rate-thanks-mark { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--green); color: #fff; }
+.rate-thanks-mark { animation: signLogo var(--dur-slow) var(--ease) both; }
+
+/* H1–H2: a restaurant's page */
+.venue-page { width: min(560px, 100%); display: flex; flex-direction: column; gap: 16px; padding-bottom: 84px; }
+.venue-hero { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.venue-hero.enter { animation: sofraIn var(--dur-base) var(--ease) both; }
+.venue-id { display: flex; flex-direction: column; gap: 4px; }
+.venue-address { display: inline-flex; align-items: center; gap: 6px; }
+.venue-rating { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--saffron); }
+.venue-rating b { color: var(--text); font-variant-numeric: tabular-nums; }
+.venue-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (min-width: 720px) { .venue-actions { grid-template-columns: repeat(4, 1fr); } }
+.venue-act { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; border-radius: var(--radius-lg);
+  border: 1px solid var(--border); background: var(--surface-2); color: inherit; font: inherit; text-align: start; min-height: 92px;
+  cursor: pointer; touch-action: manipulation; transition: transform var(--dur-fast) var(--ease); }
+.venue-act:active { transform: scale(.97); }
+.venue-act.main { background: var(--brand); border-color: transparent; color: var(--brand-ink); }
+.venue-act small { font-size: 12px; opacity: .78; }
+.venue-act-ic svg { width: 22px; height: 22px; }
+.venue-menu { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 12px; }
+.venue-cats { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0; flex-wrap: nowrap; overflow-x: auto; }
+.venue-cat-title { font-family: var(--font-display); font-size: 18px; margin: 8px 0 4px; scroll-margin-top: 64px; }
+.venue-dish { display: flex; gap: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); align-items: flex-start; }
+.venue-dish + .venue-dish { margin-top: 8px; }
+.venue-dish-ic { width: 44px; height: 44px; border-radius: 12px; background: var(--surface-2); display: grid; place-items: center; font-size: 22px; flex: none; }
+.venue-dish-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.venue-allergens { display: inline-flex; gap: 4px; align-items: center; color: var(--amber); font-size: 12px; }
+.venue-dish-price { font-weight: 700; white-space: nowrap; }
+.venue-price-note { font-size: 12px; }
+.venue-reviews { display: flex; flex-direction: column; gap: 10px; }
+.venue-review { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.venue-review-head, .review-row-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.venue-reply, .review-reply { border-inline-start: 3px solid var(--brand); padding: 6px 10px; background: var(--surface-2); border-radius: var(--radius-xs); }
+.venue-reply p, .review-reply p { margin: 2px 0 0; }
+.stars-static { color: var(--saffron); letter-spacing: 1px; }
+.stars-static .off { color: var(--border-strong); }
+.verified { display: inline-flex; align-items: center; gap: 4px; color: var(--green); font-weight: 700; font-size: 12px; }
+.chips.static .chip { height: auto; padding: 4px 10px; cursor: default; }
+.venue-dock-slot { position: fixed; inset: auto 0 0 0; z-index: 30; display: flex; justify-content: center;
+  padding: 10px max(16px, env(safe-area-inset-left, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)); pointer-events: none; }
+.venue-dock { pointer-events: auto; width: min(560px, 100%); display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px;
+  background: var(--sidebar-bg, #1b1613); color: #fff; border-radius: var(--radius-lg); box-shadow: 0 14px 30px -14px rgba(0,0,0,.55); }
+.venue-dock-text { flex: 1; min-width: 0; font-size: 13px; opacity: .9; }
+@media (prefers-reduced-motion: no-preference) { .venue-dock { animation: sofraIn var(--dur-slow) var(--ease) 200ms both; } }
+
+/* H3: binding to the table */
+.bind { display: flex; flex-direction: column; gap: 10px; }
+.bind-way { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--surface); color: inherit; font: inherit; text-align: start; cursor: pointer; min-height: 60px; touch-action: manipulation;
+  transition: transform var(--dur-fast) var(--ease); }
+.bind-way:active { transform: scale(.98); }
+.bind-way.best { border-color: var(--brand); background: var(--brand-soft); }
+.bind-way b { display: block; }
+.bind-ic { width: 40px; height: 40px; border-radius: 12px; background: var(--surface-2); display: grid; place-items: center; flex: none; }
+.scan { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.scan-frame { position: relative; width: min(320px, 100%); aspect-ratio: 1; border-radius: var(--radius-lg); overflow: hidden; background: #000; }
+.scan-video { width: 100%; height: 100%; object-fit: cover; }
+.scan-corners { position: absolute; inset: 14%; border: 3px solid rgba(255,255,255,.85); border-radius: 18px; }
+.tap-wait { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.tap-mark { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
+.tap-mark svg { width: 30px; height: 30px; }
+
+/* R1: the panel card */
+.guest-panel .card-head { display: flex; align-items: flex-start; gap: 12px; }
+.guest-panel .card-head > div { flex: 1; min-width: 0; }
+.guest-panel-body { display: flex; flex-direction: column; gap: 14px; }
+.guest-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.guest-kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+.guest-kpi small { color: var(--muted); font-weight: 600; font-size: 12px; }
+.guest-kpi b { display: block; font: 600 24px/1.15 var(--font-display); margin-top: 2px; }
+.guest-reviews { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.review-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.review-row p { margin: 0; }
+.review-row .btn { align-self: flex-start; }
+.drawer-body .review-row + .review-row { margin-top: 10px; }
+
+/* setup: the directory entry */
+.directory-list { display: flex; flex-direction: column; gap: 16px; }
+.directory-row { display: flex; flex-direction: column; gap: 8px; }
+.directory-row + .directory-row { border-top: 1px solid var(--border); padding-top: 16px; }
+.directory-where { flex-wrap: wrap; gap: 8px; align-items: center; }
+.directory-where .faint { flex: 1; min-width: 140px; }

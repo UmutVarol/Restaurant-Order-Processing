@@ -45,7 +45,10 @@ export default {
     const staffCard = h('section', { class: 'card setup-card', 'data-testid': 'setup-staff' });
     const tablesCard = h('section', { class: 'card setup-card', 'data-testid': 'setup-tables' });
     const branchesCard = h('section', { class: 'card setup-card', 'data-testid': 'setup-branches', hidden: !chainManager });
-    mount(container, h('div', { class: 'setup-grid' }, checklistCard, staffCard, tablesCard, branchesCard));
+    // round three: where each branch is, so guests who open Sofra inside find it
+    const directoryCard = h('section', { class: 'card setup-card', 'data-testid': 'setup-directory' });
+    let entries = null;
+    mount(container, h('div', { class: 'setup-grid' }, checklistCard, staffCard, tablesCard, branchesCard, directoryCard));
 
     const head = (iconName, title, sub, action) => h('div', { class: 'card-head' },
       h('span', { class: 'settings-ic' }, icon(iconName, 'sm')),
@@ -361,6 +364,57 @@ export default {
       });
     }
 
+    // ------------------------------------------------------------------ guest app directory
+    function renderDirectory() {
+      if (!entries) { mount(directoryCard, head('pin', t('dir.title'), t('dir.sub')), skeleton()); return; }
+      const mine = entries.filter((entry) => user.branchId == null || entry.branchId === user.branchId);
+      mount(directoryCard, head('pin', t('dir.title'), t('dir.sub')),
+        h('div', { class: 'card-body directory-list' }, mine.map(directoryRow)));
+    }
+
+    function directoryRow(entry) {
+      const address = h('input', { class: 'input', id: `dir-address-${entry.branchId}`, maxlength: 200, value: entry.address || '', placeholder: t('dir.addressHint') });
+      const listed = h('input', { type: 'checkbox', checked: entry.listed, 'data-testid': `dir-listed-${entry.branchId}` });
+      let position = entry.latitude == null ? null : { lat: entry.latitude, lng: entry.longitude };
+      const where = h('span', { class: 'faint', 'data-testid': `dir-where-${entry.branchId}` });
+      const paintWhere = () => { where.textContent = position ? t('dir.positionSet', { lat: position.lat.toFixed(5), lng: position.lng.toFixed(5) }) : t('dir.positionNone'); };
+      paintWhere();
+      const save = async () => {
+        try {
+          const saved = await api.placeBranch(entry.branchId, { latitude: position?.lat ?? null, longitude: position?.lng ?? null, address: address.value.trim() || null, listed: listed.checked });
+          Object.assign(entry, saved);
+          listed.checked = saved.listed;
+          toast({ title: saved.listed ? t('dir.listedToast') : t('settings.saved') });
+        } catch (error) {
+          toast({ title: errorMessage(error), kind: 'error' });
+        }
+      };
+      return h('div', { class: 'directory-row' },
+        mine().length > 1 ? h('b', { dir: 'auto' }, entry.branch) : null,
+        h('div', { class: 'row directory-where' }, icon('pin', 'sm'), where,
+          h('button', {
+            class: 'btn sm', type: 'button', 'data-testid': `dir-here-${entry.branchId}`, onclick: () => {
+              if (!('geolocation' in navigator)) { toast({ title: t('dir.noLocation'), kind: 'error' }); return; }
+              navigator.geolocation.getCurrentPosition((pos) => {
+                position = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                paintWhere();
+                toast({ title: t('dir.positionTaken', { m: Math.round(pos.coords.accuracy) }) });
+              }, () => toast({ title: t('dir.noLocation'), kind: 'error' }), { enableHighAccuracy: true, timeout: 12000 });
+            },
+          }, icon('locate', 'sm'), t('dir.useHere'))),
+        h('small', { class: 'faint' }, t('dir.useHereHint')),
+        h('div', { class: 'field' }, h('label', { for: `dir-address-${entry.branchId}` }, t('dir.address')), address),
+        h('label', { class: 'checkbox' }, listed, t('dir.listed')),
+        h('small', { class: 'faint' }, t('dir.listedHint')),
+        h('div', null, h('button', { class: 'btn primary', 'data-testid': `dir-save-${entry.branchId}`, onclick: save }, icon('check', 'sm'), t('common.save'))));
+      function mine() { return entries.filter((e) => user.branchId == null || e.branchId === user.branchId); }
+    }
+
+    async function loadDirectory() {
+      try { entries = await api.directory(); } catch { entries = []; }
+      renderDirectory();
+    }
+
     async function loadBranches() {
       try { branches = await api.branches(); } catch { branches = []; }
       renderBranches();
@@ -401,6 +455,8 @@ export default {
     loadStaff();
     loadTables();
     loadFacts();
+    renderDirectory();
+    loadDirectory();
     return {};
   },
 };

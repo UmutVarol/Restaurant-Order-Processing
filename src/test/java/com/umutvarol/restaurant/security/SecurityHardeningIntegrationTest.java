@@ -116,7 +116,7 @@ class SecurityHardeningIntegrationTest extends ApiIntegrationTest {
                 .andExpect(header().string("X-Frame-Options", "DENY"))
                 .andExpect(header().string("Cross-Origin-Opener-Policy", "same-origin"))
                 .andExpect(header().string("Cross-Origin-Resource-Policy", "same-origin"))
-                .andExpect(header().string("Permissions-Policy", containsString("camera=()")))
+                .andExpect(header().string("Permissions-Policy", containsString("microphone=()")))
                 .andExpect(header().string("Content-Security-Policy", containsString("frame-ancestors 'none'")))
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("no-store")));
     }

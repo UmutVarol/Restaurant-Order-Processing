@@ -147,6 +147,26 @@ Status is always shown as a dot and a word, never as colour alone.
   the star dish settles in. "Share" gives the phone's share sheet a 1080 × 1350 picture drawn on the device (right to
   left in Arabic), or saves it as a PNG; it never goes to the server.
 
+### Round three: the guest app (approved 22 November 2026)
+
+Candidates: https://claude.ai/artifact/449CATSWPdLNyrXg54WddH. All were chosen; the web version (`#/sofra`, `#/v/…`)
+is in place, the store app follows.
+
+- **"Are you here?" (G1–G3):** opening Sofra asks for the position once (never stored). One clear match greets the guest
+  with the restaurant's own sign (G2): its colour fills the card, the logo settles, the name rises (420 ms, staggered).
+  Otherwise a proximity view, not a map (G1): the guest in the middle, dashed rings at 25/75/150 m that draw in once,
+  each place as a pin by bearing and distance; below it the nearest places as a list with the likeliest chosen (G3).
+  No pulse, no blinking dot; while locating, the crosshair turns once and waits.
+- **A restaurant's page (H1–H3):** four large actions first (menu, call a waiter, ask for the bill, pay my share), the
+  menu at this branch's prices, then verified-visit reviews with the restaurant's answers. Anything that needs the table
+  opens the binding sheet (H3): tap the NFC tag (Android, Chrome), scan the table's QR with the camera (where the
+  browser can read codes), or use the phone's camera app. A dark dock at the bottom keeps "Connect to table" in reach.
+- **Ratings (P2, P3):** under the paid receipt, five stars first; choosing one opens what was good, the dishes liked
+  and a comment. A star settles from 84 % scale, without overshoot. A paid visit not yet rated waits on the guest
+  app's home for three days (P3). Only paid visits can be rated; everyone is asked the same way (no review gating).
+- **Panel (R1):** guests inside now (by check-in), this week's rating, Sofra guests this week, returning guests, the
+  latest ratings with a reply button; all ratings in a drawer.
+
 ## Accessibility and input
 
 - There is a skip link. Icon-only buttons have `aria-label`s, form fields have linked labels, and dialogs are
