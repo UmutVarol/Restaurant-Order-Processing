@@ -62,14 +62,20 @@ test('the waiter screen puts the tables waiting longest first', async ({ page })
     await page.clock.install();
     await page.goto('/#/service');
     const waiting = page.getByTestId('waiting-table');
-    await expect(page.getByTestId('service-waiting')).toBeHidden();
+    const row = (table) => waiting.filter({ has: page.locator('.service-table', { hasText: new RegExp(`^${table.code}$`) }) });
+    // let the screen load first: jumping the clock fires each request's timeout, aborting one still on its way
+    await expect(page.getByTestId('service-summary').locator('.service-count').first()).toBeVisible();
+    // only this test's tables are checked: the demo's own seated tables may already have waited past the limit
+    await expect(row(first)).toHaveCount(0);
+    await expect(row(second)).toHaveCount(0);
     await page.clock.fastForward('13:00');
-    await expect(page.getByTestId('service-waiting')).toBeVisible();
+    await expect(row(first)).toBeVisible();
+    await expect(row(second)).toBeVisible();
     const codes = await waiting.locator('.service-table').allTextContents();
     expect(codes.indexOf(first.code)).toBeLessThan(codes.indexOf(second.code));
     await expect(waiting.filter({ hasText: 'Check in' }).first()).toBeVisible();
     await page.clock.fastForward('08:00');
-    await expect(waiting.filter({ has: page.locator('.service-table', { hasText: new RegExp(`^${first.code}$`) }) })).toContainText('Waiting long');
+    await expect(row(first)).toContainText('Waiting long');
   } finally {
     for (const order of [older, newer]) await api(page, 'POST', `/orders/${order.id}/cancel`, { reason: 'Test finished' });
   }
