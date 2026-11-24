@@ -109,6 +109,7 @@ Bunlar `deploy/.env` dosyasında açılır; değiştirdikten sonra `docker compo
 | **QR ile online ödeme (iyzico)** | `PAYMENT_PROVIDER=IYZICO`, `IYZICO_API_KEY`, `IYZICO_SECRET_KEY` (iyzico üye işyeri panelinden). İnternet (alan adı) kurulumu gerekir. Ayrıntılar: [PAYMENTS.md](PAYMENTS.md). |
 | **ÖKC fişi** | ÖKC'nizin üreticisinden alınan köprü yazılımının adresi ve anahtarı: `FISCAL_OKC_BRIDGE_URL`, `FISCAL_OKC_API_KEY`. |
 | **e-Arşiv fatura** | GİB yetkili özel entegratörünüzün bilgileri: `FISCAL_EARSIV_BASE_URL`, `FISCAL_EARSIV_API_KEY`. |
+| **e-Adisyon** | Yalnızca GİB e-Adisyon zorunluluğu bildirdiyse: entegratörünüzün `FISCAL_EADISYON_BASE_URL`, `FISCAL_EADISYON_API_KEY` bilgileri. |
 | **Yemeksepeti / Getir / Trendyol** | Platformla yapılan sözleşmeden sonra verilen anahtarlar: `YEMEKSEPETI_WEBHOOK_SECRET` vb. (README'deki Configuration bölümü). |
 
 Bu entegrasyonlar ayarlanmadıysa Sofra o belgeleri **kesmez** ve bunu açıkça gösterir. Yasal fişi o arada yazar

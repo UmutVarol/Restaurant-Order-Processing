@@ -65,6 +65,10 @@ public class OrderLine {
     @Column(name = "unit_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal unitPrice;
 
+    /** The dish's VAT rate when it was ordered, as a percentage; the price above includes it. */
+    @Column(name = "vat_rate", nullable = false, precision = 5, scale = 2)
+    private BigDecimal vatRate = BigDecimal.TEN.setScale(2);
+
     @Column(nullable = false)
     private int quantity;
 
@@ -110,6 +114,7 @@ public class OrderLine {
         this.category = item.getCategory();
         this.stationCode = item.getStationCode();
         this.course = defaultCourse(item.getCategory());
+        this.vatRate = item.getVatRate();
         BigDecimal extras = choices.stream().map(OptionChoice::getPriceDelta).reduce(BigDecimal.ZERO, BigDecimal::add);
         this.unitPrice = Money.normalize(price.add(extras));
         this.quantity = quantity;
@@ -159,6 +164,10 @@ public class OrderLine {
 
     public MenuCategory getCategory() {
         return category;
+    }
+
+    public BigDecimal getVatRate() {
+        return vatRate;
     }
 
     public BigDecimal getUnitPrice() {

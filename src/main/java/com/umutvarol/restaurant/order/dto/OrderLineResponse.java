@@ -22,7 +22,8 @@ public record OrderLineResponse(
         String station,
         int course,
         Instant firedAt,
-        Instant readyAt) {
+        Instant readyAt,
+        BigDecimal vatRate) {
 
     public record Option(Long choiceId, String group, String choice, BigDecimal priceDelta) {
     }
@@ -45,6 +46,7 @@ public record OrderLineResponse(
                 line.getStationCode(),
                 line.getCourse(),
                 line.getFiredAt(),
-                line.getReadyAt());
+                line.getReadyAt(),
+                line.getVatRate());
     }
 }

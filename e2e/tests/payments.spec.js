@@ -33,7 +33,7 @@ async function openBillFromOrders(page, guest) {
 
 test('completing an unpaid order opens its bill; paying it in two cash halves completes the order', async ({ page, request }) => {
   const guest = uniqueGuest('Split');
-  const order = await servedDineInOrder(request, guest);   // 2 × 520 + 2 × 70 = 1180 + 10 % VAT = 1298
+  const order = await servedDineInOrder(request, guest);   // 2 × 572 + 2 × 77 = 1298, VAT included
   await signIn(page, 'waiter');
   await page.goto(`/#/orders?q=${encodeURIComponent(guest)}`);
   await page.locator('.data-table tbody tr', { hasText: guest }).click();

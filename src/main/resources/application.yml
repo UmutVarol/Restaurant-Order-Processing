@@ -104,7 +104,9 @@ restaurant:
   name: ${RESTAURANT_NAME:Sofra Bistro}
   time-zone: ${RESTAURANT_TIME_ZONE:Europe/Istanbul}
   pricing:
+    # Menu prices include VAT (KDV) and each dish has its own rate; tax-rate only reprices orders placed before that.
     tax-rate: 0.10
+    delivery-vat-rate: 0.10
     delivery-fee: 39.90
     free-delivery-threshold: 750.00
   security:
@@ -182,6 +184,10 @@ restaurant:
     e-arsiv:
       base-url: ${FISCAL_EARSIV_BASE_URL:}
       api-key: ${FISCAL_EARSIV_API_KEY:}
+    # e-Adisyon, only for a restaurant GİB notified (VUK 509); on Sofra Cloud each business connects its own
+    e-adisyon:
+      base-url: ${FISCAL_EADISYON_BASE_URL:}
+      api-key: ${FISCAL_EADISYON_API_KEY:}
   demo:
     enabled: ${DEMO_MODE:true}
     history-days: 14

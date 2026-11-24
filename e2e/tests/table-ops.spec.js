@@ -73,7 +73,7 @@ test('a waiter voids, comps with a manager PIN, discounts and moves a table', as
   await expect(modal.getByLabel('Manager username')).toHaveValue('admin');
   await modal.getByLabel('Manager PIN').fill('2468');
   await modal.getByTestId('adjust-confirm').click();
-  await expect(drawer.locator('.totals .line.discount')).toContainText('22');
+  await expect(drawer.locator('.totals .line.discount')).toContainText('24.20');
   await drawer.getByRole('button', { name: 'Close' }).first().click();
 
   // the seating moves to a free table

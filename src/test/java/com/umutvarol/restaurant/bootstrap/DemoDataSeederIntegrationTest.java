@@ -37,8 +37,12 @@ class DemoDataSeederIntegrationTest {
         assertThat(all).hasSizeGreaterThan(100);
         assertThat(all).allSatisfy(order -> {
             PriceBreakdown price = order.getPricing();
+            // menu prices include VAT: the tax is within the total, never added to it
+            assertThat(price.taxIncluded()).isTrue();
             assertThat(price.total()).isEqualByComparingTo(
-                    price.subtotal().subtract(price.discount()).add(price.tax()).add(price.deliveryFee()));
+                    price.subtotal().subtract(price.discount()).add(price.deliveryFee()));
+            assertThat(price.vat().stream().map(com.umutvarol.restaurant.order.pricing.VatLine::vat)
+                    .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)).isEqualByComparingTo(price.tax());
             assertThat(order.getHistory().getFirst().getStatus()).isEqualTo(OrderStatus.PENDING);
             assertThat(order.getHistory().getLast().getStatus()).isEqualTo(order.getStatus());
             assertThat(order.getLines()).isNotEmpty();

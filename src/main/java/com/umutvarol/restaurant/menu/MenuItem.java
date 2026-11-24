@@ -19,6 +19,7 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -30,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import org.hibernate.annotations.TenantId;
+import org.jspecify.annotations.Nullable;
 import java.util.Set;
 
 /**
@@ -59,8 +61,17 @@ public class MenuItem {
     @Column(nullable = false, length = 20)
     private MenuCategory category;
 
+    /** VAT included: the price a guest sees is the price they pay. */
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
+
+    /** The VAT (KDV) rate within the price, as a percentage: 10 for food, 20 for alcoholic drinks. */
+    @Column(name = "vat_rate", nullable = false, precision = 5, scale = 2)
+    private BigDecimal vatRate = BigDecimal.TEN.setScale(2);
+
+    /** When the price last changed; the price list at the door shows the latest of these. */
+    @Column(name = "price_changed_at")
+    private Instant priceChangedAt;
 
     @Column(length = 16)
     private String icon;
@@ -273,6 +284,27 @@ public class MenuItem {
 
     public BigDecimal getPrice() {
         return price;
+    }
+
+    public BigDecimal getVatRate() {
+        return vatRate;
+    }
+
+    public @Nullable Instant getPriceChangedAt() {
+        return priceChangedAt;
+    }
+
+    /** Sets the VAT rate within the price, as a percentage between 0 and 100. */
+    public void changeVatRate(BigDecimal rate) {
+        if (rate == null || rate.signum() < 0 || rate.compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new IllegalArgumentException("VAT rate must be between 0 and 100");
+        }
+        this.vatRate = rate.setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    /** Records that the price changed now (a new dish counts as a change). */
+    public void priceChanged(Instant at) {
+        this.priceChangedAt = Objects.requireNonNull(at, "at");
     }
 
     public String getIcon() {

@@ -44,7 +44,8 @@
     [25, 'Şalgam', 'Fermented purple carrot juice, hot or mild', 'DRINK', 75, '🥤', 1, false, ['SPICY']],
     [26, 'Maden Suyu', 'Sparkling mineral water', 'DRINK', 55, '💧', 1, false, []],
   ].map(([id, name, description, category, price, icon, prepTimeMinutes, popular, tags]) => ({
-    id, name, description, category, priceC: price * 100, icon, prepTimeMinutes, popular, tags, available: true, archived: false,
+    // menu prices include VAT (V37__vat_inclusive_prices.sql turned the seeded prices into their VAT-inclusive equivalent)
+    id, name, description, category, priceC: Math.round(price * 110), vatRate: 10, priceChangedAt: Date.now(), icon, prepTimeMinutes, popular, tags, available: true, archived: false,
   }));
 
   // Kitchen stations, as seeded by V12__courses_and_stations.sql, and where each category goes by default.
@@ -108,7 +109,12 @@
     }
   }
 
-  function price(subtotalC, type, coupon, manual = null) {
+  /** Like PricingCalculator: menu prices include VAT; the VAT within the total is worked out per rate. */
+  const DELIVERY_VAT_RATE = 10;
+  const taxedOf = (lines) => lines.map((l) => ({ rate: l.vatRate ?? 10, grossC: l.lineTotalC }));
+  function price(input, type, coupon, manual = null) {
+    const lines = Array.isArray(input) ? input : [{ rate: 10, grossC: input }];
+    const subtotalC = lines.reduce((sum, l) => sum + l.grossC, 0);
     let discountC = 0;
     if (coupon) {
       discountC = coupon.discountType === 'PERCENTAGE'
@@ -123,9 +129,23 @@
       discountC += Math.max(0, Math.min(left, manual.percent != null ? halfUp((left * manual.percent) / 100) : manual.amountC));
     }
     const discounted = subtotalC - discountC;
-    const taxC = halfUp((discounted * TAX_RATE_PERCENT) / 100);
     const feeC = type === 'DELIVERY' && discounted < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0;
-    return { subtotal: subtotalC, discount: discountC, tax: taxC, deliveryFee: feeC, total: discounted + taxC + feeC };
+    // the discount is shared between the rates in proportion, to the kuruş
+    const byRate = new Map();
+    lines.forEach((l) => byRate.set(l.rate, (byRate.get(l.rate) || 0) + l.grossC));
+    const rates = [...byRate.keys()].sort((a, b) => a - b);
+    const shares = rates.map((rate) => {
+      const exact = subtotalC ? (byRate.get(rate) * discountC) / subtotalC : 0;
+      return { rate, kurus: Math.floor(exact), rest: exact - Math.floor(exact) };
+    });
+    let left = discountC - shares.reduce((sum, x) => sum + x.kurus, 0);
+    [...shares].sort((a, b) => b.rest - a.rest).forEach((x) => { if (left > 0) { x.kurus += 1; left -= 1; } });
+    const gross = new Map(shares.map((x) => [x.rate, byRate.get(x.rate) - x.kurus]));
+    if (feeC) gross.set(DELIVERY_VAT_RATE, (gross.get(DELIVERY_VAT_RATE) || 0) + feeC);
+    const vat = [...gross.entries()].sort((a, b) => a[0] - b[0]).filter(([, g]) => g > 0)
+      .map(([rate, g]) => ({ rate, grossC: g, vatC: halfUp((g * rate) / (100 + rate)) }));
+    const taxC = vat.reduce((sum, v) => sum + v.vatC, 0);
+    return { subtotal: subtotalC, discount: discountC, tax: taxC, deliveryFee: feeC, total: discounted + feeC, vat, taxIncluded: true };
   }
 
   function validateCoupon(code, subtotalC, now) {
@@ -157,7 +177,7 @@
     const ids = { group: 1, choice: 1 };
     for (const [dishId, ...groups] of OPTIONS) {
       menu.find((m) => m.id === dishId).optionGroups = groups.map(([name, minSelect, maxSelect, choices]) => ({
-        id: ids.group++, name, minSelect, maxSelect, choices: choices.map(([choice, extra]) => ({ id: ids.choice++, name: choice, priceDeltaC: extra * 100 })),
+        id: ids.group++, name, minSelect, maxSelect, choices: choices.map(([choice, extra]) => ({ id: ids.choice++, name: choice, priceDeltaC: Math.round(extra * 110) })),
       }));
     }
     const orders = generateHistory(menu);
@@ -265,7 +285,7 @@
         throw new Problem(400, 'VALIDATION_FAILED', 'Request body is invalid.', { errors: [{ field: 'items[].course', message: 'must be between 1 and 3' }] });
       }
       return {
-        menuItemId: dish.id, name: dish.name, icon: dish.icon, category: dish.category, unitPriceC,
+        menuItemId: dish.id, name: dish.name, icon: dish.icon, category: dish.category, unitPriceC, vatRate: dish.vatRate ?? 10,
         quantity, note: clean(item.note), lineTotalC: unitPriceC * quantity, options,
         station: dish.stationCode ?? DEFAULT_STATION[dish.category], course: item.course ?? DEFAULT_COURSE[dish.category] ?? 1,
       };
@@ -294,8 +314,7 @@
   const optionText = (line) => (line.options?.length ? line.options.map((o) => o.choice).join(' · ') : null);
 
   function createOrder(details, lines, coupon, at, actor) {
-    const subtotal = lines.reduce((sum, line) => sum + line.lineTotalC, 0);
-    const pricing = price(subtotal, details.type, coupon);
+    const pricing = price(taxedOf(lines), details.type, coupon);
     return {
       id: state.nextOrderId++,
       type: details.type,
@@ -366,12 +385,14 @@
   });
   const isHeld = (line) => line.firedAt === null && line.quantity - (line.voided || 0) > 0;
   const heldCourses = (order) => [...new Set(order.lines.filter(isHeld).map((l) => l.course))].sort((a, b) => a - b);
-  const pricingView = (p) => ({ subtotal: toLira(p.subtotal), discount: toLira(p.discount), tax: toLira(p.tax), deliveryFee: toLira(p.deliveryFee), total: toLira(p.total) });
+  const pricingView = (p) => ({ subtotal: toLira(p.subtotal), discount: toLira(p.discount), tax: toLira(p.tax), deliveryFee: toLira(p.deliveryFee), total: toLira(p.total),
+    taxIncluded: p.taxIncluded !== false, vat: (p.vat || []).map((v) => ({ rate: v.rate, gross: toLira(v.grossC), vat: toLira(v.vatC) })) });
   const menuView = (m) => ({
     id: m.id, name: m.name, description: m.description, category: m.category, price: toLira(m.priceC), icon: m.icon,
     prepTimeMinutes: m.prepTimeMinutes, popular: m.popular, available: m.available && !m.archived && !m.stockOut, tags: [...m.tags].sort(),
     allergens: [...(m.allergens ?? SEED_ALLERGENS[m.name] ?? [])].sort(),
-    stockOut: Boolean(m.stockOut), needsApproval: Boolean(m.needsApproval),
+    stockOut: Boolean(m.stockOut), needsApproval: Boolean(m.needsApproval), vatRate: m.vatRate ?? 10,
+    priceChangedAt: m.priceChangedAt ? iso(m.priceChangedAt) : null,
     stationCode: m.stationCode ?? DEFAULT_STATION[m.category],
     optionGroups: (m.optionGroups || []).map((g) => ({ id: g.id, name: g.name, minSelect: g.minSelect, maxSelect: g.maxSelect,
       choices: g.choices.map((c) => ({ id: c.id, name: c.name, priceDelta: toLira(c.priceDeltaC) })) })),
@@ -420,7 +441,7 @@
       if (random() < 0.38) add(weighted('DESSERT'), 1 + Math.floor(random() * people));
       if (!basket.size) add(weighted('MAIN'));
       const lines = [...basket].map(([dish, quantity]) => ({
-        menuItemId: dish.id, name: dish.name, icon: dish.icon, category: dish.category, unitPriceC: dish.priceC, quantity,
+        menuItemId: dish.id, name: dish.name, icon: dish.icon, category: dish.category, unitPriceC: dish.priceC, vatRate: dish.vatRate ?? 10, quantity,
         note: random() < 0.07 ? pick(lineNotes) : null, lineTotalC: dish.priceC * quantity,
       }));
       const kitchen = Math.max(...lines.map((l) => menu.find((m) => m.id === l.menuItemId).prepTimeMinutes)) + Math.floor(random() * 7);
@@ -492,7 +513,7 @@
         paymentMethod: type === 'DELIVERY' ? (pay < 0.55 ? 'ONLINE' : pay < 0.85 ? 'CARD' : 'CASH') : (pay < 0.68 ? 'CARD' : 'CASH'),
         couponCode: coupon ? coupon.code : null,
         lines: d.lines,
-        pricing: price(subtotal, type, coupon),
+        pricing: price(taxedOf(d.lines), type, coupon),
         createdAt: d.createdAt, updatedAt: d.createdAt, createdBy: 'waiter', cancellationReason: null,
         history: [{ status: 'PENDING', at: d.createdAt, by: 'waiter' }],
       };
@@ -604,6 +625,18 @@
   const devices = () => (state.devices ??= []);
   // the demo keeps one set of data: a second branch shows the screens for chains, it does not split the floor
   const branches = () => (state.branches ??= [{ id: 1, code: 'merkez', name: 'Merkez', active: true }]);
+  function priceListView(branchId) {
+    const open = branches().filter((x) => x.active);
+    const branch = open.find((x) => x.id === branchId) || open[0];
+    const order = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'];
+    const items = state.menu.filter((m) => !m.archived)
+      .sort((a, b2) => order.indexOf(a.category) - order.indexOf(b2.category) || a.name.localeCompare(b2.name, 'tr'))
+      .map((m) => ({ category: m.category, name: m.name, price: toLira(m.priceC), vatRate: m.vatRate ?? 10, available: m.available && !m.stockOut,
+        priceChangedAt: m.priceChangedAt ? iso(m.priceChangedAt) : null }));
+    const last = items.map((i) => i.priceChangedAt).filter(Boolean).sort().at(-1) || null;
+    return { business: 'Sofra Bistro', slug: 'sofra', branchId: branch.id, branch: branch.name, branchCode: branch.code, address: 'Moda Cd. 12, Kadıköy',
+      listed: true, chain: open.length > 1, timeZone: 'Europe/Istanbul', lastChangedAt: last, generatedAt: iso(Date.now()), items };
+  }
   // verified-visit ratings in the demo: a few guests have already rated the restaurant
   const demoRatings = () => (state.ratings ??= [
     { id: 1, billId: -1, branchId: 1, stars: 5, tags: ['TASTE', 'FRIENDLY'], liked: ['Adana Kebap'], comment: 'Adana harikaydı, servis çok hızlıydı.', at: iso(Date.now() - 26 * 36e5), reply: 'Teşekkür ederiz, yine bekleriz!', repliedAt: iso(Date.now() - 20 * 36e5) },
@@ -669,7 +702,7 @@
     const snapshot = structuredClone(order);
     const adjustment = change();
     const coupon = order.couponCode ? COUPONS.find((c) => c.code === order.couponCode) : null;
-    order.pricing = price(order.lines.reduce((sum, l) => sum + l.lineTotalC, 0), order.type, coupon, order.manual);
+    order.pricing = price(taxedOf(order.lines), order.type, coupon, order.manual);
     const bill = billFor(order);
     const m = money(bill);
     if (m.balance - m.pending < 0) {
@@ -835,11 +868,12 @@
   }
   const integrationsView = () => ({
     cloud: true, encryptionReady: true,
-    entries: ['E_ARSIV', 'YEMEKSEPETI', 'GETIR', 'TRENDYOL'].map((kind) => {
+    entries: ['E_ARSIV', 'E_ADISYON', 'YEMEKSEPETI', 'GETIR', 'TRENDYOL'].map((kind) => {
       const own = state.integrations?.[kind];
-      return { kind, inPlan: PLAN_OFFERS[billing().plan].features.includes(kind === 'E_ARSIV' ? 'FISCAL' : 'DELIVERY_PLATFORMS'),
+      const fiscal = kind === 'E_ARSIV' || kind === 'E_ADISYON';
+      return { kind, inPlan: PLAN_OFFERS[billing().plan].features.includes(fiscal ? 'FISCAL' : 'DELIVERY_PLATFORMS'),
         configured: Boolean(own), baseUrl: own?.baseUrl || null, keyHint: own?.hint || null, webhookSecretSet: Boolean(own?.hasSecret),
-        webhookPath: kind === 'E_ARSIV' ? null : `/api/v1/channels/${kind.toLowerCase()}/webhook/sofra-bistro`,
+        webhookPath: fiscal ? null : `/api/v1/channels/${kind.toLowerCase()}/webhook/sofra-bistro`,
         updatedAt: own ? iso(own.at) : null, updatedBy: own?.by || null };
     }),
   });
@@ -1162,7 +1196,8 @@
       menuItemId: dish.id, name: dish.name, price: toLira(dish.priceC),
       lines: lines.map((r) => ({ ingredientId: r.ingredientId, ingredient: ingredient(r.ingredientId).name, unit: ingredient(r.ingredientId).unit, quantity: r.quantity,
         optionGroup: r.optionGroup, optionChoice: r.optionChoice, replacesIngredientId: r.replacesIngredientId, cost: toLira(valueC(ingredient(r.ingredientId), r.quantity)) })),
-      cost: toLira(costC), foodCostPercent: lines.length ? Math.round((costC * 1000) / dish.priceC) / 10 : null,
+      // of the price before VAT
+      cost: toLira(costC), foodCostPercent: lines.length ? Math.round((costC * 1000) / (dish.priceC * 100 / (100 + (dish.vatRate ?? 10)))) / 10 : null,
     };
   }
 
@@ -1442,7 +1477,20 @@
     }
   }
 
+  // Fiyat Etiketi Yönetmeliği: no service, cover or table charge under any name (ExtraCharges)
+  const FEE = /\b(servis (ucreti|bedeli)|hizmet (ucreti|bedeli)|masa (ucreti|bedeli)|kuver|kuvert|couvert|cover charge|service (charge|fee)|table (charge|fee))\b/;
+  const FOLD = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', â: 'a', î: 'i', û: 'u' };
+  function refuseCharge(name) {
+    if (name == null) return;
+    const folded = String(name).toLocaleLowerCase('tr').replace(/[çğıöşüâîû]/g, (c) => FOLD[c]).replace(/\s+/g, ' ');
+    if (FEE.test(folded)) {
+      throw new Problem(422, 'MENU_CHARGE_NOT_ALLOWED', 'A service, cover or table charge cannot be on the menu: the menu price is the whole price', { parameters: { name: String(name).trim() } });
+    }
+  }
+
   function applyDish(dish, body) {
+    refuseCharge(body.name);
+    (body.optionGroups || []).forEach((g) => { refuseCharge(g.name); (g.choices || []).forEach((c) => refuseCharge(c.name)); });
     if (body.optionGroups != null) {
       state.nextGroupId ??= 1000;
       state.nextChoiceId ??= 1000;
@@ -1452,6 +1500,12 @@
       }));
     }
     dish.optionGroups ??= [];
+    if (dish.priceC !== toCents(body.price)) dish.priceChangedAt = Date.now();
+    if (body.vatRate != null) {
+      if (!(Number(body.vatRate) >= 0 && Number(body.vatRate) <= 100)) throw new Problem(400, 'VALIDATION_FAILED', 'Request body is invalid.', { errors: [{ field: 'vatRate', message: 'must be between 0 and 100' }] });
+      dish.vatRate = Number(body.vatRate);
+    }
+    dish.vatRate ??= 10;
     Object.assign(dish, {
       name: String(body.name).trim(), description: clean(body.description), category: body.category, priceC: toCents(body.price),
       icon: clean(body.icon), prepTimeMinutes: Number(body.prepTimeMinutes || 0), popular: Boolean(body.popular), tags: [...(body.tags || [])],
@@ -2050,6 +2104,22 @@
     ['POST', /^billing\/portal$/, 'manager', () => { throw new Problem(422, 'NO_PORTAL', 'Manage your subscription from the provider’s e-mails'); }],
     // Setup screen: staff and tables change for this tab only; the demo starts fresh on reload.
     ['GET', /^branches$/, 'staff', () => branches()],
+    // the price list at the door and on the tables, as PriceListService builds it
+    ['GET', /^price-list$/, 'manager', ({ query: q }) => priceListView(Number(q.get('branchId')) || null)],
+    ['GET', /^price-list\/export$/, 'manager', ({ query: q }) => {
+      const list = priceListView(Number(q.get('branchId')) || null);
+      if (q.get('format') === 'json') {
+        return { schema: 'sofra.price-list/1', currency: 'TRY', vatIncluded: true, business: list.business, branch: list.branch, branchCode: list.branchCode,
+          address: list.address, lastChangedAt: list.lastChangedAt, generatedAt: list.generatedAt,
+          items: list.items.map((i) => ({ category: i.category, name: i.name, price: i.price, vatRate: i.vatRate, onSale: i.available, priceChangedAt: i.priceChangedAt })) };
+      }
+      const cat = { STARTER: 'Başlangıç', MAIN: 'Ana yemek', DESSERT: 'Tatlı', DRINK: 'İçecek' };
+      const day = (iso) => (iso ? new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso)) : '');
+      const rows = list.items.map((i) => [list.branch, cat[i.category], i.name, i.price.toFixed(2).replace('.', ','), String(i.vatRate).replace('.', ','),
+        i.available ? 'Evet' : 'Hayır', day(i.priceChangedAt)].join(';'));
+      const csv = '﻿' + ['Şube;Kategori;Ürün;Fiyat (TL, KDV dahil);KDV oranı (%);Satışta;Son fiyat değişikliği', ...rows].join('\r\n') + '\r\n';
+      return new Response(new Blob([csv], { type: 'text/csv;charset=UTF-8' }), { status: 200, headers: { 'Content-Type': 'text/csv;charset=UTF-8' } });
+    }],
     // Round three: the guest app's directory. In the demo the restaurant is always a few metres from the visitor,
     // so "I am here" works wherever the demo is opened; its position is never sent anywhere.
     ['GET', /^public\/venues\/nearby$/, 'public', ({ query: q }) => {
@@ -2320,7 +2390,7 @@
         coupon = check.coupon || null;
         result = { code: check.code, applied: Boolean(coupon), description: coupon ? coupon.description : null, errorCode: check.error ? check.error[0] : null, message: check.error ? check.error[1] : null };
       }
-      const p = price(subtotal, body.type, coupon);
+      const p = price(taxedOf(lines), body.type, coupon);
       return {
         lines: lines.map(lineView), pricing: pricingView(p), coupon: result, freeDeliveryThreshold: FREE_DELIVERY_THRESHOLD / 100,
         amountUntilFreeDelivery: body.type === 'DELIVERY' ? toLira(Math.max(0, FREE_DELIVERY_THRESHOLD - (p.subtotal - p.discount))) : 0,
@@ -2603,7 +2673,7 @@
         throw new Problem(429, 'GUEST_SLOW_DOWN', 'A cart was just sent from this table', { parameters: { retryAfterSeconds: 5 } });
       }
       const lines = buildLines(body.items.map((item) => ({ ...item, quantity: Math.min(20, Number(item.quantity)) })));
-      const totalC = price(lines.reduce((sum, l) => sum + l.lineTotalC, 0), 'DINE_IN', null).total;
+      const totalC = price(taxedOf(lines), 'DINE_IN', null).total;
       const request = newGuestRequest(table, 'ORDER', {
         guestName: clean(body.guestName), note: clean(body.note), totalC,
         lines: lines.map((l, i) => ({ menuItemId: l.menuItemId, name: l.name, icon: l.icon, quantity: l.quantity, note: l.note,
@@ -2910,6 +2980,24 @@
       return { ...table, occupied: false, needsClearingSince: null, openOrders: [], openTotal: 0 };
     }],
     ['GET', /^coupons$/, 'staff', () => COUPONS.filter((c) => !c.validUntil || Date.now() < Date.parse(c.validUntil)).map((c) => ({ ...c }))],
+    // e-Adisyon (AdisyonService), simulated in the demo: each table's bill, opened with its first order and closed
+    // with its receipt's number
+    ['GET', /^adisyon$/, 'manager', ({ query }) => {
+      const [from, to] = dayRange(query.get('date') || todayIso());
+      const adisyons = state.bills.filter((b) => b.table && b.openedAt >= from && b.openedAt < to).sort((a, b) => b.openedAt - a.openedAt).map((bill) => {
+        const orders = ordersOf(bill).filter((o) => o.status !== 'CANCELLED');
+        const m = money(bill);
+        const doc = fiscalState().documents.find((d) => d.billId === bill.id);
+        const status = bill.status === 'CLOSED' ? 'CLOSED' : bill.status === 'VOID' ? 'CANCELLED' : 'OPEN';
+        const items = orders.flatMap((o) => o.lines).reduce((sum, l) => sum + l.quantity - (l.voided || 0) - (l.comped || 0), 0);
+        return { id: bill.id, billId: bill.id, ettn: `00000000-0000-4000-8000-${String(bill.id).padStart(12, '0')}`, tableCode: bill.table.code,
+          status, total: toLira(m.total), tax: toLira(orders.reduce((sum, o) => sum + o.pricing.tax, 0)), vat: [], itemCount: items,
+          fiscalNumber: doc?.number || null, openedAt: iso(bill.openedAt), closedAt: bill.closedAt ? iso(bill.closedAt) : null,
+          version: 1, sentVersion: 1, delivery: 'SENT', provider: 'SIMULATED', documentNumber: `EAD2026${String(bill.id).padStart(9, '0')}`,
+          attempts: 0, lastError: null, nextAttemptAt: null };
+      });
+      return { enabled: true, simulated: true, waiting: 0, adisyons };
+    }],
     ['GET', /^fiscal\/documents$/, 'till', ({ query }) => {
       const [from, to] = dayRange(query.get('date') || todayIso());
       return fiscalState().documents.filter((d) => d.createdAt >= from && d.createdAt < to).sort((a, b) => b.createdAt - a.createdAt).map(fiscalView);

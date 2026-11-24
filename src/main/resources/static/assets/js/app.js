@@ -22,6 +22,7 @@ const ROUTES = [
   { id: 'cashier', icon: 'coins', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/cashier.js') },
   { id: 'dashboard', icon: 'dashboard', roles: ['ADMIN'], section: 'manage', load: () => import('./views/dashboard.js') },
   { id: 'menu', icon: 'menu', roles: ['ADMIN'], section: 'manage', load: () => import('./views/menu.js') },
+  { id: 'prices', icon: 'tag', roles: ['ADMIN'], section: 'manage', load: () => import('./views/prices.js') },
   { id: 'stock', icon: 'box', roles: ['ADMIN'], section: 'manage', when: () => hasFeature('STOCK'), load: () => import('./views/stock.js') },
   { id: 'channels', icon: 'delivery', roles: ['ADMIN'], section: 'manage', when: () => hasFeature('DELIVERY_PLATFORMS'), load: () => import('./views/channels.js') },
   { id: 'setup', icon: 'users', roles: ['ADMIN'], section: 'manage', load: () => import('./views/setup.js') },

@@ -2,9 +2,10 @@ package com.umutvarol.restaurant.integration;
 
 import com.umutvarol.restaurant.business.Feature;
 
-/** What a business can connect on its own: its e-Arşiv integrator and each delivery platform. */
+/** What a business can connect on its own: its e-Arşiv and e-Adisyon integrators and each delivery platform. */
 public enum IntegrationKind {
     E_ARSIV(Feature.FISCAL, false),
+    E_ADISYON(Feature.FISCAL, false),
     YEMEKSEPETI(Feature.DELIVERY_PLATFORMS, true),
     GETIR(Feature.DELIVERY_PLATFORMS, true),
     TRENDYOL(Feature.DELIVERY_PLATFORMS, true);

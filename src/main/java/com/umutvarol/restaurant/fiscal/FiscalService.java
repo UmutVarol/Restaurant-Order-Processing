@@ -285,7 +285,8 @@ public class FiscalService {
             }
             for (OrderLine line : order.getLines()) {
                 if (line.billableQuantity() > 0) {
-                    lines.add(new FiscalDevice.Line(line.getItemName(), line.billableQuantity(), line.getUnitPrice(), line.getLineTotal()));
+                    lines.add(new FiscalDevice.Line(line.getItemName(), line.billableQuantity(), line.getUnitPrice(), line.getLineTotal(),
+                            line.getVatRate()));
                 }
             }
         }
@@ -294,7 +295,7 @@ public class FiscalService {
         FiscalDevice.Buyer buyer = document.getBuyerTaxId() == null ? null
                 : new FiscalDevice.Buyer(document.getBuyerName(), document.getBuyerTaxId(), document.getBuyerAddress());
         return new FiscalDevice.Request("fiscal-" + document.getBillId(), document.getKind(), document.getBillId(),
-                clock.instant(), lines, document.getTotal(), document.getTax(), payments, buyer);
+                clock.instant(), lines, document.getTotal(), document.getTax(), com.umutvarol.restaurant.order.pricing.Vat.of(bill.getOrders()), payments, buyer);
     }
 
     private static BigDecimal sum(List<FiscalDocument> list) {

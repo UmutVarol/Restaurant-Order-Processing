@@ -15,10 +15,10 @@ test('a dish is ordered with its options, priced and shown to the kitchen', asyn
   await modal.getByRole('radio', { name: 'Bol acılı' }).click();
   await modal.getByRole('checkbox', { name: /Ekstra lavaş/ }).click();
   await modal.getByRole('checkbox', { name: /Közlenmiş domates/ }).click();
-  await expect(modal.locator('.options-total')).toHaveText(/565/);
+  await expect(modal.locator('.options-total')).toHaveText(/621\.50/);
   await modal.getByTestId('options-apply').click();
   await expect(line.getByTestId('line-options')).toHaveText('Bol acılı · Közlenmiş domates · Ekstra lavaş');
-  await expect(line.locator('.total')).toHaveText(/565/);
+  await expect(line.locator('.total')).toHaveText(/621\.50/);
 
   // the same dish as it comes is a separate line
   await adana.click();

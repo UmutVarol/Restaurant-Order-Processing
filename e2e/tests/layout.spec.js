@@ -2,7 +2,7 @@
 const { test, expect } = require('@playwright/test');
 const { signIn } = require('./helpers');
 
-const ROUTES = ['dashboard', 'pos', 'kitchen', 'floor', 'reservations', 'time', 'orders', 'cashier', 'menu', 'setup', 'settings'];
+const ROUTES = ['dashboard', 'pos', 'kitchen', 'floor', 'reservations', 'time', 'orders', 'cashier', 'menu', 'prices', 'setup', 'settings'];
 
 /** The theme toggle is in the top bar on a wide screen and in the "More" sheet on a phone. */
 async function toggleTheme(page) {

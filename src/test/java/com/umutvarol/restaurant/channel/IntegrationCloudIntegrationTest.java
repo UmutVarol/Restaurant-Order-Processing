@@ -53,7 +53,7 @@ class IntegrationCloudIntegrationTest {
         mvc.perform(with(kebab[1], get("/api/v1/integrations")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cloud").value(true))
-                .andExpect(jsonPath("$.entries.length()").value(4))
+                .andExpect(jsonPath("$.entries.length()").value(5))
                 .andExpect(jsonPath("$.entries[?(@.kind == 'YEMEKSEPETI')].configured").value(false))
                 .andExpect(jsonPath("$.entries[?(@.kind == 'YEMEKSEPETI')].webhookPath")
                         .value("/api/v1/channels/yemeksepeti/webhook/" + kebab[0]));
@@ -109,6 +109,17 @@ class IntegrationCloudIntegrationTest {
                 .andExpect(jsonPath("$.entries[?(@.kind == 'E_ARSIV')].keyHint").value("5678"))
                 .andReturn().getResponse().getContentAsString();
         assertThat(saved).doesNotContain("integrator-key-12345678");
+
+        // a business GİB told to keep e-Adisyons connects its integrator the same way
+        mvc.perform(with(kebab[1], json(put("/api/v1/integrations/E_ADISYON"), """
+                        {"baseUrl": "https://93.184.215.14/eadisyon"}""")))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("INTEGRATION_INCOMPLETE"));
+        mvc.perform(with(kebab[1], json(put("/api/v1/integrations/E_ADISYON"), """
+                        {"baseUrl": "https://93.184.215.14/eadisyon", "apiKey": "adisyon-key-87654321"}""")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entries[?(@.kind == 'E_ADISYON')].configured").value(true))
+                .andExpect(jsonPath("$.entries[?(@.kind == 'E_ADISYON')].webhookPath").value(org.hamcrest.Matchers.contains((Object) null)));
     }
 
     @Test

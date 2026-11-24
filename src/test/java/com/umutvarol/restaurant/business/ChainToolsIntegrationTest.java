@@ -76,7 +76,7 @@ class ChainToolsIntegrationTest extends ApiIntegrationTest {
             mvc.perform(json(post("/api/v1/public/table/{token}/orders", token), """
                             {"items": [{"menuItemId": %d, "quantity": 1}]}""".formatted(ayran)))
                     .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.total").value(61.05)); // the branch's 55.50 and the 10% service charge
+                    .andExpect(jsonPath("$.total").value(55.50)); // the branch's own price, VAT included
 
             // the owner sees the branches side by side; a branch manager does not
             mvc.perform(with(manager, get("/api/v1/analytics/branches").param("days", "1")))

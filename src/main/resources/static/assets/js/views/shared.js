@@ -3,7 +3,7 @@
 import { h } from '../core/dom.js';
 import { icon, logoMark } from '../core/icons.js';
 import { t } from '../core/i18n.js';
-import { dateTime, money, time } from '../core/format.js';
+import { dateTime, money, number, time } from '../core/format.js';
 import { api, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openDrawer, openModal, toast } from '../core/ui.js';
@@ -254,12 +254,22 @@ function lineItem(line, coursed, actions = null) {
 export function totals(pricing, { loading = false } = {}) {
   const discount = Number(pricing.discount) > 0;
   const fee = Number(pricing.deliveryFee) > 0;
+  // menu prices include VAT: the VAT is shown within the total, by rate; orders from before that added it on top
+  const included = pricing.taxIncluded !== false;
   return h('div', { class: ['totals', loading ? 'loading' : ''] },
     h('div', { class: 'line' }, h('span', null, t('pos.subtotal')), h('span', null, money(pricing.subtotal))),
     discount ? h('div', { class: 'line discount' }, h('span', null, t('pos.discount')), h('span', null, `−${money(pricing.discount)}`)) : null,
-    h('div', { class: 'line' }, h('span', null, t('pos.tax')), h('span', null, money(pricing.tax))),
+    included ? null : h('div', { class: 'line' }, h('span', null, t('pos.tax')), h('span', null, money(pricing.tax))),
     fee ? h('div', { class: 'line' }, h('span', null, t('pos.deliveryFee')), h('span', null, money(pricing.deliveryFee))) : null,
-    h('div', { class: 'grand' }, h('span', null, t('pos.total')), h('span', null, money(pricing.total))));
+    h('div', { class: 'grand' }, h('span', null, t('pos.total')), h('span', null, money(pricing.total))),
+    included ? vatLines(pricing).map(([label, amount]) => h('div', { class: 'line vat', 'data-testid': 'vat-line' },
+      h('span', null, label), h('span', null, money(amount)))) : null);
+}
+
+/** The VAT within a total, one row per rate: "incl. VAT 10%  ₺12.34". */
+export function vatLines(pricing) {
+  const lines = pricing.vat?.length ? pricing.vat : [{ rate: null, vat: pricing.tax }];
+  return lines.map((line) => [line.rate == null ? t('pos.vatWithinAll') : t('pos.vatWithin', { rate: number(line.rate, Number(line.rate) % 1 ? 2 : 0) }), line.vat]);
 }
 
 function timeline(order) {
@@ -324,10 +334,11 @@ function receiptElement(order) {
     h('hr'),
     row(t('pos.subtotal'), money(p.subtotal)),
     Number(p.discount) > 0 ? row(`${t('pos.discount')}${order.couponCode ? ` (${order.couponCode})` : ''}`, `−${money(p.discount)}`) : null,
-    row(t('pos.tax'), money(p.tax)),
+    p.taxIncluded === false ? row(t('pos.tax'), money(p.tax)) : null,
     Number(p.deliveryFee) > 0 ? row(t('pos.deliveryFee'), money(p.deliveryFee)) : null,
     h('hr'),
     row(t('pos.total'), money(p.total), 'big'),
+    p.taxIncluded === false ? null : vatLines(p).map(([label, amount]) => row(label, money(amount))),
     row(t('detail.payment'), t(`pay.${order.paymentMethod}`)),
     h('hr'),
     h('div', { class: 'c' }, 'Afiyet olsun! · Thank you!'));

@@ -8,6 +8,8 @@ restaurant:
     enabled: false
   fiscal:
     simulate-unconfigured: true
+    # every table keeps a simulated e-Adisyon, so the whole suite exercises it
+    simulate-e-adisyon: true
   channels:
     # Yemeksepeti is connected with a throwaway secret; the other platforms are simulations
     simulate-unconfigured: true

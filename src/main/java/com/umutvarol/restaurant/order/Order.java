@@ -317,6 +317,13 @@ public class Order implements BranchOwned {
         return Money.normalize(lines.stream().map(OrderLine::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
+    /** What each line charges after voids and comps, with its VAT rate: what the order is priced on. */
+    public List<com.umutvarol.restaurant.order.pricing.TaxedAmount> taxedLines() {
+        return lines.stream()
+                .map(line -> new com.umutvarol.restaurant.order.pricing.TaxedAmount(line.getVatRate(), line.getLineTotal()))
+                .toList();
+    }
+
     public void reprice(PriceBreakdown pricing, Instant at) {
         this.pricing = Objects.requireNonNull(pricing, "pricing");
         this.updatedAt = at;

@@ -2448,3 +2448,58 @@ button.rota-shift { cursor: pointer; }
 .directory-row + .directory-row { border-top: 1px solid var(--border); padding-top: 16px; }
 .directory-where { flex-wrap: wrap; gap: 8px; align-items: center; }
 .directory-where .faint { flex: 1; min-width: 140px; }
+
+/* ---------- price list at the door and on the tables (Fiyat Etiketi Yönetmeliği) ---------- */
+.prices-tools { align-items: end; flex-wrap: wrap; }
+.prices-tools .segmented { min-width: 220px; }
+.prices-tools .field.inline { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.prices-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.prices-preview { display: flex; justify-content: center; padding: 18px; background: var(--surface-3); border-radius: var(--radius-lg, 20px); overflow-x: auto; }
+.prices-side h3 { font-size: 15px; margin: 0 0 8px; }
+.prices-side hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+.prices-rules { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.prices-rules li { display: flex; gap: 8px; align-items: center; font-size: 13.5px; }
+.prices-rules .icon { color: var(--green); flex: none; }
+.prices-files { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 960px) { .prices-layout { grid-template-columns: 1fr; } }
+
+/* the sheet is paper: dark ink on white in either theme */
+.price-sheet { --ink: #1f1a17; --rule: #c9bfb6; background: #fff; color: var(--ink); width: 210mm; max-width: 100%; min-height: 240mm;
+  padding: 18mm 16mm 14mm; box-shadow: var(--shadow-md, 0 8px 30px rgba(0,0,0,.12)); display: flex; flex-direction: column; font-family: var(--font-body, Inter), sans-serif; }
+.price-sheet.a5 { width: 148mm; min-height: 190mm; padding: 12mm 11mm 10mm; font-size: 12px; }
+.price-sheet-head { text-align: center; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 14px; }
+.price-sheet-head h1 { font-family: var(--font-display); font-size: 30px; font-weight: 600; letter-spacing: -.02em; margin: 0; }
+.price-sheet.a5 .price-sheet-head h1 { font-size: 22px; }
+.price-sheet-head p { margin: 2px 0 0; font-size: 12.5px; color: #5c524b; }
+.price-sheet-head h2 { margin: 10px 0 0; font-size: 13px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; }
+.price-sheet-body { flex: 1; columns: 2; column-gap: 12mm; }
+.price-sheet.a5 .price-sheet-body { columns: 1; }
+.price-sheet-body section { break-inside: avoid; margin-bottom: 12px; }
+.price-sheet-body h3 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin: 0 0 6px; padding-bottom: 3px; border-bottom: 1px solid var(--rule); }
+.price-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; break-inside: avoid; }
+.price-name { flex: 0 1 auto; }
+.price-dots { flex: 1 1 12px; border-bottom: 1px dotted var(--rule); transform: translateY(-3px); min-width: 12px; }
+.price-amount { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+.price-sheet-foot { display: flex; justify-content: space-between; align-items: end; gap: 16px; border-top: 2px solid var(--ink); padding-top: 10px; margin-top: 12px; font-size: 12px; }
+.price-sheet-foot p { margin: 2px 0; }
+.price-sheet-rule { font-weight: 650; }
+.price-sheet-qr { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.price-sheet-qr .qr { width: 26mm; height: 26mm; }
+.price-sheet.a5 .price-sheet-qr .qr { width: 20mm; height: 20mm; }
+@media print {
+  .print-root .price-sheet { page: price; box-shadow: none; width: auto; min-height: 0; height: calc(297mm - 24mm); padding: 0; }
+  .print-root .price-sheet.a5 { page: price-a5; height: calc(210mm - 20mm); }
+}
+@page price { size: A4 portrait; margin: 12mm; }
+@page price-a5 { size: A5 portrait; margin: 10mm; }
+.menu-price-note { font-size: 12px; text-align: center; margin: 18px 12px 8px; }
+.prices-side { padding: 18px; }
+/* on a phone the preview reads as one column; the printed sheet keeps its own layout */
+@media (max-width: 700px) {
+  .prices-preview { padding: 10px; }
+  .prices-preview .price-sheet { width: 100%; min-height: 0; padding: 22px 16px 16px; }
+  .prices-preview .price-sheet-body { columns: 1; }
+  .prices-preview .price-sheet-head h1 { font-size: 24px; }
+  .prices-tools .segmented { min-width: 0; flex: 1 1 210px; }
+  .prices-tools .segmented button { white-space: nowrap; }
+}

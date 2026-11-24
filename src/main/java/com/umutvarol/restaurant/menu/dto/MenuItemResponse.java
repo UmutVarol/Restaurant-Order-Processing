@@ -24,7 +24,9 @@ public record MenuItemResponse(
         String stationCode,
         boolean stockOut,
         boolean needsApproval,
-        Set<Allergen> allergens) {
+        Set<Allergen> allergens,
+        BigDecimal vatRate,
+        java.time.@org.jspecify.annotations.Nullable Instant priceChangedAt) {
 
     public static MenuItemResponse from(MenuItem item) {
         return from(item, null);
@@ -47,6 +49,8 @@ public record MenuItemResponse(
                 item.getStationCode(),
                 item.isStockOut(),
                 item.isNeedsStaffApproval(),
-                new TreeSet<>(item.getAllergens()));
+                new TreeSet<>(item.getAllergens()),
+                item.getVatRate(),
+                com.umutvarol.restaurant.menu.BranchMenu.priceChangedAt(item, branch));
     }
 }

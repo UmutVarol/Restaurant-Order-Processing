@@ -26,13 +26,13 @@ class ProductOptionsApiIntegrationTest extends ApiIntegrationTest {
         List<Integer> extras = JsonPath.read(item, "$.optionGroups[1].choices[*].id");
         Integer hot = JsonPath.read(item, "$.optionGroups[0].choices[2].id");
 
-        // 520 + 25 + 20 = 565 per kebab
+        // 572 + 27.50 + 22 = 621.50 per kebab, VAT included
         mvc.perform(json(as(WAITER, post("/api/v1/orders/quote")), """
                         {"type": "TAKEAWAY", "items": [{"menuItemId": %d, "quantity": 2, "optionIds": [%d, %d, %d]}]}"""
                         .formatted(kebab, hot, extras.get(0), extras.get(1))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.lines[0].unitPrice").value(565.00))
-                .andExpect(jsonPath("$.lines[0].lineTotal").value(1130.00))
+                .andExpect(jsonPath("$.lines[0].unitPrice").value(621.50))
+                .andExpect(jsonPath("$.lines[0].lineTotal").value(1243.00))
                 .andExpect(jsonPath("$.lines[0].options[*].choice").value(org.hamcrest.Matchers.contains(
                         "Bol acılı", "Közlenmiş domates", "Ekstra lavaş")));
 
@@ -41,7 +41,7 @@ class ProductOptionsApiIntegrationTest extends ApiIntegrationTest {
                         {"type": "TAKEAWAY", "customerName": "Options", "paymentMethod": "CASH",
                          "items": [{"menuItemId": %d, "quantity": 1}]}""".formatted(kebab)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.lines[0].unitPrice").value(520.00))
+                .andExpect(jsonPath("$.lines[0].unitPrice").value(572.00))
                 .andExpect(jsonPath("$.lines[0].options[0].group").value("Acılık"))
                 .andExpect(jsonPath("$.lines[0].options[0].choice").value("Normal"));
     }

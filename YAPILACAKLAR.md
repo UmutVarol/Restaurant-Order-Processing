@@ -43,6 +43,20 @@ Son güncelleme: 16 Kasım 2026.
 - [ ] **Sunucuda `TOTP_ENCRYPTION_KEY`.** iyzico ve entegratör anahtarları bununla şifrelenir; kaybolursa
   kaydedilmiş anahtarlar açılamaz. Üret, sunucuya gir ve güvenli bir yerde yedekle. Ayrıntı: `docs/OPERATIONS.md`.
 
+## 3b. Mevzuat (kod hazır, teyit ve sözleşme sende) — ayrıntı: `docs/MEVZUAT.md`
+
+- [ ] **Mali müşavir teyidi.** Menü fiyatları artık KDV dahil ve her ürünün kendi oranı var (yemek ve alkolsüz
+  içecek %10, alkollü içecek %20). Teyit ettirilecekler: bu oranlar, paket teslimat ücretinin %10 sayılması,
+  indirimin oranlara orantılı dağıtılması, fişte/faturada oran bazında KDV satırları.
+- [ ] **Kapı önü ve masa fiyat listesi.** Yönetim › Fiyat listesi'nden kapıya A4, masalara A5 yazdırılıp asılır;
+  fiyat her değiştiğinde yeniden yazdırılır (liste kendiliğinden "son fiyat değişikliği" tarihini taşır).
+- [ ] **Bakanlığın elektronik fiyat listesi.** Gönderim biçimi yayımlanınca haber ver; Sofra şimdiden aynı bilgiyi
+  CSV/JSON olarak veriyor (Fiyat listesi › CSV/JSON indir), biçim gelince ona dönüştürülür.
+- [ ] **e-Adisyon** (yalnızca GİB bir işletmeye zorunluluk bildirirse): o işletme GİB yetkili bir e-Adisyon
+  entegratörüyle anlaşır ve Ayarlar › Bağlantılar › e-Adisyon'a adresini ve anahtarını girer. Gerçek bir
+  entegratöre karşı henüz denenmedi (bu ortamdan erişim yok); entegratörün adaptörü `docs/MEVZUAT.md`'deki biçimi
+  karşılamalı.
+
 ## 4. Mağaza uygulamaları
 
 - [ ] **Google Play geliştirici hesabı** ($25, bir kez).

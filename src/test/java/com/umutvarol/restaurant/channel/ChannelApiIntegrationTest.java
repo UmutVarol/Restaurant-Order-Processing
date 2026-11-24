@@ -80,7 +80,7 @@ class ChannelApiIntegrationTest extends ApiIntegrationTest {
     @Test
     void anUnmappedItemStopsTheOrderUntilAManagerMapsItOrTurnsItDown() throws Exception {
         String item = "YS-NEW-" + suffix();
-        // ayran is 70 before tax: the guest paid 77 on the platform
+        // ayran is 77 on the menu, VAT included: the guest paid the same on the platform
         String waiting = signed("yemeksepeti", order("YS-" + suffix(), item, "77.00", "[]"))
                 .andExpect(jsonPath("$.status").value("ATTENTION"))
                 .andExpect(jsonPath("$.problemCode").value("CHANNEL_ITEM_UNMAPPED"))

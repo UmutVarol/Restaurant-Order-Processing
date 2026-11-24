@@ -528,11 +528,14 @@ export default {
       return item ? Number(item.price) + optionsPrice(item, line.optionIds) : 0;
     };
 
-    /** Offline the server cannot price the cart: an estimate from the menu prices and the last tax rate seen. */
+    /** Offline the server cannot price the cart: an estimate from the menu prices, which include each dish's VAT. */
     function estimate() {
       const subtotal = ticket.lines.reduce((sum, line) => sum + unitPriceOf(line) * line.quantity, 0);
-      const tax = Math.round(subtotal * (lastReference()?.taxRate ?? 0) * 100) / 100;
-      return { estimated: true, lines: [], coupon: null, pricing: { subtotal, discount: 0, tax, deliveryFee: 0, total: subtotal + tax } };
+      const tax = Math.round(ticket.lines.reduce((sum, line) => {
+        const rate = Number(menuItem(line.menuItemId)?.vatRate ?? 10);
+        return sum + unitPriceOf(line) * line.quantity * rate / (100 + rate);
+      }, 0) * 100) / 100;
+      return { estimated: true, lines: [], coupon: null, pricing: { subtotal, discount: 0, tax, deliveryFee: 0, total: subtotal, taxIncluded: true, vat: [] } };
     }
 
     // The cart the last server quote was for: it stays valid offline as long as the cart does not change.
@@ -567,8 +570,6 @@ export default {
         if (seq !== quoteSeq) return;
         quote = result;
         quotedCart = cartKey();
-        const taxable = Number(result.pricing.subtotal) - Number(result.pricing.discount);
-        if (taxable > 0) rememberReference({ taxRate: Number(result.pricing.tax) / taxable });
       } catch (error) {
         if (seq !== quoteSeq) return;
         if (error instanceof ApiError && error.status === 0) { if (!serverQuoteCurrent()) quote = estimate(); }

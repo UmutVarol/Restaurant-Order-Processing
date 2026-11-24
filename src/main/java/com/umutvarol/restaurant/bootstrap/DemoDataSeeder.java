@@ -224,7 +224,9 @@ class DemoDataSeeder implements ApplicationRunner {
         private Order build(Draft draft, OrderType type, DiningTable table) {
             BigDecimal subtotal = draft.lines().stream().map(OrderLine::getLineTotal).reduce(Money.ZERO, BigDecimal::add);
             Coupon coupon = random.nextDouble() < 0.12 ? applicableCoupon(subtotal) : null;
-            PriceBreakdown price = pricing.calculate(subtotal, type, coupon);
+            PriceBreakdown price = pricing.calculate(draft.lines().stream()
+                    .map(line -> new com.umutvarol.restaurant.order.pricing.TaxedAmount(line.getVatRate(), line.getLineTotal())).toList(),
+                    type, coupon);
             String guest = pick(GUESTS);
             boolean delivery = type == OrderType.DELIVERY;
             OrderDetails details = new OrderDetails(

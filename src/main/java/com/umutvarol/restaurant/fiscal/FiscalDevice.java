@@ -24,11 +24,18 @@ interface FiscalDevice {
     /** What the device itself recorded for a day (its Z report), when it can tell. */
     Optional<BigDecimal> dailyTotal(LocalDate day);
 
+    /**
+     * @param lines what was sold; prices include VAT
+     * @param tax   the VAT within {@code total}
+     * @param vat   the same VAT by rate, as receipts and invoices list it
+     */
     record Request(String key, FiscalKind kind, Long billId, Instant at, List<Line> lines, BigDecimal total,
-                   BigDecimal tax, Map<PaymentMethod, BigDecimal> payments, @Nullable Buyer buyer) {
+                   BigDecimal tax, List<com.umutvarol.restaurant.order.pricing.VatLine> vat,
+                   Map<PaymentMethod, BigDecimal> payments, @Nullable Buyer buyer) {
     }
 
-    record Line(String name, int quantity, BigDecimal unitPrice, BigDecimal total) {
+    /** One line as sold: the unit price and total include VAT at {@code vatRate} percent. */
+    record Line(String name, int quantity, BigDecimal unitPrice, BigDecimal total, BigDecimal vatRate) {
     }
 
     record Buyer(String name, String taxId, @Nullable String address) {

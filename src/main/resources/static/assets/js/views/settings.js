@@ -180,8 +180,8 @@ export default {
 
     function connection(entry) {
       const kind = entry.kind;
-      const platform = kind !== 'E_ARSIV';
-      const name = platform ? PLATFORM_NAMES[kind] : t('integrations.eArsiv');
+      const platform = kind !== 'E_ARSIV' && kind !== 'E_ADISYON';
+      const name = platform ? PLATFORM_NAMES[kind] : t(kind === 'E_ADISYON' ? 'integrations.eAdisyon' : 'integrations.eArsiv');
       const status = !entry.inPlan ? t('integrations.notInPlan') : entry.configured
         ? t('integrations.connected', { hint: entry.keyHint || '••••' }) : t('integrations.notConnected');
       const field = (id, label, input, hint) => h('div', { class: 'field' }, h('label', { for: id }, label), input,
@@ -226,6 +226,7 @@ export default {
             field(`int-${kind}-url`, t('integrations.apiUrl'), url, t('integrations.apiHint')),
             field(`int-${kind}-key`, t('integrations.apiKey'), key, keep),
           ] : [
+            kind === 'E_ADISYON' ? h('p', { class: 'faint' }, t('integrations.eAdisyonHint')) : null,
             field(`int-${kind}-url`, t('integrations.integratorUrl'), url, t('integrations.urlHint')),
             field(`int-${kind}-key`, t('integrations.apiKey'), key, keep),
           ],

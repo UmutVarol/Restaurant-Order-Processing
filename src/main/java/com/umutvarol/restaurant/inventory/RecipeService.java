@@ -107,7 +107,7 @@ public class RecipeService {
                 .collect(Collectors.toMap(Ingredient::getId, Function.identity()));
         return items.stream().filter(item -> byDish.containsKey(item.id())).map(item -> {
             BigDecimal cost = portionCost(byDish.get(item.id()), byId);
-            return new DishCostResponse(item.id(), cost, percent(cost, item.price()));
+            return new DishCostResponse(item.id(), cost, percent(cost, item));
         }).toList();
     }
 
@@ -122,7 +122,7 @@ public class RecipeService {
         }).toList();
         BigDecimal cost = portionCost(lines, byId);
         return new RecipeResponse(item.id(), item.name(), item.price(), out, cost,
-                lines.isEmpty() ? null : percent(cost, item.price()));
+                lines.isEmpty() ? null : percent(cost, item));
     }
 
     /** One portion without options. */
@@ -135,8 +135,9 @@ public class RecipeService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
-    /** Prices on the menu are before tax, so the percentage is of what the restaurant keeps. */
-    private static @Nullable BigDecimal percent(BigDecimal cost, BigDecimal price) {
+    /** Menu prices include VAT, so the percentage is of the price before VAT: what the restaurant keeps. */
+    private static @Nullable BigDecimal percent(BigDecimal cost, MenuItemResponse item) {
+        BigDecimal price = com.umutvarol.restaurant.order.pricing.PricingCalculator.netOf(item.price(), item.vatRate());
         return price.signum() == 0 ? null : cost.multiply(HUNDRED).divide(price, 1, RoundingMode.HALF_UP);
     }
 

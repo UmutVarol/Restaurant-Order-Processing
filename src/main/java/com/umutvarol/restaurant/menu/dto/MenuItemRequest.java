@@ -29,7 +29,8 @@ public record MenuItemRequest(
         @Size(max = 8) List<@Valid @NotNull OptionGroupRequest> optionGroups,
         @Pattern(regexp = "[A-Z][A-Z0-9_]{1,19}") String stationCode,
         Boolean needsApproval,
-        Set<Allergen> allergens) {
+        Set<Allergen> allergens,
+        @DecimalMin("0.00") @DecimalMax("100.00") @Digits(integer = 3, fraction = 2) BigDecimal vatRate) {
 
 
     public int prepTimeMinutesOrDefault() {

@@ -5,7 +5,7 @@ import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { guestMark, guestName, leaveGuestBrand, useGuestBrand } from '../core/brand.js';
 import { t, tn } from '../core/i18n.js';
-import { money, time } from '../core/format.js';
+import { money, priceNote, time } from '../core/format.js';
 import { api, ApiError, errorMessage } from '../core/api.js';
 import { haptic, langButton, openModal, reducedMotion, themeButton, toast } from '../core/ui.js';
 import { chooseOptions, chosen, defaultOptionIds, optionKey, optionsPrice } from './options.js';
@@ -106,7 +106,8 @@ export function renderTable(root, token) {
         h('button', { class: 'btn sm ghost', onclick: openAllergies }, t('allergy.change'))) : null,
       h('div', { class: 'table-menu' }, sections.map(([category, list]) => h('section', {
         class: 'menu-section', 'data-cat': category, 'aria-label': t(`cat.${category}`),
-      }, h('h2', { class: 'menu-section-title' }, t(`cat.${category}`)), list.map(menuRow)))));
+      }, h('h2', { class: 'menu-section-title' }, t(`cat.${category}`)), list.map(menuRow)))),
+      h('p', { class: 'faint menu-price-note', 'data-testid': 'menu-price-note' }, priceNote(state.menu)));
     markCategory(false);
     renderBar();
   }

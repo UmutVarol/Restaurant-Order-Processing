@@ -35,7 +35,7 @@ class PaymentApiIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void aTablesRoundsShareOneBillThatCanBeSplitAndClosesWhenPaid() throws Exception {
-        long first = placeDineIn("1", "Demlik Çay", 2);   // 2 × 45 = 90 + 10 % tax = 99
+        long first = placeDineIn("1", "Demlik Çay", 2);   // 2 × 49.50 = 99, VAT included
         long second = placeDineIn("1", "Demlik Çay", 1);  // 49.50
         long billId = billIdOf(first);
         Assertions.assertThat(billIdOf(second)).isEqualTo(billId);

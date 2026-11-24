@@ -35,7 +35,7 @@ class TableOperationsApiIntegrationTest extends ApiIntegrationTest {
                         {"kind": "VOID", "quantity": 1, "reason": "Typed 3, meant 2"}"""))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lines[0].voidedQuantity").value(1))
-                .andExpect(jsonPath("$.lines[0].lineTotal").value(440.00))
+                .andExpect(jsonPath("$.lines[0].lineTotal").value(484.00))
                 .andExpect(jsonPath("$.itemCount").value(2))
                 .andExpect(jsonPath("$.pricing.total").value(484.00))
                 .andExpect(jsonPath("$.adjustments[0].kind").value("VOID"))
@@ -81,7 +81,7 @@ class TableOperationsApiIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lines[0].compedQuantity").value(1))
                 .andExpect(jsonPath("$.itemCount").value(2))
-                .andExpect(jsonPath("$.pricing.subtotal").value(520.00))
+                .andExpect(jsonPath("$.pricing.subtotal").value(572.00))
                 .andExpect(jsonPath("$.adjustments[0].approvedBy").value("admin"));
 
         mvc.perform(json(as(WAITER, put("/api/v1/orders/{id}/discount", id)), """
@@ -97,7 +97,7 @@ class TableOperationsApiIntegrationTest extends ApiIntegrationTest {
                         {"percent": 10, "reason": "Regular guest", "approval": {"manager": "admin", "pin": "%s"}}"""
                         .formatted(MANAGER_PIN)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pricing.discount").value(52.00))
+                .andExpect(jsonPath("$.pricing.discount").value(57.20))
                 .andExpect(jsonPath("$.pricing.tax").value(46.80))
                 .andExpect(jsonPath("$.pricing.total").value(514.80))
                 .andExpect(jsonPath("$.manualDiscount.percent").value(10));

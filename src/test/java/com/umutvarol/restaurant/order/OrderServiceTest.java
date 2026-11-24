@@ -67,7 +67,7 @@ class OrderServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW, ZoneId.of("Europe/Istanbul"));
         PricingCalculator pricing = new PricingCalculator(
-                new PricingProperties(new BigDecimal("0.10"), new BigDecimal("39.90"), new BigDecimal("750.00")));
+                new PricingProperties(new BigDecimal("0.10"), new BigDecimal("0.10"), new BigDecimal("39.90"), new BigDecimal("750.00")));
         service = new OrderService(orders, menuItems, tables, new CouponService(couponRepository, clock), pricing,
                 events, new SettlementPolicy() {
                     @Override
@@ -96,7 +96,9 @@ class OrderServiceTest {
         assertThat(response.createdAt()).isEqualTo(NOW);
         assertThat(response.createdBy()).isEqualTo("waiter");
         assertThat(response.pricing().subtotal()).isEqualByComparingTo("1130.00");
-        assertThat(response.pricing().total()).isEqualByComparingTo("1243.00");
+        // the menu price is what the guest pays: no tax added on top, 10 % VAT within it
+        assertThat(response.pricing().total()).isEqualByComparingTo("1130.00");
+        assertThat(response.pricing().tax()).isEqualByComparingTo("102.73");
 
         ArgumentCaptor<OrderChangedEvent> event = ArgumentCaptor.forClass(OrderChangedEvent.class);
         verify(events).publishEvent(event.capture());
@@ -185,8 +187,9 @@ class OrderServiceTest {
     void advancingAnnouncesTheStatusChange() {
         Order order = Order.place(com.umutvarol.restaurant.support.TestData.takeaway(),
                 List.of(OrderLine.of(kebap, 1, null)), new PricingCalculator(new PricingProperties(
-                        new BigDecimal("0.10"), BigDecimal.ZERO, BigDecimal.ZERO))
-                        .calculate(new BigDecimal("520"), OrderType.TAKEAWAY, null),
+                        new BigDecimal("0.10"), new BigDecimal("0.10"), BigDecimal.ZERO, BigDecimal.ZERO))
+                        .calculate(List.of(new com.umutvarol.restaurant.order.pricing.TaxedAmount(BigDecimal.TEN, new BigDecimal("520"))),
+                                OrderType.TAKEAWAY, null),
                 NOW.minusSeconds(300), "waiter");
         withId(order, 1500L);
         when(orders.findById(1500L)).thenReturn(Optional.of(order));

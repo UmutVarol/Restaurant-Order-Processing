@@ -52,17 +52,17 @@ bir maddeye geçince oradan devam edilir, işaretler orada güncellenir).
   3. tur aday sayfası (G1–G3, H1–H3, P1–P3, R1): https://claude.ai/artifact/449CATSWPdLNyrXg54WddH. Kullanıcı **hepsini**
   seçti (22 Kasım 2026); web sürümü uygulandı (V36, `directory` paketi, `#/sofra`, `#/v/…`, P2/P3/R1; ayrıntı ve kalanlar
   `docs/GUEST_APP_PLAN.md` › Durum, `DESIGN.md` › Round three). Misafir akışı: `docs/GUEST_JOURNEY.md`.
-- **Mevzuat (öncelikli):** Sofra KDV'yi menü fiyatının üstüne tek oranla ekliyor (`PricingCalculator`, %10); KDV dahil
-  fiyat ve ürün bazında KDV oranı gerekir (mali müşavirle teyit edilecek). Kapı önü basılı fiyat listesi + "TL" +
-  son fiyat değişiklik tarihi (2026 cezası ihlal başına 3.973 TL). Servis/kuver/masa ücreti 30.01.2026'dan beri
-  yasak (Sofra'da yok; menüde bu adla ürün girilince uyarı eklenebilir). e-Adisyon (GİB'in bildirdiği işletmeler).
-  Bakanlığa elektronik fiyat listesi bildirimi.
+- **Mevzuat: yapıldı (24 Kasım 2026, `docs/MEVZUAT.md`).** KDV dahil fiyat ve ürün bazında KDV oranı (V37; eski fiyatlar
+  %10 artırılarak KDV dahil yapıldı, eski siparişler `taxIncluded=false` ile eski kuralla), oran bazında KDV satırları
+  (kasa, fiş, ÖKC/e-Arşiv isteği), fiyat değişiklik tarihi, Yönetim › Fiyat listesi (kapı A4/masa A5, TL, KDV dahil,
+  son değişiklik, QR), Bakanlık için CSV/JSON dışa aktarım (`sofra.price-list/1`; biçim yayımlanınca dönüştürülecek),
+  servis/kuver/masa ücreti adıyla ürün engeli, e-Adisyon (V38, `compliance` paketi; Ayarlar › Bağlantılar, kasa kartı;
+  gerçek entegratörle denenmedi). Mali müşavir teyidi kullanıcıda (`YAPILACAKLAR.md` › 3b).
 - **Gerçek sorunlar:** komisyonsuz kendi online sipariş kanalı (platformlar %10–38), rezervasyonda kapora +
   SMS/WhatsApp hatırlatma (gelmeme %10–30), enflasyon araçları (toplu zam, marj uyarısı), personel maliyeti yüzdesi
   ve vardiya önerisi, talep tahmini/hazırlık listesi/israf, sadakat ve puanlama (seçici Google yorumu isteme Google kurallarına aykırı, yapılmayacak), yeni nesil ÖKC POS
   entegrasyonu, muhasebe dışa aktarımı (Logo/Mikro/Paraşüt), tedarikçiye otomatik sipariş.
-- Önerilen sıra: mevzuat → kendi online sipariş → kapora/hatırlatma → enflasyon araçları → sadakat → tahmin.
-- Küçük düzeltme: `ChainToolsIntegrationTest` yorumu %10'u "service charge" diyor, aslında KDV.
+- Önerilen sıra (mevzuat bitti): kendi online sipariş → kapora/hatırlatma → enflasyon araçları → sadakat → tahmin.
 
 ## Tasarım: kullanıcının "UI UX Tasarım Stüdyosu" (ikinci beyin)
 

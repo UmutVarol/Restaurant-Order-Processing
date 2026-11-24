@@ -12,16 +12,21 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param okc                  the ÖKC vendor's bridge on the till's own network
  * @param eArsiv               the e-Arşiv integrator
  * @param simulateUnconfigured simulate what is not connected, as in demo mode
+ * @param eAdisyon             the e-Adisyon integrator, for a restaurant GİB notified (VUK 509)
+ * @param simulateEAdisyon     keep simulated e-Adisyons without an integrator; off by default, since only businesses
+ *                             GİB notified keep them
  */
 @ConfigurationProperties(prefix = "restaurant.fiscal")
 public record FiscalProperties(
         @DefaultValue Connection okc,
         @DefaultValue Connection eArsiv,
-        @DefaultValue("false") boolean simulateUnconfigured) {
+        @DefaultValue("false") boolean simulateUnconfigured,
+        @DefaultValue Connection eAdisyon,
+        @DefaultValue("false") boolean simulateEAdisyon) {
 
     public record Connection(@Nullable URI baseUrl, @Nullable String apiKey) {
 
-        boolean configured() {
+        public boolean configured() {
             return baseUrl != null && apiKey != null && !apiKey.isBlank();
         }
     }

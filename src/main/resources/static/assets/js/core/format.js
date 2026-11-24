@@ -82,3 +82,13 @@ export function durationMinutes(minutes) {
 export function itemCount(n) {
   return tn('pos.items', n);
 }
+
+/**
+ * The note under a guest menu (Fiyat Etiketi Yönetmeliği): prices include VAT, and the day they last changed, the
+ * latest change among the dishes shown.
+ */
+export function priceNote(items) {
+  const last = (items || []).map((item) => item.priceChangedAt).filter(Boolean).sort().at(-1);
+  const day = last ? new Date(last).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+  return day ? `${t('gapp.priceNote')} ${t('gapp.priceChanged', { date: day })}` : t('gapp.priceNote');
+}

@@ -46,7 +46,7 @@ test('a till keeps taking orders offline and sends each one once when the connec
   await expect(page.getByTestId('outbox')).toHaveText('2 waiting');
 
   // meanwhile the manager changes a price the first order used
-  await setPrice(request, admin, 'Ayran', 80);
+  await setPrice(request, admin, 'Ayran', 88);
   try {
     await context.setOffline(false);
     await expect(page.locator('.toast', { hasText: '1 offline order(s) sent' })).toBeVisible({ timeout: 15_000 });
@@ -62,7 +62,7 @@ test('a till keeps taking orders offline and sends each one once when the connec
     await page.locator('.modal').getByRole('button', { name: 'Close' }).last().click();
     await expect(page.getByTestId('outbox')).toBeHidden();
   } finally {
-    await setPrice(request, admin, 'Ayran', 70);
+    await setPrice(request, admin, 'Ayran', 77);
   }
 
   // each order exists once, and the cash taken offline is on the second bill

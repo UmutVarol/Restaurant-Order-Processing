@@ -123,7 +123,7 @@ public class IntegrationService {
         String url = blank(baseUrl) ? null : OutboundUrls.requirePublicHttps(baseUrl).toString();
         String key = blank(apiKey) ? own.getApiKey() : box.seal(clean(apiKey).getBytes(StandardCharsets.UTF_8));
         String secret = blank(webhookSecret) ? own.getWebhookSecret() : box.seal(clean(webhookSecret).getBytes(StandardCharsets.UTF_8));
-        if (kind == IntegrationKind.E_ARSIV && (url == null || key == null)) {
+        if ((kind == IntegrationKind.E_ARSIV || kind == IntegrationKind.E_ADISYON) && (url == null || key == null)) {
             throw new BusinessRuleException("INTEGRATION_INCOMPLETE", "The integrator's address and API key are both needed");
         }
         if (kind.platform() && secret == null) {

@@ -100,7 +100,8 @@ class StockApiIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.lines[3].optionChoice").value("Large"))
                 // 100 g at 400/kg + 10 g at 100/kg + 2 g at 10/kg = 40 + 1 + 0.02
                 .andExpect(jsonPath("$.cost").value(41.02))
-                .andExpect(jsonPath("$.foodCostPercent").value(41.0));
+                // of the price before VAT: 100 with 10 % VAT inside is 90.91
+                .andExpect(jsonPath("$.foodCostPercent").value(45.1));
         mvc.perform(json(as(ADMIN, put("/api/v1/recipes/{id}", dishId)), """
                         {"lines": [{"ingredientId": %d, "quantity": 5, "optionGroup": "Size", "optionChoice": "Huge"}]}"""
                         .formatted(cheese)))

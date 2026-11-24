@@ -92,7 +92,10 @@ public class OrderAdjustmentService {
 
     private OrderResponse finish(Order order, OrderAdjustment adjustment, Instant now) {
         Coupon coupon = order.getCouponCode() == null ? null : coupons.findByCode(order.getCouponCode()).orElse(null);
-        order.reprice(pricing.calculate(order.linesSubtotal(), order.getType(), coupon, order.manualDiscount()), now);
+        // an order placed before menu prices included VAT keeps being priced the way it was
+        order.reprice(order.getPricing().taxIncluded()
+                ? pricing.calculate(order.taxedLines(), order.getType(), coupon, order.manualDiscount())
+                : pricing.calculateBeforeTax(order.linesSubtotal(), order.getType(), coupon, order.manualDiscount()), now);
         settlement.requireCovered(order);
         audit.info("order.{} order={} item={} quantity={} amount={} by={} approvedBy={} detail=\"{}\"",
                 adjustment.getKind().name().toLowerCase(), order.getId(), clean(adjustment.getItemName()),

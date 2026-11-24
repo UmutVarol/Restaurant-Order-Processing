@@ -41,6 +41,10 @@ public class BranchMenuItem {
     @Column(name = "updated_by", nullable = false, length = 50)
     private String updatedBy;
 
+    /** When this branch's own price last changed. */
+    @Column(name = "price_changed_at")
+    private @Nullable Instant priceChangedAt;
+
     protected BranchMenuItem() {
         // for JPA
     }
@@ -51,6 +55,9 @@ public class BranchMenuItem {
     }
 
     void change(@Nullable BigDecimal price, @Nullable Boolean available, Instant at, String by) {
+        if (price == null ? this.price != null : this.price == null || price.compareTo(this.price) != 0) {
+            this.priceChangedAt = at;
+        }
         this.price = price;
         this.available = available;
         this.updatedAt = at;
@@ -71,6 +78,10 @@ public class BranchMenuItem {
 
     public @Nullable BigDecimal getPrice() {
         return price;
+    }
+
+    public @Nullable Instant getPriceChangedAt() {
+        return priceChangedAt;
     }
 
     public @Nullable Boolean getAvailable() {

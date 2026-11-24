@@ -5,7 +5,7 @@
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
-import { dateTime, money, number } from '../core/format.js';
+import { dateTime, money, number, priceNote } from '../core/format.js';
 import { api } from '../core/api.js';
 import { guestMark, guestName, useGuestBrand } from '../core/brand.js';
 import { haptic, langButton, openModal, reducedMotion, themeButton } from '../core/ui.js';
@@ -96,7 +96,7 @@ export function renderVenue(root, business, branch, { navigate = (hash) => { loc
             item.description ? h('small', { class: 'faint' }, item.description) : null,
             item.allergens?.length ? h('small', { class: 'venue-allergens' }, icon('wheat', 'sm'), allergenList(item.allergens)) : null),
           h('span', { class: 'venue-dish-price num' }, money(item.price)))))),
-      h('p', { class: 'faint venue-price-note' }, t('gapp.priceNote')));
+      h('p', { class: 'faint venue-price-note', 'data-testid': 'menu-price-note' }, priceNote(page.menu)));
   }
 
   // ------------------------------------------------------------------ verified-visit reviews and the answers

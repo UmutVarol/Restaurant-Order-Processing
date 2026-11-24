@@ -90,9 +90,10 @@ public class MenuService {
                 .filter(com.umutvarol.restaurant.business.Branch::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("branch", branchId));
         java.util.Optional<BranchMenuItem> existing = branchOverrides.findByBranchIdAndMenuItemId(branchId, itemId);
-        if (price == null && available == null) {
+        if (price == null && available == null && existing.map(row -> row.getPrice() == null).orElse(true)) {
             existing.ifPresent(branchOverrides::delete); // the branch sells it like the central menu again
         } else {
+            // a branch going back to the central price keeps its row: the price list shows when its price changed
             BranchMenuItem row = existing.orElseGet(() -> new BranchMenuItem(branchId, itemId));
             row.change(price == null ? null : com.umutvarol.restaurant.common.money.Money.normalize(price), available, clock.instant(), actor);
             branchOverrides.save(row);
@@ -106,11 +107,16 @@ public class MenuService {
     }
 
     public MenuItemResponse create(MenuItemRequest request) {
+        refuseCharges(request);
         if (repository.existsByNameIgnoreCase(request.name().strip())) {
             throw nameTaken(request.name());
         }
         MenuItem item = new MenuItem(request.name(), request.description(), request.category(), request.price(),
                 request.icon(), request.prepTimeMinutesOrDefault(), request.popularOrDefault(), request.tags());
+        item.priceChanged(clock.instant());
+        if (request.vatRate() != null) {
+            item.changeVatRate(request.vatRate());
+        }
         item.replaceOptions(specs(request));
         // Stored explicitly, so the station counts as in use and cannot be removed from under the dish.
         assignStation(item, request.stationCode() != null ? request.stationCode() : Station.defaultCode(item.getCategory()));
@@ -122,12 +128,21 @@ public class MenuService {
     }
 
     public MenuItemResponse update(Long id, MenuItemRequest request) {
+        refuseCharges(request);
         MenuItem item = find(id);
         if (repository.existsByNameIgnoreCaseAndIdNot(request.name().strip(), id)) {
             throw nameTaken(request.name());
         }
+        boolean repriced = item.getPrice().compareTo(request.price()) != 0;
         item.update(request.name(), request.description(), request.category(), request.price(), request.icon(),
                 request.prepTimeMinutesOrDefault(), request.popularOrDefault(), request.tags());
+        if (repriced) {
+            item.priceChanged(clock.instant());
+        }
+        // left out of the request (an older till), the rate stays as it is
+        if (request.vatRate() != null) {
+            item.changeVatRate(request.vatRate());
+        }
         if (request.stationCode() != null) {
             assignStation(item, request.stationCode());
         }
@@ -144,6 +159,17 @@ public class MenuService {
             repository.flush();
         }
         return MenuItemResponse.from(item);
+    }
+
+    /** No service, cover or table charge under the name of a dish or an option (Fiyat Etiketi Yönetmeliği). */
+    private static void refuseCharges(MenuItemRequest request) {
+        ExtraCharges.refuse(request.name());
+        if (request.optionGroups() != null) {
+            request.optionGroups().forEach(group -> {
+                ExtraCharges.refuse(group.name());
+                group.choices().forEach(choice -> ExtraCharges.refuse(choice.name()));
+            });
+        }
     }
 
     private void assignStation(MenuItem item, String code) {

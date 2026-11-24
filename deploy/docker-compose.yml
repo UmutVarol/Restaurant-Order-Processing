@@ -55,6 +55,8 @@ services:
       FISCAL_OKC_API_KEY: ${FISCAL_OKC_API_KEY:-}
       FISCAL_EARSIV_BASE_URL: ${FISCAL_EARSIV_BASE_URL:-}
       FISCAL_EARSIV_API_KEY: ${FISCAL_EARSIV_API_KEY:-}
+      FISCAL_EADISYON_BASE_URL: ${FISCAL_EADISYON_BASE_URL:-}
+      FISCAL_EADISYON_API_KEY: ${FISCAL_EADISYON_API_KEY:-}
     # No published port: only Caddy reaches the app. Printers and the ÖKC bridge on the restaurant's network are
     # reached from inside the container like from any computer there.
     networks: [internal, edge]

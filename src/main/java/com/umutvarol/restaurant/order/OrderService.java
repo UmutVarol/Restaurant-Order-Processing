@@ -90,7 +90,7 @@ public class OrderService {
                     coupon == null ? null : coupon.getDescription(), validation.errorCode(), validation.message());
         }
 
-        PriceBreakdown breakdown = pricing.calculate(subtotal, request.type(), coupon);
+        PriceBreakdown breakdown = pricing.calculate(taxed(lines), request.type(), coupon);
         return new QuoteResponse(
                 lines.stream().map(OrderLineResponse::from).toList(),
                 breakdown,
@@ -131,7 +131,7 @@ public class OrderService {
         OrderDetails details = new OrderDetails(request.type(), request.customerName(), request.customerPhone(), table,
                 request.deliveryAddress(), request.note(), request.paymentMethod(),
                 coupon == null ? null : coupon.getCode());
-        PriceBreakdown breakdown = pricing.calculate(subtotal, request.type(), coupon);
+        PriceBreakdown breakdown = pricing.calculate(taxed(lines), request.type(), coupon);
 
         Order placed = Order.place(details, lines, breakdown, clock.instant(), actor);
         if (Boolean.TRUE.equals(request.holdCourses())) {
@@ -283,6 +283,10 @@ public class OrderService {
                             menuItem.resolveOptions(item.optionIds()))
                     .inCourse(item.course());
         }).toList();
+    }
+
+    private static List<com.umutvarol.restaurant.order.pricing.TaxedAmount> taxed(List<OrderLine> lines) {
+        return lines.stream().map(line -> new com.umutvarol.restaurant.order.pricing.TaxedAmount(line.getVatRate(), line.getLineTotal())).toList();
     }
 
     private static BigDecimal subtotalOf(List<OrderLine> lines) {

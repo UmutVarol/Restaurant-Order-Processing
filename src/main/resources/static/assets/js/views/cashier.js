@@ -24,9 +24,12 @@ export default {
     const billsCard = h('div', { class: 'card' });
     const reportCard = h('div', { class: 'card' });
     const fiscalCard = h('div', { class: 'card fiscal-card' });
+    // e-Adisyon, for a business GİB notified: only shown when it keeps them
+    const adisyonCard = h('div', { class: 'card fiscal-card', hidden: true, 'data-testid': 'adisyon-card' });
+    let adisyon = null;
     const kpis = h('div', { class: 'kpis cashier-kpis' });
     mount(container, manager ? kpis : null, h('div', { class: manager ? 'cashier-grid' : '' },
-      h('div', { class: 'cashier-left' }, billsCard, fiscalCard), manager ? reportCard : null));
+      h('div', { class: 'cashier-left' }, billsCard, fiscalCard, adisyonCard), manager ? reportCard : null));
 
     function renderBills() {
       const head = h('div', { class: 'card-head' }, h('div', null, h('div', { class: 'card-title' }, t('cashier.openBills')),
@@ -172,6 +175,37 @@ export default {
           : h('p', { class: 'muted card-body' }, t('fiscal.noneToday')));
     }
 
+    function renderAdisyon() {
+      if (!adisyon?.enabled) {
+        adisyonCard.hidden = true;
+        return;
+      }
+      adisyonCard.hidden = false;
+      const head = h('div', { class: 'card-head' }, h('div', null, h('div', { class: 'card-title' }, t('adisyon.title')),
+        h('div', { class: 'card-sub' }, adisyon.simulated ? t('adisyon.subSimulated') : t('adisyon.sub'))));
+      const delivered = (a) => (a.delivery === 'SENT' ? 'ISSUED' : a.delivery);
+      mount(adisyonCard, head,
+        adisyon.waiting ? h('div', { class: 'form-error', 'data-testid': 'adisyon-waiting' }, icon('alert', 'sm'), t('adisyon.waiting', { n: adisyon.waiting })) : null,
+        adisyon.adisyons.length ? h('ul', { class: 'fiscal-list', 'data-testid': 'adisyon-list' }, adisyon.adisyons.slice(0, 12).map((a) => h('li', { class: `f-${delivered(a)}` },
+          h('span', { class: `pill f-${delivered(a)}` }, t(`adisyon.status.${a.status}`)),
+          h('div', null,
+            h('b', null, `${a.tableCode ? `${t('pos.table')} ${a.tableCode}` : t('bill.number', { id: a.billId })} · ${money(a.total)}`),
+            h('small', { class: 'faint block' }, [a.documentNumber, a.fiscalNumber ? t('adisyon.receipt', { number: a.fiscalNumber }) : null,
+              t('adisyon.delivery.' + a.delivery)].filter(Boolean).join(' · ')),
+            a.lastError && a.delivery !== 'SENT' ? h('small', { class: 'danger-text block' }, a.lastError) : null),
+          a.delivery !== 'SENT' ? h('button', { class: 'btn sm', onclick: async () => {
+            try { await api.retryAdisyon(a.id); } catch (error) { toast({ title: errorMessage(error), kind: 'error' }); }
+            loadAdisyon();
+          } }, icon('refresh', 'sm'), t('fiscal.retry')) : null)))
+          : h('p', { class: 'muted card-body' }, t('adisyon.none')));
+    }
+
+    async function loadAdisyon() {
+      if (!manager || !hasFeature('FISCAL')) return;
+      try { adisyon = await api.adisyon(); } catch { adisyon = null; }
+      renderAdisyon();
+    }
+
     async function loadFiscal() {
       // legal receipts are part of the Business plan
       if (!hasFeature('FISCAL')) {
@@ -215,9 +249,9 @@ export default {
     }
 
     const reload = debounce(() => { loadBills(); if (date === today()) loadReport(); }, 250);
-    const reloadFiscal = debounce(loadFiscal, 300);
+    const reloadFiscal = debounce(() => { loadFiscal(); loadAdisyon(); }, 300);
     const offPayment = bus.on('payment', reload);
-    const offOrder = bus.on('order', reload);
+    const offOrder = bus.on('order', () => { reload(); reloadFiscal(); });
     const offFiscal = bus.on('fiscal', reloadFiscal);
     renderBills();
     renderReport();
@@ -225,6 +259,7 @@ export default {
     loadBills();
     loadReport();
     loadFiscal();
+    loadAdisyon();
     return {
       destroy() {
         offPayment();

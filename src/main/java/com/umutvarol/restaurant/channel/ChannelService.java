@@ -366,7 +366,7 @@ public class ChannelService {
                         .orElseThrow().getMenuItemId(), i.quantity(), null, List.of())).toList();
         BigDecimal total = (known.isEmpty() ? BigDecimal.ZERO
                 : orderService.quote(new QuoteRequest(OrderType.TAKEAWAY, null, known)).pricing().total())
-                .add(withUnmappedItem ? new BigDecimal("165.00") : BigDecimal.ZERO);
+                .add(withUnmappedItem ? new BigDecimal("150.00") : BigDecimal.ZERO);
         String[] guests = {"Deniz K.", "Ayşe Y.", "Mert A.", "Selin T.", "Can B."};
         ChannelOrderPayload payload = new ChannelOrderPayload("SIM-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(),
                 new ChannelOrderPayload.Customer(guests[random.nextInt(guests.length)], null, null), items, total, null);

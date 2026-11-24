@@ -116,7 +116,9 @@ export default {
       function renderCost() {
         const cost = rows.filter((r) => !r.optionGroup && byId.get(r.ingredientId))
           .reduce((sum, r) => sum + (Number(r.quantity) || 0) * Number(byId.get(r.ingredientId).cost) / BULK[byId.get(r.ingredientId).unit], 0);
-        const share = Number(item.price) ? (cost * 100) / Number(item.price) : 0;
+        // of the price before VAT: menu prices include it
+        const net = Number(item.price) * 100 / (100 + Number(item.vatRate ?? 10));
+        const share = net ? (cost * 100) / net : 0;
         summary.textContent = t('recipe.cost', { cost: money(cost), share: number(share, 1) });
       }
       function renderRows() {
@@ -262,6 +264,10 @@ export default {
         icon: h('input', { class: 'input emoji-input', value: draft.icon || '', maxlength: 4 }),
         prepTimeMinutes: h('input', { class: 'input', type: 'number', min: '0', max: '240', value: draft.prepTimeMinutes }),
         stationCode: h('select', { class: 'select', 'data-testid': 'menu-station' }),
+        // menu prices include VAT; each dish has its rate (food 10 %, alcoholic drinks 20 %)
+        vatRate: h('select', { class: 'select', 'data-testid': 'menu-vat-rate' },
+          [...new Set([0, 1, 10, 20, Number(draft.vatRate ?? 10)])].sort((a, b) => a - b)
+            .map((rate) => h('option', { value: rate, selected: rate === Number(draft.vatRate ?? 10) }, t('menu.vatOption', { rate: number(rate, rate % 1 ? 2 : 0) })))),
       };
       // The station follows the category until the manager picks one by hand.
       let stationPicked = Boolean(item);
@@ -288,6 +294,8 @@ export default {
             field('icon', t('menu.icon'), inputs.icon), field('name', t('menu.name'), inputs.name)),
           field('description', t('menu.description'), inputs.description),
           h('div', { class: 'grid-2' }, field('category', t('menu.category'), inputs.category), field('price', t('menu.price'), inputs.price)),
+          h('div', { class: 'grid-2' }, field('vatRate', t('menu.vatRate'), inputs.vatRate),
+            h('p', { class: 'faint menu-vat-hint' }, t('menu.vatHint'))),
           h('div', { class: 'grid-2' }, field('prepTimeMinutes', t('menu.prep'), inputs.prepTimeMinutes),
             stations.length ? field('stationCode', t('stations.label'), inputs.stationCode) : h('span')),
           h('label', { class: 'checkbox' }, popular, t('menu.popular')),
@@ -305,6 +313,7 @@ export default {
                 description: inputs.description.value.trim() || null,
                 category: inputs.category.value,
                 price: inputs.price.value === '' ? null : Number(inputs.price.value),
+                vatRate: Number(inputs.vatRate.value),
                 icon: inputs.icon.value.trim() || null,
                 prepTimeMinutes: Number(inputs.prepTimeMinutes.value || 0),
                 popular: popular.checked,

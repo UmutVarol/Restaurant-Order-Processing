@@ -165,7 +165,7 @@ class BillTest {
     private static Order order(String total) {
         BigDecimal value = new BigDecimal(total);
         return Order.place(takeaway(), List.of(OrderLine.of(menuItem(1, "Item", MenuCategory.MAIN, total), 1, null)),
-                new PriceBreakdown(value, Money.ZERO, Money.ZERO, Money.ZERO, value), T0, "waiter");
+                new PriceBreakdown(value, Money.ZERO, Money.ZERO, Money.ZERO, value, null, true), T0, "waiter");
     }
 
     private static BigDecimal money(String amount) {

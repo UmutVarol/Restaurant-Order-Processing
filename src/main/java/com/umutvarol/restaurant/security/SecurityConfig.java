@@ -208,6 +208,9 @@ class SecurityConfig {
                         // round three: the directory entry and the ratings are the managers'
                         .requestMatchers("/api/v1/directory", "/api/v1/directory/**", "/api/v1/ratings", "/api/v1/ratings/**")
                                 .hasRole(Role.ADMIN.name())
+                        // the price list at the door and its export, and the e-Adisyon records: the managers'
+                        .requestMatchers("/api/v1/price-list", "/api/v1/price-list/**", "/api/v1/adisyon", "/api/v1/adisyon/**")
+                                .hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/branding", "/api/v1/branding/logo").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/branding/logo").hasRole(Role.ADMIN.name())
                         // guests' names and phone numbers: floor staff and managers, not the kitchen

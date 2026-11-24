@@ -118,7 +118,7 @@ class AnalyticsServiceTest {
         BigDecimal amount = new BigDecimal(total);
         return Order.place(details,
                 List.of(OrderLine.of(menuItem(1, "Mantı", MenuCategory.MAIN, total), 1, null)),
-                new PriceBreakdown(amount, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, amount),
+                new PriceBreakdown(amount, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, amount, null, true),
                 Instant.parse(createdAt), "waiter");
     }
 

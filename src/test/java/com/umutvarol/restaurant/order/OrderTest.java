@@ -24,7 +24,7 @@ class OrderTest {
 
     private static final Instant PLACED_AT = Instant.parse("2026-05-20T17:30:00Z");
     private static final PriceBreakdown PRICE = new PriceBreakdown(BigDecimal.TEN, BigDecimal.ZERO, BigDecimal.ONE,
-            BigDecimal.ZERO, new BigDecimal("11"));
+            BigDecimal.ZERO, BigDecimal.TEN, null, true);
 
     private final MenuItem adana = menuItem(1, "Adana Kebap", MenuCategory.MAIN, "520.00");
     private final MenuItem ayran = menuItem(2, "Ayran", MenuCategory.DRINK, "70.00");

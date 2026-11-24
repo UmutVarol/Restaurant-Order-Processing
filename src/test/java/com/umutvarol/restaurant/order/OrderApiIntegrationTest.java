@@ -39,12 +39,17 @@ class OrderApiIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.itemCount").value(3))
                 .andExpect(jsonPath("$.lines[0].name").value("İskender"))
                 .andExpect(jsonPath("$.lines[0].note").value("extra yogurt"))
-                .andExpect(jsonPath("$.lines[0].lineTotal").value(1120.00))
-                .andExpect(jsonPath("$.pricing.subtotal").value(1380.00))
-                .andExpect(jsonPath("$.pricing.discount").value(138.00))
-                .andExpect(jsonPath("$.pricing.tax").value(124.20))
+                .andExpect(jsonPath("$.lines[0].lineTotal").value(1232.00))
+                .andExpect(jsonPath("$.lines[0].vatRate").value(10.00))
+                .andExpect(jsonPath("$.pricing.subtotal").value(1518.00))
+                .andExpect(jsonPath("$.pricing.discount").value(150.00)) // the welcome coupon is capped at 150
+                // menu prices include VAT: the guest pays the lines less the discount; 10 % VAT is inside that
+                .andExpect(jsonPath("$.pricing.taxIncluded").value(true))
+                .andExpect(jsonPath("$.pricing.tax").value(124.36))
+                .andExpect(jsonPath("$.pricing.vat[0].rate").value(10.00))
+                .andExpect(jsonPath("$.pricing.vat[0].gross").value(1368.00))
                 .andExpect(jsonPath("$.pricing.deliveryFee").value(0.00))
-                .andExpect(jsonPath("$.pricing.total").value(1366.20))
+                .andExpect(jsonPath("$.pricing.total").value(1368.00))
                 .andExpect(jsonPath("$.createdBy").value(WAITER))
                 .andReturn().getResponse().getContentAsString();
         long id = ((Number) JsonPath.read(created, "$.id")).longValue();
@@ -55,7 +60,7 @@ class OrderApiIntegrationTest extends ApiIntegrationTest {
         mvc.perform(as(WAITER, post("/api/v1/orders/{id}/advance", id)))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("BILL_NOT_PAID"))
-                .andExpect(jsonPath("$.parameters.balance").value(1366.20));
+                .andExpect(jsonPath("$.parameters.balance").value(1368.00));
 
         payInFull(id, "CARD");
         mvc.perform(as(WAITER, get("/api/v1/orders/{id}", id)))
