@@ -77,7 +77,8 @@ class PostgresCompatibilityTest {
                                 {"type": "TAKEAWAY", "customerName": "Postgres Pınar", "paymentMethod": "CARD",
                                  "couponCode": "TATLI50", "items": [{"menuItemId": 16, "quantity": 2}]}"""))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.pricing.total").value(517.00));
+                // two künefe at 286 (VAT included) less the 50 lira coupon
+                .andExpect(jsonPath("$.pricing.total").value(522.00));
         mvc.perform(get("/api/v1/floor/tables").header(HttpHeaders.AUTHORIZATION, adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].code", hasItem("12")));

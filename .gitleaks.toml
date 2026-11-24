@@ -18,6 +18,7 @@ regexes = [
   '''kebab-webhook-secret-0123456789''',
   '''cafe-webhook-secret-9876543210''',
   '''integrator-key-12345678''',
+  '''adisyon-key-87654321''',
   '''getir-webhook-secret-4321''',
   '''getir-api-token-12345678''',
   # push tests: a stand-in Firebase access token
