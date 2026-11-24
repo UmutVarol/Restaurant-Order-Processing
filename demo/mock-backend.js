@@ -625,6 +625,52 @@
   const devices = () => (state.devices ??= []);
   // the demo keeps one set of data: a second branch shows the screens for chains, it does not split the floor
   const branches = () => (state.branches ??= [{ id: 1, code: 'merkez', name: 'Merkez', active: true }]);
+  const ROUNDING_STEPS = { NONE: 0, HALF: 0.5, ONE: 1, FIVE: 5, TEN: 10 };
+  const pricingSettings = () => ({ targetFoodCost: 30, rounding: 'ONE', ...(state.pricing || {}) });
+  const priceChangeView = (c) => ({ id: c.id, mode: c.mode, amount: c.amount, rounding: c.rounding, itemCount: new Set(c.lines.map((l) => l.itemId)).size,
+    createdAt: iso(c.createdAt), createdBy: c.createdBy, revertedAt: c.revertedAt ? iso(c.revertedAt) : null, revertedBy: c.revertedBy,
+    revertible: !c.revertedAt && Date.now() - c.createdAt < 30 * 86_400_000 });
+  function repricePreview(body) {
+    const rounding = body.rounding && ROUNDING_STEPS[body.rounding] !== undefined ? body.rounding : pricingSettings().rounding;
+    const step = ROUNDING_STEPS[rounding];
+    const round = (v) => (step ? Math.max(1, Math.round(v / step)) * step : Math.round(v * 100) / 100);
+    const rule = () => new Problem(422, 'BULK_PRICE_RULE', 'This change is not allowed');
+    const live = state.menu.filter((m) => !m.archived);
+    let chosen;
+    const exact = new Map();
+    if (body.mode === 'EXACT') {
+      if (!Array.isArray(body.prices) || !body.prices.length) throw rule();
+      body.prices.forEach((p) => { if (!(Number(p.price) > 0)) throw rule(); exact.set(Number(p.itemId), Math.round(Number(p.price) * 100) / 100); });
+      chosen = live.filter((m) => exact.has(m.id));
+    } else {
+      const value = Number(body.value);
+      if (!value || (body.mode === 'PERCENT' && (value < -50 || value > 200)) || (body.mode === 'AMOUNT' && Math.abs(value) > 10000)) throw rule();
+      const cats = body.categories || [];
+      const only = body.itemIds || [];
+      const out = new Set(body.excludeItemIds || []);
+      chosen = live.filter((m) => (!cats.length || cats.includes(m.category)) && (!only.length || only.includes(m.id)) && !out.has(m.id));
+    }
+    if (!chosen.length) throw new Problem(422, 'BULK_PRICE_NOTHING', 'No dish is chosen');
+    const order = ['STARTER', 'MAIN', 'DESSERT', 'DRINK'];
+    const lines = chosen.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category) || a.name.localeCompare(b.name, 'tr')).map((m) => {
+      const old = toLira(m.priceC);
+      let next = exact.get(m.id);
+      if (next == null) {
+        const raw = body.mode === 'PERCENT' ? old * (100 + Number(body.value)) / 100 : old + Number(body.value);
+        if (raw <= 0) throw new Problem(422, 'BULK_PRICE_INVALID', `The new price of ${m.name} would be zero or less`, { parameters: { name: m.name } });
+        next = Math.round(round(raw) * 100) / 100;
+      }
+      const hasRecipe = stock().recipes.some((r) => r.menuItemId === m.id);
+      const costC = hasRecipe ? recipeView(m).cost * 100 : null;
+      const share = (price) => (costC == null ? null : Math.round((costC * 1000) / (price * 100 * 100 / (100 + (m.vatRate ?? 10)))) / 10);
+      return { key: String(m.id), itemId: m.id, name: m.name, category: m.category, branchId: null, branch: null, oldPrice: old, newPrice: next,
+        change: Math.round((next - old) * 100) / 100, foodCostBefore: share(old), foodCostAfter: share(next) };
+    });
+    const average = Math.round((lines.reduce((sum, l) => sum + (l.change * 100) / l.oldPrice, 0) / lines.length) * 10) / 10;
+    return { rounding, lines, itemCount: lines.length, changed: lines.filter((l) => l.oldPrice !== l.newPrice).length, averagePercent: average,
+      expected: Object.fromEntries(lines.map((l) => [l.key, l.oldPrice])) };
+  }
+
   function priceListView(branchId) {
     const open = branches().filter((x) => x.active);
     const branch = open.find((x) => x.id === branchId) || open[0];
@@ -3203,6 +3249,58 @@
       const day = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const to = query.get('to') || day(today);
       return stockReport(query.get('from') || day(new Date(new Date(`${to}T00:00:00`).getTime() - 6 * 24 * 60 * MINUTE)), to);
+    }],
+    // Inflation tools (RepricingService): a bulk change previewed, applied once, taken back; dishes over the target
+    ['POST', /^repricing\/preview$/, 'manager', (_, body) => repricePreview(body)],
+    ['POST', /^repricing\/apply$/, 'manager', ({ user }, body) => {
+      if (!body.expected || !Object.keys(body.expected).length) throw new Problem(422, 'BULK_PRICE_PREVIEW_NEEDED', 'Look at the new prices before applying them');
+      const preview = repricePreview(body);
+      const moving = preview.lines.filter((l) => l.oldPrice !== l.newPrice);
+      if (!moving.length) throw new Problem(422, 'BULK_PRICE_NOTHING', 'No price would change');
+      const stale = preview.lines.find((l) => body.expected[l.key] == null || Number(body.expected[l.key]) !== l.oldPrice);
+      if (stale) throw new Problem(409, 'PRICES_CHANGED', `The price of ${stale.name} changed meanwhile`, { parameters: { name: stale.name } });
+      const now = Date.now();
+      moving.forEach((l) => { const dish = findDish(l.itemId); dish.priceC = toCents(l.newPrice); dish.priceChangedAt = now; });
+      state.priceChanges ??= [];
+      const change = { id: (state.priceChanges.length ? state.priceChanges[0].id : 0) + 1, mode: body.mode, amount: body.mode === 'EXACT' ? null : Number(body.value),
+        rounding: preview.rounding, createdAt: now, createdBy: user.username, revertedAt: null, revertedBy: null,
+        lines: moving.map((l) => ({ itemId: l.itemId, oldPrice: l.oldPrice, newPrice: l.newPrice })) };
+      state.priceChanges.unshift(change);
+      menuChanged();
+      return priceChangeView(change);
+    }],
+    ['GET', /^repricing\/changes$/, 'manager', () => (state.priceChanges || []).slice(0, 20).map(priceChangeView)],
+    ['POST', /^repricing\/changes\/(\d+)\/revert$/, 'manager', ({ params, user }) => {
+      const change = (state.priceChanges || []).find((c) => c.id === Number(params[0]));
+      if (!change) throw new Problem(404, 'NOT_FOUND', 'Price change was not found');
+      if (change.revertedAt) throw new Problem(409, 'PRICE_CHANGE_REVERTED', 'This change was already taken back');
+      let restored = 0;
+      change.lines.forEach((l) => { const dish = findDish(l.itemId); if (toLira(dish.priceC) === l.newPrice) { dish.priceC = toCents(l.oldPrice); dish.priceChangedAt = Date.now(); restored += 1; } });
+      change.revertedAt = Date.now();
+      change.revertedBy = user.username;
+      menuChanged();
+      return { change: priceChangeView(change), restored, skipped: change.lines.length - restored };
+    }],
+    ['GET', /^repricing\/settings$/, 'manager', () => pricingSettings()],
+    ['PUT', /^repricing\/settings$/, 'manager', (_, body) => {
+      const target = Number(body.targetFoodCost);
+      if (!(target >= 5 && target <= 90)) throw new Problem(400, 'VALIDATION_FAILED', 'Request body is invalid.', { errors: [{ field: 'targetFoodCost', message: 'must be between 5 and 90' }] });
+      state.pricing = { targetFoodCost: target, rounding: ROUNDING_STEPS[body.rounding] !== undefined ? body.rounding : 'ONE' };
+      return pricingSettings();
+    }],
+    ['GET', /^repricing\/margins$/, 'manager', () => {
+      const own = pricingSettings();
+      const items = state.menu.filter((m) => !m.archived && stock().recipes.some((r) => r.menuItemId === m.id)).map((m) => {
+        const costC = recipeView(m).cost * 100;
+        const vat = m.vatRate ?? 10;
+        const share = Math.round((costC * 1000) / (m.priceC * 100 / (100 + vat))) / 10;
+        const raw = (costC / 100) * 100 / own.targetFoodCost * (100 + vat) / 100;
+        const step = ROUNDING_STEPS[own.rounding] || 0.01;
+        const suggested = Math.max(toLira(m.priceC), Math.ceil(raw / step - 1e-9) * step);
+        return { itemId: m.id, name: m.name, category: m.category, price: toLira(m.priceC), vatRate: vat, cost: costC / 100, foodCost: share,
+          suggestedPrice: Math.round(suggested * 100) / 100, status: share <= own.targetFoodCost ? 'OK' : share <= own.targetFoodCost * 1.25 ? 'WARN' : 'HIGH' };
+      }).sort((a, b) => b.foodCost - a.foodCost);
+      return { target: own.targetFoodCost, rounding: own.rounding, needing: items.filter((i) => i.status !== 'OK' && i.suggestedPrice > i.price).length, items };
     }],
     ['GET', /^recipes\/costs$/, 'manager', () => state.menu.filter((m) => !m.archived && stock().recipes.some((r) => r.menuItemId === m.id))
       .map((m) => { const view = recipeView(m); return { menuItemId: m.id, cost: view.cost, foodCostPercent: view.foodCostPercent }; })],

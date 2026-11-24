@@ -209,7 +209,8 @@ class SecurityConfig {
                         .requestMatchers("/api/v1/directory", "/api/v1/directory/**", "/api/v1/ratings", "/api/v1/ratings/**")
                                 .hasRole(Role.ADMIN.name())
                         // the price list at the door and its export, and the e-Adisyon records: the managers'
-                        .requestMatchers("/api/v1/price-list", "/api/v1/price-list/**", "/api/v1/adisyon", "/api/v1/adisyon/**")
+                        .requestMatchers("/api/v1/price-list", "/api/v1/price-list/**", "/api/v1/adisyon", "/api/v1/adisyon/**",
+                                "/api/v1/repricing", "/api/v1/repricing/**")
                                 .hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, "/api/v1/branding", "/api/v1/branding/logo").hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/branding/logo").hasRole(Role.ADMIN.name())

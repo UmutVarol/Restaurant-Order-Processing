@@ -2503,3 +2503,31 @@ button.rota-shift { cursor: pointer; }
   .prices-tools .segmented { min-width: 0; flex: 1 1 210px; }
   .prices-tools .segmented button { white-space: nowrap; }
 }
+
+/* ---------- inflation tools: bulk price and margins ---------- */
+.margin-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 12px;
+  border-radius: var(--radius); background: var(--amber-soft); color: var(--text); }
+.margin-banner > .icon { color: var(--amber); flex: none; }
+.margin-banner > span { flex: 1 1 220px; }
+.bulk { display: grid; gap: 18px; }
+.bulk section h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+.bulk-how { display: grid; gap: 10px; }
+.bulk-how .segmented { max-width: 320px; }
+.bulk-value-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bulk-input { display: inline-flex; align-items: center; gap: 6px; }
+.bulk-input .input { width: 110px; text-align: end; font-variant-numeric: tabular-nums; }
+.bulk-options { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }
+.bulk-options .field.inline, .margins-target { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.bulk-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bulk-summary { margin-bottom: 8px; min-height: 22px; }
+.bulk-table { max-height: 46vh; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.bulk-lines td small.up { color: var(--amber); }
+.bulk-lines td small.down { color: var(--green); }
+.bulk-lines td:first-child { width: 36px; }
+.food-cost.ok b { color: var(--green); }
+.faint-row td { opacity: .6; }
+.bulk-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.bulk-history li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.margins { display: grid; gap: 12px; }
+.bulk-lines td small.up, .bulk-lines td small.down { display: block; font-size: 11.5px; }
+.bulk-lines td b { white-space: nowrap; }

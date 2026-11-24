@@ -10,5 +10,7 @@ public interface BranchMenuItemRepository extends JpaRepository<BranchMenuItem, 
 
     List<BranchMenuItem> findByMenuItemId(Long menuItemId);
 
+    List<BranchMenuItem> findByMenuItemIdInAndPriceIsNotNull(java.util.Collection<Long> menuItemIds);
+
     Optional<BranchMenuItem> findByBranchIdAndMenuItemId(Long branchId, Long menuItemId);
 }

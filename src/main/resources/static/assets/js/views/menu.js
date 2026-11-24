@@ -8,14 +8,16 @@ import { api, ApiError, errorMessage, hasFeature } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openModal, toast } from '../core/ui.js';
 import { optionGroupsEditor } from './options.js';
+import { openBulkPricing, openMargins } from './repricing.js';
 import { CATEGORIES } from './shared.js';
 
 const TAGS = ['VEGETARIAN', 'VEGAN', 'GLUTEN_FREE', 'SPICY'];
 // Where a new dish is made unless the manager picks another station (same defaults as the server).
 const DEFAULT_STATION = { STARTER: 'COLD', MAIN: 'HOT', DESSERT: 'DESSERT', DRINK: 'BAR' };
-// Food cost above these shares of the price is worth a look (amber), or a price change (red).
-const FOOD_COST_WARN = 30;
-const FOOD_COST_HIGH = 40;
+// Food cost above the business's target is worth a look (amber), and well above it a price change (red); the
+// target is the one set in the margin check (30 % until the manager sets another).
+let FOOD_COST_WARN = 30;
+let FOOD_COST_HIGH = 37.5;
 const BULK = { GRAM: 1000, MILLILITRE: 1000, PIECE: 1 };
 
 export default {
@@ -30,9 +32,30 @@ export default {
     let openBranches = [];
     const chips = h('div', { class: 'chips' });
     const tableCard = h('div', { class: 'card table-wrap menu-admin' });
+    // inflation tools: dishes whose ingredients take more of the price than the target, one tap from here
+    const marginBanner = h('div', { class: 'margin-banner', hidden: true, 'data-testid': 'margin-banner' });
 
-    mount(actions, h('button', { class: 'btn primary', 'aria-label': t('menu.add'), onclick: () => editItem(null) }, icon('plus', 'sm'), h('span', { class: 'btn-label' }, t('menu.add'))));
-    mount(container, h('div', { class: 'toolbar' }, chips), tableCard);
+    mount(actions,
+      h('button', { class: 'btn', 'aria-label': t('bulk.open'), 'data-testid': 'bulk-open',
+        onclick: () => openBulkPricing({ branches: openBranches.length, onChanged: load }) }, icon('trend', 'sm'), h('span', { class: 'btn-label' }, t('bulk.open'))),
+      h('button', { class: 'btn primary', 'aria-label': t('menu.add'), onclick: () => editItem(null) }, icon('plus', 'sm'), h('span', { class: 'btn-label' }, t('menu.add'))));
+    mount(container, marginBanner, h('div', { class: 'toolbar' }, chips), tableCard);
+
+    async function loadMargins() {
+      if (!hasFeature('STOCK')) return;
+      let margins;
+      try { margins = await api.margins(); } catch { return; }
+      if (Number(margins.target) !== FOOD_COST_WARN) {
+        FOOD_COST_WARN = Number(margins.target);
+        FOOD_COST_HIGH = FOOD_COST_WARN * 1.25;
+        render();
+      }
+      marginBanner.hidden = !margins.needing;
+      if (!margins.needing) return;
+      mount(marginBanner, icon('alert', 'sm'),
+        h('span', null, t('margins.banner', { n: margins.needing, target: number(margins.target) })),
+        h('button', { class: 'btn sm', 'data-testid': 'margin-open', onclick: () => openMargins({ onChanged: load }) }, t('margins.open')));
+    }
 
     function render() {
       mount(chips, ['ALL', ...CATEGORIES].map((key) => h('button', {
@@ -359,6 +382,7 @@ export default {
       if (menuResult.status === 'rejected') toast({ title: errorMessage(menuResult.reason), kind: 'error' });
       costs = new Map(costResult.status === 'fulfilled' ? costResult.value.map((c) => [c.menuItemId, c]) : []);
       render();
+      loadMargins();
     }
 
     render();

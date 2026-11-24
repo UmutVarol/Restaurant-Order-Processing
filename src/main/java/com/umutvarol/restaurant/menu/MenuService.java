@@ -83,6 +83,75 @@ public class MenuService {
                 }).toList();
     }
 
+    /** A price to set: the central price of a dish ({@code branchId} null) or one branch's own price. */
+    public record PriceSet(Long itemId, @org.jspecify.annotations.Nullable Long branchId, java.math.BigDecimal price) {
+    }
+
+    /** What a bulk change found and did, line by line. */
+    public record Repriced(Long itemId, @org.jspecify.annotations.Nullable Long branchId, java.math.BigDecimal oldPrice,
+                           java.math.BigDecimal newPrice) {
+    }
+
+    /** The branches' own prices of these dishes (Chain plan), the ones a bulk change may move with the central ones. */
+    @Transactional(readOnly = true)
+    public List<PriceSet> branchOwnPrices(java.util.Collection<Long> itemIds) {
+        if (itemIds.isEmpty()) {
+            return List.of();
+        }
+        return branchOverrides.findByMenuItemIdInAndPriceIsNotNull(itemIds).stream()
+                .map(row -> new PriceSet(row.getMenuItemId(), row.getBranchId(), row.getPrice())).toList();
+    }
+
+    /**
+     * Sets many prices in one go, all or none. Each line names the price it expects to replace: if a price changed
+     * since (another manager, or the same change sent twice), nothing is changed.
+     *
+     * @throws com.umutvarol.restaurant.common.error.InvalidStateException {@code PRICES_CHANGED} on a stale line
+     */
+    public List<Repriced> reprice(List<PriceSet> changes, java.util.Map<String, java.math.BigDecimal> expected, String actor) {
+        java.time.Instant now = clock.instant();
+        java.util.Map<Long, MenuItem> dishes = repository.findAllById(changes.stream().map(PriceSet::itemId).collect(java.util.stream.Collectors.toSet()))
+                .stream().collect(java.util.stream.Collectors.toMap(MenuItem::getId, java.util.function.Function.identity()));
+        List<Repriced> done = new java.util.ArrayList<>();
+        for (PriceSet change : changes) {
+            MenuItem dish = dishes.get(change.itemId());
+            if (dish == null || dish.isArchived()) {
+                throw new ResourceNotFoundException("menu item", change.itemId());
+            }
+            java.math.BigDecimal current;
+            if (change.branchId() == null) {
+                current = dish.getPrice();
+            } else {
+                current = branchOverrides.findByBranchIdAndMenuItemId(change.branchId(), change.itemId())
+                        .map(BranchMenuItem::getPrice).orElse(null);
+                if (current == null) {
+                    continue; // the branch went back to the central price meanwhile: it follows the central change
+                }
+            }
+            java.math.BigDecimal wanted = expected.get(key(change.itemId(), change.branchId()));
+            if (wanted != null && wanted.compareTo(current) != 0) {
+                throw new com.umutvarol.restaurant.common.error.InvalidStateException("PRICES_CHANGED",
+                        "The price of %s changed meanwhile; look at the new prices first".formatted(dish.getName()),
+                        java.util.Map.of("name", dish.getName()));
+            }
+            if (change.branchId() == null) {
+                dish.reprice(change.price(), now);
+            } else {
+                BranchMenuItem row = branchOverrides.findByBranchIdAndMenuItemId(change.branchId(), change.itemId()).orElseThrow();
+                row.change(com.umutvarol.restaurant.common.money.Money.normalize(change.price()), row.getAvailable(), now, actor);
+            }
+            done.add(new Repriced(change.itemId(), change.branchId(), current,
+                    com.umutvarol.restaurant.common.money.Money.normalize(change.price())));
+        }
+        repository.flush();
+        return done;
+    }
+
+    /** How a line of a bulk change is named in {@code expected}: the dish's id, and the branch's after a colon. */
+    public static String key(Long itemId, @org.jspecify.annotations.Nullable Long branchId) {
+        return branchId == null ? itemId.toString() : itemId + ":" + branchId;
+    }
+
     /** Sets one branch's own price and sale state of a dish; nulls go back to the central menu. */
     public List<BranchPrice> setBranchPrice(Long itemId, Long branchId, java.math.BigDecimal price, Boolean available, String actor) {
         find(itemId);

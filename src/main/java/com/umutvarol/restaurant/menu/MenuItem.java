@@ -302,6 +302,18 @@ public class MenuItem {
         this.vatRate = rate.setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
+    /** A new price, from a bulk change or its undoing; the price list date moves with it. */
+    public void reprice(BigDecimal newPrice, Instant at) {
+        if (!Money.isPositive(newPrice)) {
+            throw new IllegalArgumentException("price must be positive");
+        }
+        BigDecimal normalized = Money.normalize(newPrice);
+        if (normalized.compareTo(price) != 0) {
+            this.price = normalized;
+            priceChanged(at);
+        }
+    }
+
     /** Records that the price changed now (a new dish counts as a change). */
     public void priceChanged(Instant at) {
         this.priceChangedAt = Objects.requireNonNull(at, "at");
