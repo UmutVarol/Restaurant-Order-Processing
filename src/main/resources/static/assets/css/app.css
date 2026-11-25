@@ -2588,3 +2588,6 @@ button.rota-shift { cursor: pointer; }
 .prep-qty { white-space: nowrap; }
 .prep-qty b, .prep-qty small { display: block; }
 .prep-name small { display: block; }
+.table-viz .top { padding: 0 8px; overflow: hidden; }
+.table-viz .top > span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-viz .top.long { font-size: 13px; }

@@ -112,7 +112,9 @@ export default {
           else if (canTakeOrders(user)) navigate('pos', { table: table.id });
         },
       },
-      h('div', { class: 'table-viz' }, seatsAround(table.seats), h('div', { class: 'top' }, table.code)),
+      h('div', { class: 'table-viz' }, seatsAround(table.seats),
+          // a long code ("Bahçe-12") gets smaller type, and is cut with an ellipsis rather than spilling out of the table
+          h('div', { class: ['top', table.code.length > 4 ? 'long' : ''], title: table.code }, h('span', null, table.code))),
       h('div', { class: 't-info' }, table.occupied
         ? [
           h('div', { class: 'row', style: { gap: '6px' } }, statusPill(order.status),
