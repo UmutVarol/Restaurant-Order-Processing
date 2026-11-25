@@ -42,12 +42,13 @@ test('a dish whose ingredients take too much is flagged and set to the suggested
     await page.goto('/#/menu');
     await expect(page.getByTestId('margin-banner')).toBeVisible();
     await page.getByTestId('margin-open').click();
-    // only this test's dish: the demo's own dishes keep their prices
-    const others = page.getByTestId('margin-row').filter({ hasNotText: name }).locator('input[type=checkbox]:checked');
-    while (await others.count()) await others.first().uncheck();
     const row = page.getByTestId('margin-row').filter({ hasText: name });
     // 50 of a 100 price before VAT: 50 %; at a 30 % target the price should be 184
     await expect(row).toContainText('184.00');
+    // only this test's dish: the demo's own dishes keep their prices
+    const others = page.getByTestId('margin-row').filter({ hasNotText: name }).locator('input[type=checkbox]');
+    for (let i = 0; i < await others.count(); i++) await others.nth(i).setChecked(false);
+    await expect(page.getByTestId('margins-apply')).toContainText('1 dish');
     await page.getByTestId('margins-apply').click();
     await expect(page.locator('.toast', { hasText: 'prices updated' })).toBeVisible();
     expect((await call(page, 'GET', `/menu/${dish.id}`)).price).toBe(184);

@@ -215,13 +215,18 @@ export async function openMargins({ onChanged } = {}) {
           const can = Number(m.suggestedPrice) > Number(m.price);
           return h('tr', { 'data-testid': 'margin-row', class: m.status === 'OK' ? 'faint-row' : '' },
             h('td', null, can ? h('input', { type: 'checkbox', checked: picked.has(m.itemId), 'aria-label': `${t('bulk.include')}: ${m.name}`,
-              onchange: (event) => { if (event.target.checked) picked.add(m.itemId); else picked.delete(m.itemId); render(); } }) : null),
+              onchange: (event) => { if (event.target.checked) picked.add(m.itemId); else picked.delete(m.itemId); updateApply(); } }) : null),
             h('td', null, h('b', null, m.name), h('small', { class: 'faint block' }, t('margins.cost', { cost: money(m.cost) }))),
             h('td', { class: 'right' }, share(m.foodCost, margins.target)),
             h('td', { class: 'right num faint' }, money(m.price)),
             h('td', { class: 'right num' }, can ? h('b', null, money(m.suggestedPrice)) : h('span', { class: 'faint' }, t('margins.fine'))));
         }))))
         : h('div', { class: 'empty' }, h('div', { class: 'art' }, '🧾'), h('h4', null, t('margins.noRecipes')), h('p', null, t('margins.noRecipesText'))));
+    updateApply();
+  }
+
+  // a tick only changes the button: the table stays as it is, so focus stays on the box just ticked
+  function updateApply() {
     apply.disabled = !picked.size;
     apply.replaceChildren(icon('check', 'sm'), t('margins.apply', { n: picked.size }));
   }
