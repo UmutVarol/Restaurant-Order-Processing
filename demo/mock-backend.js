@@ -601,7 +601,7 @@
   }
 
   // ------------------------------------------------------------------------------------------- routing
-  const ROLES = { staff: ['ADMIN', 'WAITER', 'KITCHEN'], till: ['ADMIN', 'WAITER'], manager: ['ADMIN'] };
+  const ROLES = { staff: ['ADMIN', 'WAITER', 'KITCHEN'], till: ['ADMIN', 'WAITER'], manager: ['ADMIN'], kitchen: ['ADMIN', 'KITCHEN'] };
 
   function authenticate(headers, access) {
     if (access === 'public') return null;
@@ -669,6 +669,51 @@
     const average = Math.round((lines.reduce((sum, l) => sum + (l.change * 100) / l.oldPrice, 0) / lines.length) * 10) / 10;
     return { rounding, lines, itemCount: lines.length, changed: lines.filter((l) => l.oldPrice !== l.newPrice).length, averagePercent: average,
       expected: Object.fromEntries(lines.map((l) => [l.key, l.oldPrice])) };
+  }
+
+  /** Like PlanningService.prep: the same weekday of the last six weeks, recent weeks weighing more, else recent days. */
+  function prepView(dayIso) {
+    const day = new Date(`${dayIso}T12:00:00`);
+    const today = new Date(`${todayIso()}T12:00:00`);
+    const diff = Math.round((day - today) / 86_400_000);
+    if (diff < -1 || diff > 7) throw new Problem(422, 'PREP_DAY_INVALID', 'Plan a day from yesterday to a week ahead');
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const byDay = new Map();
+    for (const order of state.orders) {
+      if (order.status === 'CANCELLED') continue;
+      const key = iso(new Date(order.createdAt));
+      if (key >= dayIso) continue;
+      const lines = byDay.get(key) || new Map();
+      order.lines.forEach((l) => lines.set(l.menuItemId, (lines.get(l.menuItemId) || 0) + l.quantity - (l.voided || 0)));
+      byDay.set(key, lines);
+    }
+    const weeks = [];
+    for (let w = 1; w <= 6; w++) { const d = new Date(day); d.setDate(d.getDate() - 7 * w); if (byDay.has(iso(d))) weeks.push(iso(d)); }
+    const recent = [...byDay.keys()].sort().reverse().slice(0, 14);
+    const checks = state.prepChecks || {};
+    const dishes = state.menu.filter((m) => !m.archived).map((m) => {
+      const w = weeks.map((d) => byDay.get(d).get(m.id) || 0);
+      const r = recent.map((d) => byDay.get(d).get(m.id) || 0);
+      let expected = 0; let low = 0; let high = 0; let confidence = 'NONE';
+      if (w.length >= 2) {
+        const weights = w.map((_, i) => 6 - i);
+        expected = Math.round(w.reduce((sum, q, i) => sum + q * weights[i], 0) / weights.reduce((a, b) => a + b, 0));
+        low = Math.min(expected, ...w); high = Math.max(expected, ...w); confidence = w.length >= 4 ? 'GOOD' : 'LOW';
+      } else if (r.length) {
+        expected = Math.round(r.reduce((a, b) => a + b, 0) / r.length); low = Math.min(expected, ...r); high = Math.max(expected, ...r); confidence = 'LOW';
+      }
+      const check = checks[`${dayIso}:${m.id}`];
+      return { menuItemId: m.id, name: m.name, icon: m.icon, category: m.category, expected, low, high, confidence, prepared: Boolean(check), preparedBy: check?.by || null };
+    }).filter((d) => d.expected > 0 || d.high > 0).sort((a, b) => b.expected - a.expected || a.name.localeCompare(b.name, 'tr'));
+    const need = new Map();
+    dishes.forEach((d) => stock().recipes.filter((r) => r.menuItemId === d.menuItemId && !r.optionGroup)
+      .forEach((r) => need.set(r.ingredientId, (need.get(r.ingredientId) || 0) + r.quantity * d.expected)));
+    const ingredients = [...need.entries()].map(([id, needed]) => {
+      const i = stock().ingredients.find((x) => x.id === id);
+      const onHand = balanceOf(id);
+      return { ingredientId: id, name: i.name, unit: i.unit, needed: qty(needed), onHand, tracked: i.trackStock, shortBy: i.trackStock ? qty(Math.max(0, needed - Math.max(0, onHand))) : 0 };
+    }).sort((a, b) => (b.shortBy > 0) - (a.shortBy > 0) || a.name.localeCompare(b.name, 'tr'));
+    return { day: dayIso, weekday: null, weeks: weeks.length, trendPercent: 0, dishes, ingredients, shortages: ingredients.filter((n) => n.shortBy > 0).length, generatedAt: new Date().toISOString() };
   }
 
   function priceListView(branchId) {
@@ -3177,6 +3222,63 @@
       placeChannelOrder(record);
       save();
       return [201, channelOrderView(record)];
+    }],
+    // Planning (PlanningService): the day's likely sales from the same weekday of past weeks, the prep list, waste
+    ['GET', /^planning\/prep$/, 'kitchen', ({ query: q }) => prepView(q.get('date') || todayIso())],
+    ['PUT', /^planning\/prep\/(\d{4}-\d{2}-\d{2})\/(\d+)$/, 'kitchen', ({ params, user }, body) => {
+      findDish(params[1]);
+      state.prepChecks ??= {};
+      const key = `${params[0]}:${params[1]}`;
+      if (body.prepared) state.prepChecks[key] ??= { by: user.username, at: Date.now() }; else delete state.prepChecks[key];
+      return [204, null];
+    }],
+    ['POST', /^planning\/waste$/, 'staff', ({ user }, body) => {
+      state.waste ??= [];
+      if (body.requestKey) { const earlier = state.waste.find((w) => w.requestKey === body.requestKey); if (earlier) return [201, earlier]; }
+      if ((body.menuItemId == null) === (body.ingredientId == null)) throw new Problem(422, 'WASTE_INVALID', 'Say either the dish or the ingredient');
+      if (!body.reason) throw new Problem(422, 'WASTE_REASON_REQUIRED', 'Say why it was thrown away');
+      const amount = Number(body.quantity);
+      if (!(amount > 0)) throw new Problem(422, 'WASTE_INVALID', 'Give how much was thrown away');
+      const note = clean(body.note);
+      const reason = note ? `${body.reason}: ${note}` : body.reason;
+      let entry;
+      if (body.menuItemId != null) {
+        if (!Number.isInteger(amount) || amount > 1000) throw new Problem(422, 'WASTE_INVALID', 'Give whole portions, at most 1000');
+        const dish = findDish(body.menuItemId);
+        let costC = 0;
+        stock().recipes.filter((r) => r.menuItemId === dish.id && !r.optionGroup).forEach((r) => {
+          const ingredient = stock().ingredients.find((i) => i.id === r.ingredientId);
+          if (!ingredient || ingredient.archived) return;
+          const quantity = qty(r.quantity * amount);
+          stock().movements.push({ id: stock().nextMovementId++, ingredientId: ingredient.id, kind: 'WASTE', quantity: -quantity, unitCostC: ingredient.costC, orderId: null, reason, supplier: null, by: user.username, at: Date.now() });
+          costC += valueC(ingredient, quantity);
+        });
+        entry = { id: state.waste.length + 1, menuItemId: dish.id, ingredientId: null, name: dish.name, quantity: amount, unit: 'PORTION', reason: body.reason, note, cost: Math.round(costC) / 100 };
+      } else {
+        const ingredient = findIngredient(body.ingredientId);
+        const [base, factor] = INPUT_UNITS[body.unit] || [];
+        if (!base || base !== ingredient.unit) throw new Problem(422, 'WASTE_INVALID', 'Give the unit');
+        const quantity = qty(amount * factor);
+        stock().movements.push({ id: stock().nextMovementId++, ingredientId: ingredient.id, kind: 'WASTE', quantity: -quantity, unitCostC: ingredient.costC, orderId: null, reason, supplier: null, by: user.username, at: Date.now() });
+        entry = { id: state.waste.length + 1, menuItemId: null, ingredientId: ingredient.id, name: ingredient.name, quantity: amount, unit: body.unit, reason: body.reason, note, cost: Math.round(valueC(ingredient, quantity)) / 100 };
+      }
+      Object.assign(entry, { at: iso(Date.now()), by: user.username, requestKey: body.requestKey || null });
+      state.waste.unshift(entry);
+      stockMoved(new Map());
+      return [201, entry];
+    }],
+    ['GET', /^planning\/waste\/today$/, 'kitchen', () => { const [from, to] = dayRange(todayIso()); return (state.waste || []).filter((w) => Date.parse(w.at) >= from && Date.parse(w.at) < to); }],
+    ['GET', /^planning\/waste$/, 'manager', ({ query: q }) => {
+      const [from] = dayRange(q.get('from'));
+      const [, to] = dayRange(q.get('to'));
+      const entries = (state.waste || []).filter((w) => Date.parse(w.at) >= from && Date.parse(w.at) < to);
+      const cost = Math.round(entries.reduce((sum, w) => sum + w.cost * 100, 0)) / 100;
+      const revenue = toLira(state.orders.filter((o) => o.status === 'COMPLETED' && o.createdAt >= from && o.createdAt < to).reduce((sum, o) => sum + o.pricing.total, 0));
+      const group = (key) => Object.values(entries.reduce((acc, w) => { const k = key(w); (acc[k] ??= []).push(w); return acc; }, {}));
+      return { from: q.get('from'), to: q.get('to'), cost, count: entries.length, revenue, sharePercent: revenue ? Math.round((cost * 1000) / revenue) / 10 : null,
+        byReason: group((w) => w.reason).map((list) => ({ reason: list[0].reason, count: list.length, cost: Math.round(list.reduce((s2, w) => s2 + w.cost * 100, 0)) / 100 })).sort((a, b) => b.cost - a.cost),
+        topItems: group((w) => `${w.name}|${w.unit}`).map((list) => ({ name: list[0].name, quantity: list.reduce((s2, w) => s2 + w.quantity, 0), unit: list[0].unit, cost: Math.round(list.reduce((s2, w) => s2 + w.cost * 100, 0)) / 100 })).sort((a, b) => b.cost - a.cost).slice(0, 5),
+        entries: entries.slice(0, 100) };
     }],
     ['GET', /^stock\/ingredients$/, 'manager', () => stock().ingredients.filter((i) => !i.archived).sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(ingredientView)],
     ['POST', /^stock\/ingredients$/, 'manager', (_, body) => {

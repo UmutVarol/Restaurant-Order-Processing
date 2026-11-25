@@ -17,6 +17,7 @@ const ROUTES = [
   { id: 'kitchen', icon: 'kitchen', roles: ALL, section: 'service', load: () => import('./views/kitchen.js') },
   { id: 'floor', icon: 'floor', roles: ALL, section: 'service', load: () => import('./views/floor.js') },
   { id: 'time', icon: 'clock', roles: ALL, section: 'service', when: () => hasFeature('SHIFTS_AND_TIPS'), load: () => import('./views/time.js') },
+  { id: 'prep', icon: 'note', roles: ['ADMIN', 'KITCHEN'], section: 'service', when: () => hasFeature('STOCK'), load: () => import('./views/prep.js') },
   { id: 'reservations', icon: 'calendar', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/reservations.js') },
   { id: 'orders', icon: 'orders', roles: ALL, section: 'service', load: () => import('./views/orders.js') },
   { id: 'cashier', icon: 'coins', roles: ['ADMIN', 'WAITER'], section: 'service', load: () => import('./views/cashier.js') },

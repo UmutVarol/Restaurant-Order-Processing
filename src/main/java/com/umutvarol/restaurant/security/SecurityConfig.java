@@ -208,6 +208,11 @@ class SecurityConfig {
                         // round three: the directory entry and the ratings are the managers'
                         .requestMatchers("/api/v1/directory", "/api/v1/directory/**", "/api/v1/ratings", "/api/v1/ratings/**")
                                 .hasRole(Role.ADMIN.name())
+                        // planning: the waste report is the managers'; prep lists the kitchen's too; anyone serving records waste
+                        .requestMatchers(HttpMethod.GET, "/api/v1/planning/waste").hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.POST, "/api/v1/planning/waste")
+                                .hasAnyRole(Role.ADMIN.name(), Role.KITCHEN.name(), Role.WAITER.name())
+                        .requestMatchers("/api/v1/planning/**").hasAnyRole(Role.ADMIN.name(), Role.KITCHEN.name())
                         // the price list at the door and its export, and the e-Adisyon records: the managers'
                         .requestMatchers("/api/v1/price-list", "/api/v1/price-list/**", "/api/v1/adisyon", "/api/v1/adisyon/**",
                                 "/api/v1/repricing", "/api/v1/repricing/**")

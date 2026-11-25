@@ -3,10 +3,11 @@
 import { h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
-import { dateTime, money, number } from '../core/format.js';
-import { api, errorMessage } from '../core/api.js';
+import { dateTime, money, number, percent } from '../core/format.js';
+import { api, ApiError, errorMessage } from '../core/api.js';
 import { bus } from '../core/store.js';
 import { confirmDialog, openDrawer, openModal, toast } from '../core/ui.js';
+import { openWaste } from './waste.js';
 
 const UNITS = ['GRAM', 'MILLILITRE', 'PIECE'];
 // The units a quantity can be typed in, per base unit; the first is the default.
@@ -30,6 +31,7 @@ export default {
   mount(container, { actions }) {
     let ingredients = null;
     let report = null;
+    let waste = null;
     let tab = 'stock';
     let period = 7;
     let onlyLow = false;
@@ -42,11 +44,11 @@ export default {
     mount(container, h('div', { class: 'toolbar' }, tabs, h('span', { class: 'spacer' }), summary), body);
 
     function render() {
-      mount(tabs, ['stock', 'report'].map((key) => h('button', {
+      mount(tabs, ['stock', 'report', 'waste'].map((key) => h('button', {
         class: ['chip', tab === key ? 'active' : ''], role: 'tab', 'aria-selected': String(tab === key), 'data-testid': `stock-tab-${key}`,
-        onclick: () => { tab = key; render(); if (key === 'report' && !report) loadReport(); },
+        onclick: () => { tab = key; render(); if (key === 'report' && !report) loadReport(); if (key === 'waste' && !waste) loadWaste(); },
       }, t(`stock.tab.${key}`))));
-      if (tab === 'stock') renderStock(); else renderReport();
+      if (tab === 'stock') renderStock(); else if (tab === 'waste') renderWaste(); else renderReport();
     }
 
     // ------------------------------------------------------------------ stock list
@@ -169,8 +171,10 @@ export default {
       const supplier = h('input', { class: 'input', id: 'movement-supplier', maxlength: 80, autocomplete: 'off' });
       const unitCost = h('input', { class: 'input', id: 'movement-cost', type: 'number', min: 0, step: '0.01', value: ingredient.cost });
       const problem = problemBox();
+      // a quick reason is also recorded as such, so the waste report can add waste up by reason
+      let picked = null;
       const reasons = kind === 'WASTE' ? h('div', { class: 'quick-reasons' }, ['expired', 'spoiled', 'dropped', 'returned'].map((key) => h('button', {
-        type: 'button', class: 'chip', onclick: () => { reason.value = t(`stock.reason.${key}`); },
+        type: 'button', class: 'chip', onclick: () => { reason.value = t(`stock.reason.${key}`); picked = { reason: key.toUpperCase(), text: reason.value }; },
       }, t(`stock.reason.${key}`)))) : null;
       openModal({
         title: t(`stock.dialog.${kind}`, { name: ingredient.name }),
@@ -192,7 +196,13 @@ export default {
             problem.hidden = true;
             button.disabled = true;
             try {
-              await api.recordMovement(ingredient.id, {
+              if (kind === 'WASTE') {
+                const text = reason.value.trim();
+                if (!text) throw new ApiError(422, { code: 'WASTE_REASON_REQUIRED', detail: t('error.WASTE_REASON_REQUIRED') });
+                const quick = picked && picked.text === text;
+                await api.recordWaste({ ingredientId: ingredient.id, quantity: amount.value === '' ? null : Number(amount.value), unit: unit.value,
+                  reason: quick ? picked.reason : 'OTHER', note: quick ? null : text });
+              } else await api.recordMovement(ingredient.id, {
                 kind, quantity: amount.value === '' ? null : Number(amount.value), unit: unit.value,
                 reason: reason.value.trim() || null, supplier: kind === 'DELIVERY' ? supplier.value.trim() || null : null,
                 unitCost: kind === 'DELIVERY' && unitCost.value !== '' ? Number(unitCost.value) : null,
@@ -284,6 +294,55 @@ export default {
       if (tab === 'report') renderReport();
     }
 
+    // ------------------------------------------------------------------ waste: what was thrown away, why, against sales
+    function renderWaste() {
+      const choices = h('div', { class: 'chips' }, [1, 7, 30].map((days) => h('button', {
+        class: ['chip', period === days ? 'active' : ''], 'data-testid': `waste-period-${days}`, onclick: () => { period = days; waste = null; renderWaste(); loadWaste(); },
+      }, days === 1 ? t('prep.today') : t('stock.lastDays', { n: days }))));
+      mount(summary, choices, h('button', { class: 'btn sm', 'data-testid': 'waste-open', onclick: () => openWaste({ onSaved: () => { waste = null; loadWaste(); load(); } }) },
+        icon('trash', 'sm'), t('waste.open')));
+      if (!waste) {
+        mount(body, h('div', { style: { padding: '16px' } }, h('div', { class: 'skeleton', style: { height: '200px' } })));
+        return;
+      }
+      const most = Math.max(1, ...waste.byReason.map((r) => Number(r.cost)));
+      mount(body,
+        h('div', { class: 'report-totals', 'data-testid': 'waste-report' },
+          total(t('waste.total'), waste.cost, t('waste.entries', { n: waste.count })),
+          h('div', { class: 'report-total', 'data-testid': 'waste-share' }, h('small', null, t('waste.share')),
+            h('b', null, waste.sharePercent == null ? '—' : percent(Number(waste.sharePercent) / 100, 1)),
+            h('span', { class: 'faint' }, t('waste.shareHint', { revenue: money(waste.revenue) })))),
+        waste.count ? h('div', { class: 'waste-grid' },
+          h('section', null, h('h3', null, t('waste.byReason')),
+            h('ul', { class: 'waste-bars' }, waste.byReason.map((r) => h('li', null,
+              h('span', null, t(`waste.reason.${r.reason}`)), h('span', { class: 'waste-bar' }, h('i', { style: { transform: `scaleX(${Number(r.cost) / most})` } })),
+              h('b', { class: 'num' }, money(r.cost)))))),
+          h('section', null, h('h3', null, t('waste.topItems')),
+            h('ol', { class: 'waste-top' }, waste.topItems.map((i) => h('li', null, h('span', null, i.name),
+              h('b', { class: 'num' }, money(i.cost)))))))
+          : h('div', { class: 'empty' }, h('div', { class: 'art' }, '🌱'), h('h4', null, t('waste.none')), h('p', null, t('waste.noneText'))),
+        waste.entries.length ? h('table', { class: 'data-table' },
+          h('thead', null, h('tr', null, h('th', null, t('waste.item')), h('th', null, t('waste.why')), h('th', { class: 'right' }, t('waste.cost')))),
+          h('tbody', null, waste.entries.map((e) => h('tr', null,
+            h('td', null, h('b', null, e.name), h('small', { class: 'faint block' },
+              `${e.unit === 'PORTION' ? t('waste.portionsN', { n: number(e.quantity) }) : `${number(e.quantity, 2)} ${t(`stock.input.${e.unit}`)}`} · ${dateTime(e.at)} · ${e.by}`)),
+            h('td', null, t(`waste.reason.${e.reason}`), e.note ? h('small', { class: 'faint block' }, e.note) : null),
+            h('td', { class: 'right num' }, money(e.cost)))))) : null);
+    }
+
+    async function loadWaste() {
+      const to = new Date();
+      const from = new Date(to.getTime() - (period - 1) * 86_400_000);
+      const day = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      try {
+        waste = await api.wasteReport(day(from), day(to));
+      } catch (error) {
+        waste = { cost: 0, count: 0, revenue: 0, sharePercent: null, byReason: [], topItems: [], entries: [] };
+        toast({ title: errorMessage(error), kind: 'error' });
+      }
+      if (tab === 'waste') renderWaste();
+    }
+
     async function load() {
       try {
         ingredients = await api.ingredients();
@@ -294,7 +353,7 @@ export default {
       if (tab === 'stock') renderStock();
     }
 
-    const offStock = bus.on('stock', () => { load(); report = null; if (tab === 'report') loadReport(); });
+    const offStock = bus.on('stock', () => { load(); report = null; waste = null; if (tab === 'report') loadReport(); if (tab === 'waste') loadWaste(); });
     const offOrder = bus.on('order', (event) => { if (event.status === 'COMPLETED') load(); });
     render();
     load();

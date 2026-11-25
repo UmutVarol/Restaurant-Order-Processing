@@ -4,7 +4,7 @@ import { debounce, h, mount } from '../core/dom.js';
 import { icon } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { elapsed, minutesSince, number } from '../core/format.js';
-import { api, errorMessage } from '../core/api.js';
+import { api, errorMessage, hasFeature } from '../core/api.js';
 import { bus, chime, prefs } from '../core/store.js';
 import { flip, flipNumber, swipeAction, toast, undoable } from '../core/ui.js';
 import { optionsText } from './options.js';
@@ -77,7 +77,10 @@ export default {
       renderFar();
     });
     renderFar();
-    mount(actions, farButton, soundButton);
+    // waste in one tap, where it happens (the plan includes stock)
+    const wasteButton = hasFeature('STOCK') ? h('button', { class: 'btn sm', 'data-testid': 'waste-open', title: t('waste.open'), 'aria-label': t('waste.open'),
+      onclick: async () => { const { openWaste } = await import('./waste.js'); openWaste({}); } }, icon('trash', 'sm'), h('span', { class: 'btn-label' }, t('waste.open'))) : null;
+    mount(actions, wasteButton, farButton, soundButton);
 
     const stationSelect = h('select', {
       class: 'select', id: 'kitchen-station', 'data-testid': 'kitchen-station', 'aria-label': t('stations.screen'),

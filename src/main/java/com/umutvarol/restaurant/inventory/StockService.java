@@ -157,6 +157,85 @@ public class StockService {
         return MovementResponse.from(movement);
     }
 
+    /**
+     * What some portions of dishes need, ingredient by ingredient (one portion without options, from each recipe),
+     * against what the ledger says is on hand.
+     *
+     * @param needed in base units (grams, millilitres, pieces)
+     * @param cost   what the needed amount is worth at the current price
+     */
+    public record Need(Long ingredientId, String name, StockUnit unit, BigDecimal needed, BigDecimal onHand,
+                       boolean tracked, BigDecimal cost) {
+    }
+
+    @Transactional(readOnly = true)
+    public List<Need> needsFor(Map<Long, BigDecimal> portions) {
+        if (portions.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, BigDecimal> total = new java.util.LinkedHashMap<>();
+        for (RecipeLine line : recipes.findByMenuItemIdIn(portions.keySet())) {
+            BigDecimal count = portions.get(line.getMenuItemId());
+            if (line.isBase() && count != null && count.signum() > 0) {
+                total.merge(line.getIngredientId(), line.getQuantity().multiply(count), BigDecimal::add);
+            }
+        }
+        if (total.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, BigDecimal> onHand = new java.util.HashMap<>();
+        for (Object[] row : movements.balancesOf(total.keySet())) {
+            onHand.put((Long) row[0], (BigDecimal) row[1]);
+        }
+        return ingredients.findAllById(total.keySet()).stream()
+                .filter(ingredient -> !ingredient.isArchived())
+                .map(ingredient -> new Need(ingredient.getId(), ingredient.getName(), ingredient.getUnit(),
+                        total.get(ingredient.getId()).setScale(3, java.math.RoundingMode.HALF_UP),
+                        onHand.getOrDefault(ingredient.getId(), BigDecimal.ZERO).setScale(3, java.math.RoundingMode.HALF_UP),
+                        ingredient.isTrackStock(), ingredient.valueOf(total.get(ingredient.getId())).setScale(2, java.math.RoundingMode.HALF_UP)))
+                .sorted(java.util.Comparator.comparing(Need::name))
+                .toList();
+    }
+
+    /**
+     * Throws away prepared portions of a dish: each ingredient of its recipe (one portion without options, times the
+     * portions) goes out of stock as waste, in one go.
+     *
+     * @return what was thrown away was worth; zero for a dish without a recipe
+     */
+    public BigDecimal wasteDish(Long menuItemId, BigDecimal portions, String reason, String actor) {
+        requirePositive(portions);
+        Instant now = clock.instant();
+        Map<Ingredient, Boolean> wasLow = new java.util.HashMap<>();
+        BigDecimal cost = BigDecimal.ZERO;
+        for (RecipeLine line : recipes.findByMenuItemIdOrderByIdAsc(menuItemId)) {
+            if (!line.isBase()) {
+                continue;
+            }
+            Ingredient ingredient = ingredients.findById(line.getIngredientId()).orElse(null);
+            if (ingredient == null || ingredient.isArchived()) {
+                continue;
+            }
+            BigDecimal quantity = line.getQuantity().multiply(portions);
+            wasLow.put(ingredient, ingredient.isLow(movements.balanceOf(ingredient.getId())));
+            movements.save(StockMovement.waste(ingredient, quantity, reason, actor, now));
+            cost = cost.add(ingredient.valueOf(quantity));
+        }
+        if (!wasLow.isEmpty()) {
+            audit.info("stock WASTE dish={} portions={} by={}", menuItemId, portions, actor);
+            announce(wasLow, now);
+        }
+        return cost.setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    /** Throws away an ingredient, as a waste movement. @return what it was worth */
+    public BigDecimal wasteIngredient(Long ingredientId, BigDecimal quantity, QuantityUnit unit, String reason, String actor) {
+        Ingredient ingredient = find(ingredientId);
+        BigDecimal base = unit.toBase(quantity, ingredient.getUnit());
+        record(ingredientId, new MovementRequest(MovementKind.WASTE, quantity, unit, reason, null, null), actor);
+        return ingredient.valueOf(base).setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
     @Transactional(readOnly = true)
     public List<MovementResponse> movements(Long id, int limit) {
         find(id);
