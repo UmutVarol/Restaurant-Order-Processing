@@ -1877,4 +1877,5 @@ export default {
   "error.WASTE_INVALID": "Der Eintrag ist unvollständig: Gericht oder Zutat, Menge und Einheit (bei Gerichten ganze Portionen).",
   "error.PREP_DAY_INVALID": "Wählen Sie einen Tag von gestern bis in einer Woche.",
   "error.WASTE_PERIOD_INVALID": "Wählen Sie einen Zeitraum von höchstens 92 Tagen.",
+  "login.tryGuest": "Als Gast ausprobieren",
 };

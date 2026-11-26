@@ -1891,4 +1891,5 @@ export default {
   "error.WASTE_INVALID": "The waste entry is incomplete: a dish or an ingredient, an amount and a unit (whole portions for a dish).",
   "error.PREP_DAY_INVALID": "Choose a day from yesterday to a week ahead.",
   "error.WASTE_PERIOD_INVALID": "Choose a period of at most 92 days.",
+  "login.tryGuest": "Try it as a guest",
 };

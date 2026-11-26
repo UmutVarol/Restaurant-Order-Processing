@@ -1911,4 +1911,5 @@ export default {
   "error.WASTE_INVALID": "التسجيل غير مكتمل: طبق أو مكوّن وكمية ووحدة (حصص كاملة للطبق).",
   "error.PREP_DAY_INVALID": "اختر يومًا من أمس حتى أسبوع قادم.",
   "error.WASTE_PERIOD_INVALID": "اختر فترة لا تزيد على 92 يومًا.",
+  "login.tryGuest": "جرّبه كضيف",
 };

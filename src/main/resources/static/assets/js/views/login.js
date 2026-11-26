@@ -114,7 +114,8 @@ function passwordForm({ onSignedIn, onPin }) {
       demoBlock.hidden = false;
       foot.hidden = false;
       mount(foot, window.SOFRA_BACKEND?.demo
-        ? [t('login.demoMode'), ' · ', h('a', { href: 'https://github.com/UmutVarol/Restaurant-Order-Processing', target: '_blank', rel: 'noopener' }, t('login.source'))]
+        ? [t('login.demoMode'), ' · ', h('a', { href: '#/sofra', 'data-testid': 'demo-guest' }, t('login.tryGuest')), ' · ',
+          h('a', { href: 'https://github.com/UmutVarol/Restaurant-Order-Processing', target: '_blank', rel: 'noopener' }, t('login.source'))]
         : [h('a', { href: 'swagger-ui.html', target: '_blank', rel: 'noopener' }, t('login.api')), ' · Spring Boot 4 · Java 21']);
     } else if (config.restaurantName) {
       subtitle.textContent = config.restaurantName;

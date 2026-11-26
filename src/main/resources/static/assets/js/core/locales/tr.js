@@ -1875,4 +1875,5 @@ export default {
   "error.WASTE_INVALID": "İsraf kaydı eksik: yemek ya da malzeme, miktar ve birim gerekli (yemekte tam porsiyon).",
   "error.PREP_DAY_INVALID": "Dünden bir hafta sonrasına kadar bir gün seçin.",
   "error.WASTE_PERIOD_INVALID": "En çok 92 günlük bir dönem seçin.",
+  "login.tryGuest": "Misafir olarak dene",
 };

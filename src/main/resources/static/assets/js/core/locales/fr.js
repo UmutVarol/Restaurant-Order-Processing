@@ -1878,4 +1878,5 @@ export default {
   "error.WASTE_INVALID": "La saisie est incomplète : un plat ou un ingrédient, une quantité et une unité (portions entières pour un plat).",
   "error.PREP_DAY_INVALID": "Choisissez un jour entre hier et dans une semaine.",
   "error.WASTE_PERIOD_INVALID": "Choisissez une période de 92 jours au plus.",
+  "login.tryGuest": "Essayer en tant que client",
 };
