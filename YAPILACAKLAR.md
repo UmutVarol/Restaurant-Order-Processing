@@ -73,8 +73,8 @@ Son güncelleme: 16 Kasım 2026.
 ## Claude'un bekleyen işleri (senin kararını bekleyenler)
 
 - Paddle sandbox denemesi (yukarıdaki 2. bölüm bitince).
-- İsteğe bağlı özellikler, hangisini istersen: iyzico ile TL abonelik, sadakat programı, saatlik fiyat (happy
-  hour), müşteri ekranı.
+- Claude'un geliştireceği her şey tek listede: `docs/BACKLOG.md` (sadakat, kapora ve hatırlatma, tedarikçiye
+  otomatik sipariş, kendi online sipariş kanalı, muhasebe dışa aktarımı ve diğerleri). Hepsi yapılacak.
 - 3. tur tasarım adayları: üç yaratıcı yönden birini seçersen (`CLAUDE.md` › Tasarım) aday sayfası hazırlanır.
 
 ## Sofra'yı bir kullanıcı gibi denemek

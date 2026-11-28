@@ -1,0 +1,27 @@
+diff --git a/src/main/java/com/umutvarol/restaurant/order/OrderAdjustmentService.java b/src/main/java/com/umutvarol/restaurant/order/OrderAdjustmentService.java
+index 57afd34..3b1d9b4 100644
+--- a/src/main/java/com/umutvarol/restaurant/order/OrderAdjustmentService.java
++++ b/src/main/java/com/umutvarol/restaurant/order/OrderAdjustmentService.java
+@@ -90,6 +90,22 @@ public class OrderAdjustmentService {
+         return finish(order, adjustment, now);
+     }
+ 
++    /**
++     * A reward the business promised (the loyalty card's), taken off an order as an amount. It needs no manager: the
++     * rule was set by one. An order that already has a discount keeps it and gets no reward on top.
++     *
++     * @throws BusinessRuleException {@code DISCOUNT_ALREADY_SET} when the order already has a manual discount
++     */
++    public OrderResponse rewardDiscount(Long orderId, java.math.BigDecimal amount, String reason, String actor) {
++        Order order = find(orderId);
++        if (order.manualDiscount() != null) {
++            throw new BusinessRuleException("DISCOUNT_ALREADY_SET", "This order already has a discount; remove it first");
++        }
++        Instant now = clock.instant();
++        OrderAdjustment adjustment = order.setManualDiscount(new ManualDiscount(null, amount), reason, now, actor, "loyalty");
++        return finish(order, adjustment, now);
++    }
++
+     private OrderResponse finish(Order order, OrderAdjustment adjustment, Instant now) {
+         Coupon coupon = order.getCouponCode() == null ? null : coupons.findByCode(order.getCouponCode()).orElse(null);
+         // an order placed before menu prices included VAT keeps being priced the way it was

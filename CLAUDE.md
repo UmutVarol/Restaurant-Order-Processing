@@ -42,7 +42,7 @@ bir maddeye geçince oradan devam edilir, işaretler orada güncellenir).
 5. [x] PostgreSQL satır güvenliği (RLS), ikinci yalıtım duvarı (16 Kasım 2026; `RowLevelSecurity`, her göçten sonra
    uygulanır; yerel PostgreSQL 16'da ve bulut modunda iki işletmeyle denendi).
 6. [ ] Paddle'ı sandbox'ta kullanıcıyla birlikte doğrulamak (bu ortamdan Paddle'a erişim yok).
-7. [ ] İsteğe bağlı: iyzico aboneliği (TL), sadakat, saatlik fiyat, müşteri ekranı.
+7. [ ] Geri kalan her şey: `docs/BACKLOG.md`.
 
 ## Bekleyen fikirler (22 Kasım 2026, kullanıcı "bir dursun, sonra düzeltip geliştireceğiz" dedi)
 
@@ -62,7 +62,10 @@ bir maddeye geçince oradan devam edilir, işaretler orada güncellenir).
   SMS/WhatsApp hatırlatma (gelmeme %10–30), enflasyon araçları (toplu zam, marj uyarısı), personel maliyeti yüzdesi
   ve vardiya önerisi, talep tahmini/hazırlık listesi/israf, sadakat ve puanlama (seçici Google yorumu isteme Google kurallarına aykırı, yapılmayacak), yeni nesil ÖKC POS
   entegrasyonu, muhasebe dışa aktarımı (Logo/Mikro/Paraşüt), tedarikçiye otomatik sipariş.
-- Önerilen sıra (mevzuat bitti): kendi online sipariş → kapora/hatırlatma → enflasyon araçları → sadakat → tahmin.
+- **Enflasyon araçları (24 Kasım) ve hazırlık/israf (25 Kasım) yapıldı** (`repricing` ve `planning` paketleri, V39–V40).
+- **Bundan sonrası tek listede: `docs/BACKLOG.md`** (28 Kasım 2026; kullanıcı "hepsini geliştireceğiz" dedi). Sıra:
+  sadakat (yarım, taslaklar `docs/wip/loyalty/`) → kapora/hatırlatma → tedarikçiye otomatik sipariş → kendi online
+  sipariş; ardından muhasebe dışa aktarımı, personel maliyeti, misafir uygulaması kalanları, isteğe bağlılar.
 
 ## Tasarım: kullanıcının "UI UX Tasarım Stüdyosu" (ikinci beyin)
 
